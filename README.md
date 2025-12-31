@@ -1,0 +1,70 @@
+# Ordinarium: a liturgy planning workspace
+
+> Work in progress as of December 2025.
+
+Ordinarium is a web-based liturgy planning workspace that encodes the structure and rubrics of the ACNA 2019 Book of Common Prayer, enabling clergy and planners to assemble, order, and manage complete services of worship. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials. Though focused initially on Anglican Eucharistic services, Ordinarium is designed to accommodate additional rites and traditions as the platform develops.
+
+
+## Table of contents
+- Overview
+- Features
+- Liturgical text conventions
+- Data structure
+- Tech stack
+- Roadmap
+- License
+
+## Features
+- Compose a full liturgical order by selecting propers, readings, and prayers from the ACNA 2019 BCP.
+- Enforce rubrical sequencing while allowing flexible overrides for local practice.
+- Export or share services for worship planning, presentation software, or printable leaflets.
+- Planned: role-based access (clergy, musicians, readers), history/audit trail, and additional rite modules.
+
+## Liturgical text conventions
+
+All service texts are represented in Markdown.
+
+- Service titles use H1 (e.g., "The Order for the Administration of the Lord’s Supper or Holy Communion, Commonly Called the Holy Eucharist").
+- Service subtitles use H2 (e.g., "Renewed Ancient Text").
+- Service sections use H3 (e.g., "The Acclamation").
+- Rubrics use italic face.
+- Celebrant text uses regular face.
+- People text uses bold face (**Text**).
+- References use H6.
+- When there is optionality on the rendition of a piece of text (e.g., the Kyrie), an unordered list is used; for example (note double-space line breaks to preserve formatting):
+    -   Lord, have mercy upon us.  
+        **Christ, have mercy upon us.**  
+        Lord, have mercy upon us.
+    -   Lord, have mercy.  
+        **Christ, have mercy.**  
+        Lord, have mercy.
+    -   Kyrie eleison.  
+        **Christe eleison.**  
+        Kyrie eleison.
+- Preformatted text use double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
+- Preformatted paragraphs (e.g., the Creeds) use code (four spaces, resulting in <pre><code> blocks).
+- Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
+
+## Database structure
+
+Note that the SQLite database uses JSON data storage fields with virtual columns. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing).
+
+## Tech stack (planned)
+- Python 3.11+
+- Flask (Jinja templates, blueprints)
+- SQLite
+- HTML/CSS/JS front end
+- Gunicorn for production serving
+
+## Development (local)
+1) Create and activate a virtual environment.
+2) Install dependencies: `pip install -r requirements.txt`.
+3) Initialize the database: `flask --app ordinarium init-db`.
+4) Run the app: `flask --app ordinarium run`.
+
+## Roadmap (high level)
+- Additional liturgy templates (Morning Prayer, Compline, funerals, weddings).
+- Rich propers search with calendar/season awareness.
+- Export formats: PDF, DOCX, HTML, Planning Center or ProPresenter-friendly outputs.
+- Collaboration features: comments, approvals, version history.
+- Authentication and team roles.

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="text">
+
+	<h1>{{ title | markdown_template }}</h1>
+		<h2>{{ rite | markdown_template }}</h2>
+
+		{% for ordinary in ordinaries %}
+			{% if not loop.previtem or ordinary.title != loop.previtem.title %}
+				<h3>{{ ordinary.title | markdown_template }}</h3>
+			{% endif %}
+			{{ ordinary.text | markdown_template }}
+		{% endfor %}
+
+</div>
+
+{% endblock %}
