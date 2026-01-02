@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+
+	<h2>Plan</h2>
+
+	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “Generate” to create your service text.</p>
+
+	<strong>{{ rite }}</strong>
+
+	<ul class="plan-list">
+	{% for ordinary in ordinaries %}
+		<li class="plan-row" draggable="true">
+			<label class="plan-item">
+				<input type="checkbox" name="ordinaries" value="{{ ordinary.id }}" data-default-order="{{ ordinary.default_order }}" checked>
+				<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
+			</label>
+		{% if ordinary.text %}<small>{{ ordinary.text | markdown_template | striptags | truncate(240) }}</small>{% endif %}
+		</li>
+	{% endfor %}
+	</ul>
+
+	<form class="plan-actions" id="plan-form" action="{{ url_for('main.text') }}" method="get">
+		<input type="hidden" name="ids" id="plan-ids" value="">
+		<button class="plan-submit" type="submit">Generate</button>
+	</form>
+
+	<script>
+		const planList = document.querySelector('.plan-list')
+		const planForm = document.querySelector('#plan-form')
+		const planIds = document.querySelector('#plan-ids')
+		let draggedRow = null
+
+		if (planForm) {
+			planForm.addEventListener('submit', () => {
+				if (!planList || !planIds) {
+					return
+				}
+				const ids = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
+					.filter((input) => input.checked)
+					.map((input) => input.value)
+				planIds.value = ids.join(',')
+			})
+		}
+
+		if (planList) {
+			planList.addEventListener('dragstart', (event) => {
+				const row = event.target.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				draggedRow = row
+				event.dataTransfer.effectAllowed = 'move'
+				event.dataTransfer.setData('text/plain', '')
+				row.classList.add('is-dragging')
+			})
+
+			planList.addEventListener('dragend', (event) => {
+				const row = event.target.closest('.plan-row')
+				if (row) {
+					row.classList.remove('is-dragging')
+				}
+				draggedRow = null
+			})
+
+			planList.addEventListener('dragover', (event) => {
+				event.preventDefault()
+				const target = event.target.closest('.plan-row')
+				if (!target || target === draggedRow) {
+					return
+				}
+				const rect = target.getBoundingClientRect()
+				const insertAfter = event.clientY - rect.top > rect.height / 2
+				planList.insertBefore(draggedRow, insertAfter ? target.nextSibling : target)
+			})
+		}
+	</script>
+
+</div>
+
+{% endblock %}

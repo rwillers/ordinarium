@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+
+	<h2>{{ title | markdown_template }}</h2>
+
+	{{ content | markdown_template }}
+
+</div>
+
+{% endblock %}

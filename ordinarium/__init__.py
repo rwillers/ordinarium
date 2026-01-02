@@ -23,7 +23,7 @@ def create_app():
 	extras = [
 		'fenced-code-blocks',
 		'code-friendly',
-		'target-blank-links',
+		# 'target-blank-links',
 		'markdown-in-html',
 		'footnotes'
 	]

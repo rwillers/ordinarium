@@ -2,8 +2,7 @@
 
 > Work in progress as of December 2025.
 
-Ordinarium is a web-based liturgy planning workspace that encodes the structure and rubrics of the ACNA 2019 Book of Common Prayer, enabling clergy and planners to assemble, order, and manage complete services of worship. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials. Though focused initially on Anglican Eucharistic services, Ordinarium is designed to accommodate additional rites and traditions as the platform develops.
-
+Ordinarium is a liturgy planning workspace that incorporates the structure and rubrics of the Anglican Church in North America (ACNA) *Book of Common Prayer* (2019), enabling clergy and liturgists to assemble, order, and manage liturgical orders of service. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials. Though focused initially on Anglican eucharistic services, Ordinarium is designed to accommodate additional rites and traditions as the platform develops.
 
 ## Table of contents
 - Overview
