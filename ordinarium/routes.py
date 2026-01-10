@@ -190,7 +190,7 @@ def text(service_id):
     saved_service = None
     if service_id:
         saved_service = db.execute(
-            "select text_order, text_disabled, season, rite from services where id=? limit 1",
+            "select text_order, text_disabled, season, rite, service_date from services where id=? limit 1",
             (service_id,),
         ).fetchone()
     if not saved_service:
@@ -284,11 +284,35 @@ def text(service_id):
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
+    observance = None
+    propers_list = []
+    if saved_service and saved_service["service_date"]:
+        try:
+            observance = resolve_observance(
+                date.fromisoformat(saved_service["service_date"])
+            )
+        except ValueError:
+            observance = None
+    if observance:
+        propers_list = list(observance.propers)
+
+    collect_text = None
+    if propers_list:
+        propers_json = json.dumps(propers_list)
+        collect_text = db.execute(
+            "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
+            (propers_json, "collect", "proper"),
+        ).fetchone()
+
     propers = {
         "acclamation": (
             acclamation["text"] if acclamation else "*Error: No acclamation found.*"
         ),
-        "collect_of_the_day": "Almighty God, you have poured upon us the new light of your incarnate Word: Grant that this light, kindled in our hearts, may shine forth in our lives; through Jesus Christ our Lord, who lives and reigns with you in the unity of the Holy Spirit, one God, now and for ever. **Amen.**",
+        "collect_of_the_day": (
+            collect_text["text"]
+            if collect_text
+            else "Almighty God, you have poured upon us the new light of your incarnate Word: Grant that this light, kindled in our hearts, may shine forth in our lives; through Jesus Christ our Lord, who lives and reigns with you in the unity of the Holy Spirit, one God, now and for ever. **Amen.**"
+        ),
         "lesson_1_reference": "Isaiah (61:10–62:5)",
         "psalm_reference": "Psalm (147:12-20)",
         "lesson_2_reference": "Galations (3:23–4:7)",
