@@ -63,6 +63,7 @@
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
 		const planSeasonDisplay = document.querySelector('#plan-season-display')
+		const planTitleInput = document.querySelector('input[name="title"]')
 		let draggedRow = null
 
 		if (planList) {
@@ -116,13 +117,13 @@
 		}
 
 		if (planServiceDate && planSeasonDisplay) {
-			const updateSeasonFromDate = async () => {
+			const updateObservanceFromDate = async () => {
 				if (!planServiceDate.value) {
 					planSeasonDisplay.textContent = 'Auto-detect'
 					return
 				}
 				try {
-					const response = await fetch(`/season?date=${planServiceDate.value}`)
+					const response = await fetch(`/observance?date=${planServiceDate.value}`)
 					if (!response.ok) {
 						return
 					}
@@ -130,14 +131,17 @@
 					if (data && data.season) {
 						planSeasonDisplay.textContent = data.season
 					}
+					if (data && data.title && planTitleInput && !planTitleInput.value) {
+						planTitleInput.value = data.title
+					}
 				} catch (error) {
 					// Ignore lookup failures.
 				}
 			}
 
-			planServiceDate.addEventListener('change', updateSeasonFromDate)
+			planServiceDate.addEventListener('change', updateObservanceFromDate)
 			if (planServiceDate.value) {
-				updateSeasonFromDate()
+				updateObservanceFromDate()
 			}
 		}
 	</script>

@@ -16,7 +16,7 @@ from flask import (
 import ordinarium
 
 from .db import get_db
-from .liturgical_calendar import resolve_season
+from .liturgical_calendar import resolve_observance, resolve_season
 
 bp = Blueprint("main", __name__)
 
@@ -419,3 +419,28 @@ def season_from_date():
     except ValueError:
         season = None
     return jsonify({"season": season})
+
+
+@bp.route("/observance")
+def observance_from_date():
+    raw_date = request.args.get("date", "")
+    if not raw_date:
+        return jsonify({"title": None, "handle": None, "propers": [], "season": None})
+    try:
+        service_date = date.fromisoformat(raw_date)
+    except ValueError:
+        return jsonify({"title": None, "handle": None, "propers": [], "season": None})
+    observance = resolve_observance(service_date)
+    season = resolve_season(service_date)
+    if not observance:
+        return jsonify({"title": None, "handle": None, "propers": [], "season": season})
+    title = observance.name or observance.alternative_name
+    return jsonify(
+        {
+            "title": title,
+            "handle": observance.handle,
+            "propers": list(observance.propers),
+            "season": season,
+            "subcycle": observance.subcycle,
+        }
+    )
