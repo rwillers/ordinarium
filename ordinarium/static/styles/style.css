@@ -288,6 +288,16 @@ div#page {
 	.plan-actions {
 		margin: 0.8em 0 0 0;
 	}
+	.plan-inline-fields {
+		display: flex;
+		gap: 1em;
+		flex-wrap: wrap;
+		align-items: flex-start;
+	}
+	.plan-inline-fields > * {
+		flex: 1 1 300px;
+		margin: 0;
+	}
 	.plan-field {
 		display: flex;
 		flex-direction: column;

@@ -432,8 +432,14 @@ def text(service_id):
             else "*Error: No proper preface found.*"
         ),
     }
+    service_title = observance.name or observance.alternative_name if observance else ""
     return render_template(
-        "text.html", title=title, rite=rite_name, ordinaries=ordinaries, **propers
+        "text.html",
+        title=title,
+        rite=rite_name,
+        service_title=service_title,
+        ordinaries=ordinaries,
+        **propers,
     )
 
 

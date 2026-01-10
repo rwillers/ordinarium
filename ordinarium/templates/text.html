@@ -5,7 +5,11 @@
 <div id="text">
 
 	<h1>{{ title | markdown_template }}</h1>
-		<h2>{{ rite | markdown_template }}</h2>
+		{% if service_title %}
+			<h2>{{ service_title }} ({{ rite }})</h2>
+		{% else %}
+			<h2>{{ rite | markdown_template }}</h2>
+		{% endif %}
 
 		{% for ordinary in ordinaries %}
 			{% if not loop.previtem or ordinary.title != loop.previtem.title %}
