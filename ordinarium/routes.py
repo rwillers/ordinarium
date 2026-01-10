@@ -54,10 +54,17 @@ def plan(rite="Renewed Ancient Text"):
 
     db = get_db()
 
+    service_id = request.args.get("service_id", 1)
+    try:
+        service_id = int(service_id)
+    except (TypeError, ValueError):
+        service_id = 1
+
     saved_plan = db.execute(
-        "select text_order, text_disabled from services where id=? limit 1", (1,)
+        "select text_order, text_disabled, title, season, occasion, service_date, rite from services where id=? limit 1",
+        (service_id,),
     ).fetchone()
-    if saved_plan:
+    if saved_plan and saved_plan["text_order"]:
         ordinaries = db.execute(
             'select texts.id, texts.default_order, texts.title, texts.detailed_title, texts.text, saved_order.value, saved_disabled.value as "disabled" from texts left join json_each(?) saved_order on texts.id=saved_order.value left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? order by saved_order.key',
             (
@@ -73,12 +80,21 @@ def plan(rite="Renewed Ancient Text"):
             "select id, default_order, title, detailed_title, text from texts where type=? and filter_type=? and filter_content=? order by default_order",
             ("ordinarium", "rite", rite),
         ).fetchall()
+    service_data = {
+        "title": saved_plan["title"] if saved_plan else "",
+        "season": saved_plan["season"] if saved_plan else "",
+        "occasion": saved_plan["occasion"] if saved_plan else "",
+        "service_date": saved_plan["service_date"] if saved_plan else "",
+        "rite": saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite,
+    }
     return render_template(
         "plan.html",
         user=get_user(),
         rite=rite,
         rite_slug=rite_slug,
         ordinaries=ordinaries,
+        service_id=service_id,
+        service=service_data,
     )
 
 
@@ -166,6 +182,18 @@ def text(rite_slug):
 
 @bp.route("/persist/service", methods=["POST"])
 def persist_service():
+    def normalize_value(value):
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    service_id = request.form.get("service_id", 1)
+    try:
+        service_id = int(service_id)
+    except (TypeError, ValueError):
+        service_id = 1
+
     order = request.form.get("ids", "").split(",") if request.form.get("ids") else []
     order_json = "[" + ",".join(order) + "]"
     disabled = (
@@ -175,20 +203,51 @@ def persist_service():
     )
     disabled_json = "[" + ",".join(disabled) + "]"
 
-    payload = {
-        "user_id": 1,
-        "title": "First Sunday of Christmas",
-        "rite": "Renewed Ancient Text",
-        "text_order": order_json,
-        "text_disabled": disabled_json,
-    }
-
     db = get_db()
-    db.execute("update services set data=? where id=?", (json.dumps(payload), 1))
+    existing = db.execute(
+        "select data from services where id=? limit 1", (service_id,)
+    ).fetchone()
+    existing_data = (
+        json.loads(existing["data"]) if existing and existing["data"] else {}
+    )
+    payload = {
+        "user_id": existing_data.get("user_id", 1),
+        "title": existing_data.get("title", "Untitled Service"),
+        "rite": existing_data.get("rite", "Renewed Ancient Text"),
+        "season": existing_data.get("season"),
+        "occasion": existing_data.get("occasion"),
+        "service_date": existing_data.get("service_date"),
+    }
+    payload.update(
+        {
+            "user_id": normalize_value(request.form.get("user_id"))
+            or payload["user_id"],
+            "title": normalize_value(request.form.get("title")) or payload["title"],
+            "rite": normalize_value(request.form.get("rite")) or payload["rite"],
+            "season": normalize_value(request.form.get("season")) or payload["season"],
+            "occasion": normalize_value(request.form.get("occasion"))
+            or payload["occasion"],
+            "service_date": normalize_value(request.form.get("service_date"))
+            or payload["service_date"],
+            "text_order": order_json,
+            "text_disabled": disabled_json,
+        }
+    )
+
+    if existing:
+        db.execute(
+            "update services set data=? where id=?",
+            (json.dumps(payload), service_id),
+        )
+    else:
+        db.execute(
+            "insert into services (id, data) values (?, ?)",
+            (service_id, json.dumps(payload)),
+        )
     db.commit()
     # flash('Service saved.')
 
-    return redirect(url_for("main.plan"))
+    return redirect(url_for("main.plan", service_id=service_id))
 
 
 @bp.route("/<slug>")

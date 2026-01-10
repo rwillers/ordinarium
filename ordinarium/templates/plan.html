@@ -10,6 +10,30 @@
 
 	<strong>{{ rite }}</strong>
 
+	<form class="plan-actions" id="plan-meta-form" action="{{ url_for('main.persist_service') }}" method="post">
+		<input type="hidden" name="service_id" value="{{ service_id }}">
+		<input type="hidden" name="ids" value="">
+		<input type="hidden" name="disabled" value="">
+		<label class="plan-field">
+			<span>Service title</span>
+			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas">
+		</label>
+		<label class="plan-field">
+			<span>Service date</span>
+			<input type="date" name="service_date" value="{{ service.service_date or '' }}">
+		</label>
+		<label class="plan-field">
+			<span>Season</span>
+			<input type="text" name="season" value="{{ service.season or '' }}" placeholder="e.g., Christmastide">
+		</label>
+		<label class="plan-field">
+			<span>Occasion</span>
+			<input type="text" name="occasion" value="{{ service.occasion or '' }}" placeholder="e.g., Feast of the Presentation of Christ">
+		</label>
+		<input type="hidden" name="rite" value="{{ service.rite or rite }}">
+		<button class="plan-submit" type="submit">Save Details</button>
+	</form>
+
 	<ul class="plan-list">
 	{% for ordinary in ordinaries %}
 		<li class="plan-row" draggable="true">
@@ -26,6 +50,7 @@
 	</ul>
 
 	<form class="plan-actions" id="plan-save-form" action="{{ url_for('main.persist_service') }}" method="post">
+		<input type="hidden" name="service_id" value="{{ service_id }}">
 		<input type="hidden" name="ids" id="plan-save-ids" value="">
 		<input type="hidden" name="disabled" id="plan-save-disabled" value="">
 		<button class="plan-submit" type="submit">Save</button>
@@ -43,6 +68,7 @@
 		const planSaveForm = document.querySelector('#plan-save-form')
 		const planSaveIds = document.querySelector('#plan-save-ids')
 		const planSaveDisabled = document.querySelector('#plan-save-disabled')
+		const planMetaForm = document.querySelector('#plan-meta-form')
 		let draggedRow = null
 
 		const collectIds = () => {
@@ -106,6 +132,22 @@
 				const rect = target.getBoundingClientRect()
 				const insertAfter = event.clientY - rect.top > rect.height / 2
 				planList.insertBefore(draggedRow, insertAfter ? target.nextSibling : target)
+			})
+		}
+
+		if (planMetaForm) {
+			planMetaForm.addEventListener('submit', () => {
+				const ids = planMetaForm.querySelector('input[name="ids"]')
+				const disabled = planMetaForm.querySelector('input[name="disabled"]')
+				if (!ids || !disabled) {
+					return
+				}
+				const inputs = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
+				ids.value = inputs.map((input) => input.value).join(',')
+				disabled.value = inputs
+					.filter((input) => !input.checked)
+					.map((input) => input.value)
+					.join(',')
 			})
 		}
 	</script>

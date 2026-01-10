@@ -256,6 +256,25 @@ div#page {
 	.plan-actions {
 		margin: 0.8em 0 0 0;
 	}
+	.plan-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4em;
+		min-width: 220px;
+	}
+	.plan-field span {
+		font-size: 0.8em;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--rubric-color);
+	}
+	.plan-field input {
+		padding: 0.6em 0.75em;
+		border-radius: 0.5em;
+		border: 1px solid rgba(27, 27, 27, 0.2);
+		background: #fff;
+		font-size: 0.95em;
+	}
 	.plan-title {
 		font-weight: 600;
 		cursor: pointer;
