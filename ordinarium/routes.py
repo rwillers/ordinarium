@@ -311,7 +311,7 @@ def text(service_id):
         "collect_of_the_day": (
             collect_text["text"]
             if collect_text
-            else "Almighty God, you have poured upon us the new light of your incarnate Word: Grant that this light, kindled in our hearts, may shine forth in our lives; through Jesus Christ our Lord, who lives and reigns with you in the unity of the Holy Spirit, one God, now and for ever. **Amen.**"
+            else "*Error: No collect found for this date.*"
         ),
         "lesson_1_reference": "Isaiah (61:10–62:5)",
         "psalm_reference": "Psalm (147:12-20)",
@@ -382,6 +382,15 @@ def persist_service():
             "text_disabled": disabled_json,
         }
     )
+    if payload["service_date"] and not normalize_value(request.form.get("title")):
+        try:
+            observance = resolve_observance(
+                date.fromisoformat(payload["service_date"])
+            )
+        except ValueError:
+            observance = None
+        if observance:
+            payload["title"] = observance.name or observance.alternative_name or ""
     if not payload["title"] or not payload["service_date"]:
         context = build_plan_context(service_id, payload["rite"])
         context["service"]["title"] = payload["title"] or ""
