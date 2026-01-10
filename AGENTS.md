@@ -23,7 +23,7 @@
 
 ## Testing Guidelines
 - No automated test suite is present yet.
-- Manual verification: run the dev server and check `/`, `/plan`, and `/text/<rite_slug>` flows. If you touch DB logic, re-run `init-db` and verify a fresh database works.
+- Manual verification: run the dev server and check `/`, `/services`, `/service/<id>`, and `/text/<rite_slug>` flows. If you touch DB logic, re-run `init-db` and verify a fresh database works.
 
 ## Commit & Pull Request Guidelines
 - Existing commits use short, imperative, sentence-case summaries (e.g., “Add …”, “Enhance …”). Follow that pattern.

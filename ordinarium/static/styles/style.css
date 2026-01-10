@@ -176,6 +176,14 @@ div#page {
 		font-weight: 600;
 		margin: 20px 0;
 	}
+	h3 {
+		font-size: 0.91em;
+		font-weight: 400;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--rubric-color);
+		margin: 1em 0;
+	}
 	.plan-header {
 		display: flex;
 		align-items: center;

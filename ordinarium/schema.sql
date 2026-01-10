@@ -12,7 +12,7 @@ You can also find collects and other prayers from the *Book of Common Prayer*, t
 *The Rev. Ryan Willers*","slug":"about"}');
 INSERT INTO "pages" VALUES(2, '{"title":"Welcome to Ordinarium","content":"Ordinarium is a liturgy planning workspace supporting the assembly, ordering, and management of liturgical orders of service. We currently support the eucharistic services from the <a href=\"https://anglicanchurch.net/\" target=\"_blank\">Anglican Church in North America</a> *Book of Common Prayer* (2019).
 
-<a href=\"/plan\" class=\"button\">Plan a Service</a>","slug":"home"}');
+<a href=\"/services\" class=\"button\">Plan a Service</a>","slug":"home"}');
 CREATE INDEX idx_pages_slug ON pages(slug);
 CREATE TABLE services (
   id INTEGER PRIMARY KEY,

@@ -52,17 +52,11 @@ def index():
     return page("home")
 
 
-@bp.route("/plan")
-def plan(rite="Renewed Ancient Text"):
+@bp.route("/service/<int:service_id>")
+def service(service_id, rite="Renewed Ancient Text"):
     rite_slug = rite.replace(" ", "_").lower()
 
     db = get_db()
-
-    service_id = request.args.get("service_id", 1)
-    try:
-        service_id = int(service_id)
-    except (TypeError, ValueError):
-        service_id = 1
 
     saved_plan = db.execute(
         "select text_order, text_disabled, title, season, service_date, rite from services where id=? limit 1",
@@ -99,6 +93,72 @@ def plan(rite="Renewed Ancient Text"):
         service_id=service_id,
         service=service_data,
     )
+
+
+@bp.route("/service")
+def service_missing_id():
+    return (
+        render_template(
+            "page.html",
+            title="Error",
+            content="Service ID required. Open a service from the Services list.",
+        ),
+        400,
+    )
+
+
+@bp.route("/services")
+def services():
+    user = get_user()
+    if not user:
+        return render_template("page.html", title="Error", content="User not found"), 404
+
+    db = get_db()
+    today = date.today().isoformat()
+    current_services = db.execute(
+        "select id, title, service_date from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+        (user["id"], today),
+    ).fetchall()
+    past_services = db.execute(
+        "select id, title, service_date from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
+        (user["id"], today),
+    ).fetchall()
+    def format_services(services):
+        formatted = []
+        for service in services:
+            display_date = service["service_date"]
+            try:
+                parsed = date.fromisoformat(service["service_date"])
+                display_date = f"{parsed.month}/{parsed.day}/{parsed.year}"
+            except (TypeError, ValueError):
+                pass
+            formatted.append(
+                {
+                    "id": service["id"],
+                    "title": service["title"],
+                    "service_date": service["service_date"],
+                    "display_date": display_date,
+                }
+            )
+        return formatted
+
+    return render_template(
+        "services.html",
+        user=user,
+        current_services=format_services(current_services),
+        past_services=format_services(past_services),
+    )
+
+
+@bp.route("/services/new")
+def services_new():
+    user = get_user()
+    if not user:
+        return render_template("page.html", title="Error", content="User not found"), 404
+
+    db = get_db()
+    next_id = db.execute("select coalesce(max(id), 0) + 1 as next_id from services").fetchone()
+    return redirect(url_for("main.service", service_id=next_id["next_id"]))
 
 
 @bp.route("/text/<rite_slug>")
@@ -281,7 +341,7 @@ def persist_service():
     db.commit()
     # flash('Service saved.')
 
-    return redirect(url_for("main.plan", service_id=service_id))
+    return redirect(url_for("main.service", service_id=service_id))
 
 
 @bp.route("/<slug>")

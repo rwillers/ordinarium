@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+
+	<div class="plan-header">
+		<h2>Services</h2>
+		<div class="plan-header-actions">
+			<a class="button" href="{{ url_for('main.services_new') }}">Add a Service</a>
+		</div>
+	</div>
+
+	<h3>Current services</h3>
+	{% if current_services %}
+	<ul>
+		{% for service in current_services %}
+			<li>
+				{{ service.display_date }} —
+				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
+			</li>
+		{% endfor %}
+	</ul>
+	{% else %}
+	<p>No upcoming services.</p>
+	{% endif %}
+
+	<h3>Past services</h3>
+	{% if past_services %}
+	<ul>
+		{% for service in past_services %}
+			<li>
+				{{ service.display_date }} —
+				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
+			</li>
+		{% endfor %}
+	</ul>
+	{% else %}
+	<p>No past services.</p>
+	{% endif %}
+
+</div>
+
+{% endblock %}
