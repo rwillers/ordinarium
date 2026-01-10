@@ -111,7 +111,10 @@ def service_missing_id():
 def services():
     user = get_user()
     if not user:
-        return render_template("page.html", title="Error", content="User not found"), 404
+        return (
+            render_template("page.html", title="Error", content="User not found"),
+            404,
+        )
 
     db = get_db()
     today = date.today().isoformat()
@@ -123,6 +126,7 @@ def services():
         "select id, title, service_date from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (user["id"], today),
     ).fetchall()
+
     def format_services(services):
         formatted = []
         for service in services:
@@ -154,10 +158,15 @@ def services():
 def services_new():
     user = get_user()
     if not user:
-        return render_template("page.html", title="Error", content="User not found"), 404
+        return (
+            render_template("page.html", title="Error", content="User not found"),
+            404,
+        )
 
     db = get_db()
-    next_id = db.execute("select coalesce(max(id), 0) + 1 as next_id from services").fetchone()
+    next_id = db.execute(
+        "select coalesce(max(id), 0) + 1 as next_id from services"
+    ).fetchone()
     return redirect(url_for("main.service", service_id=next_id["next_id"]))
 
 

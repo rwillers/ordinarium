@@ -12,7 +12,7 @@ You can also find collects and other prayers from the *Book of Common Prayer*, t
 *The Rev. Ryan Willers*","slug":"about"}');
 INSERT INTO "pages" VALUES(2, '{"title":"Welcome to Ordinarium","content":"Ordinarium is a liturgy planning workspace supporting the assembly, ordering, and management of liturgical orders of service. We currently support the eucharistic services from the <a href=\"https://anglicanchurch.net/\" target=\"_blank\">Anglican Church in North America</a> *Book of Common Prayer* (2019).
 
-<a href=\"/services\" class=\"button\">Plan a Service</a>","slug":"home"}');
+<a href=\"/services\" class=\"button\">Manage services</a>","slug":"home"}');
 CREATE INDEX idx_pages_slug ON pages(slug);
 CREATE TABLE services (
   id INTEGER PRIMARY KEY,
@@ -25,7 +25,8 @@ CREATE TABLE services (
   season TEXT GENERATED ALWAYS AS (json_extract(data, '$.season')) VIRTUAL,
   service_date TEXT GENERATED ALWAYS AS (json_extract(data, '$.service_date')) VIRTUAL
 );
-INSERT INTO "services" VALUES(1, '{"user_id": 1,"title": "First Sunday of Christmas","rite": "Renewed Ancient Text","text_order": "[]","text_disabled": "[]","season": null,"service_date": null}');
+INSERT INTO "services" VALUES(1, '{"user_id": 1, "title": "Last Sunday of Christmas", "rite": "Renewed Ancient Text", "season": "Christmastide", "service_date": "2026-01-04", "text_order": "[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]", "text_disabled": "[]"}');
+INSERT INTO "services" VALUES(2, '{"user_id": 1, "title": "First Sunday of Epiphanytide", "rite": "Renewed Ancient Text", "season": "Epiphanytide", "service_date": "2026-01-11", "text_order": "[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]", "text_disabled": "[]"}');
 CREATE INDEX idx_services_user_id ON services(user_id);
 CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
