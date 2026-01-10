@@ -8,9 +8,17 @@
 		<h2>Plan a service</h2>
 		<div class="plan-header-actions">
 			<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
-			<button class="plan-submit" type="submit" form="plan-form">Generate</button>
+			<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
+			{% if can_delete %}
+			<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+				<button class="plan-submit" type="submit">Delete</button>
+			</form>
+			{% endif %}
 		</div>
 	</div>
+	{% if form_error %}
+	<p class="plan-error">{{ form_error }}</p>
+	{% endif %}
 
 	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “Generate” to create your service text.</p>
 
@@ -22,11 +30,11 @@
 		<input type="hidden" name="disabled" value="">
 		<p><label class="plan-field">
 			<span>Service title:</span>
-			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas">
+			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas" required>
 		</label></p>
 		<p><label class="plan-field">
 			<span>Service date:</span>
-			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}">
+			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}" required>
 		</label></p>
 		<p><label class="plan-field">
 			<span>Season:</span>
@@ -50,37 +58,12 @@
 	{% endfor %}
 	</ul>
 
-	<form id="plan-form" action="{{ url_for('main.text', rite_slug=rite_slug) }}" method="get">
-		<input type="hidden" name="service_id" value="{{ service_id }}">
-		<input type="hidden" name="ids" id="plan-ids" value="">
-	</form>
-
 	<script>
 		const planList = document.querySelector('.plan-list')
-		const planForm = document.querySelector('#plan-form')
-		const planIds = document.querySelector('#plan-ids')
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
 		const planSeasonDisplay = document.querySelector('#plan-season-display')
 		let draggedRow = null
-
-		const collectIds = () => {
-			if (!planList) {
-				return []
-			}
-			return Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
-				.filter((input) => input.checked)
-				.map((input) => input.value)
-		}
-
-		if (planForm) {
-			planForm.addEventListener('submit', () => {
-				if (!planIds) {
-					return
-				}
-				planIds.value = collectIds().join(',')
-			})
-		}
 
 		if (planList) {
 			planList.addEventListener('dragstart', (event) => {
@@ -121,7 +104,9 @@
 				if (!ids || !disabled) {
 					return
 				}
-				const inputs = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
+				const inputs = Array.from(
+					planList.querySelectorAll('.plan-row input[type="checkbox"]')
+				)
 				ids.value = inputs.map((input) => input.value).join(',')
 				disabled.value = inputs
 					.filter((input) => !input.checked)

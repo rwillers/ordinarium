@@ -52,12 +52,9 @@ def index():
     return page("home")
 
 
-@bp.route("/service/<int:service_id>")
-def service(service_id, rite="Renewed Ancient Text"):
+def build_plan_context(service_id, rite):
     rite_slug = rite.replace(" ", "_").lower()
-
     db = get_db()
-
     saved_plan = db.execute(
         "select text_order, text_disabled, title, season, service_date, rite from services where id=? limit 1",
         (service_id,),
@@ -84,15 +81,23 @@ def service(service_id, rite="Renewed Ancient Text"):
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite,
     }
-    return render_template(
-        "plan.html",
-        user=get_user(),
-        rite=rite,
-        rite_slug=rite_slug,
-        ordinaries=ordinaries,
-        service_id=service_id,
-        service=service_data,
-    )
+    return {
+        "user": get_user(),
+        "rite": rite,
+        "rite_slug": rite_slug,
+        "ordinaries": ordinaries,
+        "service_id": service_id,
+        "service": service_data,
+        "can_delete": bool(
+            saved_plan and saved_plan["title"] and saved_plan["service_date"]
+        ),
+    }
+
+
+@bp.route("/service/<int:service_id>")
+def service(service_id, rite="Renewed Ancient Text"):
+    context = build_plan_context(service_id, rite)
+    return render_template("service.html", **context)
 
 
 @bp.route("/service")
@@ -170,20 +175,47 @@ def services_new():
     return redirect(url_for("main.service", service_id=next_id["next_id"]))
 
 
-@bp.route("/text/<rite_slug>")
-def text(rite_slug):
-    if not rite_slug:
-        return (
-            render_template("page.html", title="Error", content="No rite indicated"),
-            404,
-        )
+@bp.route("/service/<int:service_id>/delete", methods=["POST"])
+def service_delete(service_id):
+    db = get_db()
+    db.execute("delete from services where id=?", (service_id,))
+    db.commit()
+    return redirect(url_for("main.services"))
+
+
+@bp.route("/text/<int:service_id>")
+def text(service_id):
 
     db = get_db()
+    saved_service = None
+    if service_id:
+        saved_service = db.execute(
+            "select text_order, text_disabled, season, rite from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+    if not saved_service:
+        return (
+            render_template(
+                "page.html",
+                title="Error",
+                content="Service ID required to generate text.",
+            ),
+            400,
+        )
 
     # Update not to be hard coded:
     title = "<!--<small>The Order for the Administration of</small>  \nThe Lord’s Supper  \n<small>*or*</small>  \nHoly Communion,  \n<small>Commonly Called</small>  \n-->The Holy Eucharist"
 
-    rite_name = rite_slug.replace("_", " ").title()
+    if not saved_service["rite"]:
+        return (
+            render_template(
+                "page.html",
+                title="Error",
+                content="Service rite is required to generate text.",
+            ),
+            400,
+        )
+    rite_name = saved_service["rite"]
     rite = db.execute(
         "select distinct filter_content from texts where type=? and filter_type=? and filter_content=? limit 1",
         ("ordinarium", "rite", rite_name),
@@ -194,17 +226,25 @@ def text(rite_slug):
             404,
         )
 
-    ids = request.args.get("ids", "").split(",") if request.args.get("ids") else []
-    if ids:
-        ids_json = "[" + ",".join(ids) + "]"
+    disabled_json = "[]"
+    if saved_service and saved_service["text_disabled"]:
+        disabled_json = saved_service["text_disabled"]
+
+    if saved_service["text_order"]:
         ordinaries = db.execute(
-            "select title, text from texts join json_each(?) ids on texts.id=ids.value where texts.type=? and texts.filter_type=? and texts.filter_content=? order by ids.key;",
-            (ids_json, "ordinarium", "rite", rite_name),
+            'select texts.title, texts.text from texts join json_each(?) saved_order on texts.id=saved_order.value left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? and saved_disabled.value is null order by saved_order.key;',
+            (
+                saved_service["text_order"],
+                disabled_json,
+                "ordinarium",
+                "rite",
+                rite_name,
+            ),
         ).fetchall()
     else:
         ordinaries = db.execute(
-            "select title, text from texts where type=? and filter_type=? and filter_content=? order by default_order;",
-            ("ordinarium", "rite", rite_name),
+            "select texts.title, texts.text from texts left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? and saved_disabled.value is null order by default_order;",
+            (disabled_json, "ordinarium", "rite", rite_name),
         ).fetchall()
     if not ordinaries:
         return (
@@ -212,17 +252,8 @@ def text(rite_slug):
             404,
         )
 
-    service_id = request.args.get("service_id")
     season = request.args.get("season", "")
     if service_id:
-        try:
-            service_id = int(service_id)
-        except (TypeError, ValueError):
-            service_id = None
-    if service_id:
-        saved_service = db.execute(
-            "select season from services where id=? limit 1", (service_id,)
-        ).fetchone()
         if saved_service and saved_service["season"]:
             season = saved_service["season"]
 
@@ -327,6 +358,12 @@ def persist_service():
             "text_disabled": disabled_json,
         }
     )
+    if not payload["title"] or not payload["service_date"]:
+        context = build_plan_context(service_id, payload["rite"])
+        context["service"]["title"] = payload["title"] or ""
+        context["service"]["service_date"] = payload["service_date"] or ""
+        context["form_error"] = "Title and service date are required."
+        return render_template("service.html", **context), 400
     if payload["service_date"]:
         try:
             payload["season"] = resolve_season(
@@ -349,7 +386,9 @@ def persist_service():
         )
     db.commit()
     # flash('Service saved.')
-
+    action = request.form.get("action", "")
+    if action == "generate":
+        return redirect(url_for("main.text", service_id=service_id))
     return redirect(url_for("main.service", service_id=service_id))
 
 

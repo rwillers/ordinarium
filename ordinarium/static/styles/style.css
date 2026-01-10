@@ -194,6 +194,10 @@ div#page {
 	.plan-header-actions {
 		display: flex;
 		gap: 0.75em;
+		align-items: center;
+	}
+	.plan-header-actions form {
+		margin: 0;
 	}
 	p {
 		line-height: 1.5;
@@ -306,6 +310,14 @@ div#page {
 		font-size: 0.95em;
 		font-weight: 600;
 		color: var(--body-color);
+	}
+	.plan-error {
+		border: 1px solid rgba(124, 30, 26, 0.4);
+		background: rgba(124, 30, 26, 0.08);
+		color: #7c1e1a;
+		padding: 0.6em 0.8em;
+		border-radius: 5px;
+		margin: 0.8em 0 1em 0;
 	}
 	.plan-title {
 		font-weight: 600;
