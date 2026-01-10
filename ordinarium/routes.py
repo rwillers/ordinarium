@@ -304,6 +304,40 @@ def text(service_id):
             (propers_json, "collect", "proper"),
         ).fetchone()
 
+    lessons = []
+    if propers_list:
+        propers_json = json.dumps(propers_list)
+        lessons = db.execute(
+            "select texts.data from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order",
+            (propers_json, "lesson", "proper"),
+        ).fetchall()
+
+    subcycle = observance.subcycle if observance else None
+    readings = {}
+    if lessons:
+        for row in lessons:
+            lesson = json.loads(row["data"])
+            if lesson.get("optional"):
+                continue
+            lesson_subcycles = lesson.get("subcycles") or []
+            if lesson_subcycles and subcycle and subcycle not in lesson_subcycles:
+                continue
+            reading_number = lesson.get("reading")
+            if reading_number in readings:
+                continue
+            readings[reading_number] = lesson
+
+    def format_reference(lesson):
+        if not lesson:
+            return None
+        reference = lesson.get("reference_short") or lesson.get("reference_long")
+        if not reference:
+            return None
+        book_name = lesson.get("book_name") or lesson.get("book")
+        if not book_name:
+            return reference
+        return f"{book_name} ({reference})"
+
     propers = {
         "acclamation": (
             acclamation["text"] if acclamation else "*Error: No acclamation found.*"
@@ -313,10 +347,14 @@ def text(service_id):
             if collect_text
             else "*Error: No collect found for this date.*"
         ),
-        "lesson_1_reference": "Isaiah (61:10–62:5)",
-        "psalm_reference": "Psalm (147:12-20)",
-        "lesson_2_reference": "Galations (3:23–4:7)",
-        "gospel_reference": "John (1:1–18)",
+        "lesson_1_reference": format_reference(readings.get(1))
+        or "*Error: No first lesson found.*",
+        "psalm_reference": format_reference(readings.get(2))
+        or "*Error: No psalm found.*",
+        "lesson_2_reference": format_reference(readings.get(3))
+        or "*Error: No second lesson found.*",
+        "gospel_reference": format_reference(readings.get(5))
+        or "*Error: No gospel found.*",
         "offertory_sentence": (
             offertory_sentence["text"]
             if offertory_sentence
