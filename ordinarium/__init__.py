@@ -1,5 +1,6 @@
 import html
 import os
+import re
 from html.parser import HTMLParser
 
 import markdown2
@@ -42,6 +43,7 @@ def create_app():
 		)
 	)
 	app.jinja_env.filters['markdown_template'] = markdown_template
+	app.jinja_env.filters['clean'] = lambda value: re.sub(r'\s+', ' ', value or '').strip()
 
 	app.register_blueprint(main_bp)
 	app.teardown_appcontext(close_db)

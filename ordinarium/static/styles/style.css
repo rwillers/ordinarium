@@ -1,5 +1,5 @@
 :root {
-	--header-font-family: -apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif;
+	--header-font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif;
 	--body-font-family: apple-system-ui-serif, ui-serif, Georgia, serif;
 	/* Occasional Prayers theme: */
 	--body-background-color: #f4f2f0; /* ivory */
@@ -74,6 +74,7 @@ header {
 
 	/* Fixed navbar code */
 	position: fixed;
+	z-index: 1000;
 	top: -100px;
 	padding: 120px 0 20px 0;
 
@@ -141,6 +142,25 @@ footer {
 	}
 }
 
+.button {
+  display: inline-block;
+  text-decoration: none;
+}
+button, input[type="submit"], .button, .button:visited {
+	background: #f6f6f6;
+	border: 1px solid var(--line-color);
+	border-radius: 5px;
+	color: #555 !important;
+	cursor: pointer;
+	font-family: var(--header-font-family);
+	font-size: 0.9em;
+	padding: 0.6em 1.2em;
+}
+button:hover, input[type="submit"]:hover, .button:hover {
+	background-color: #fff;
+	color: var(--body-color);
+}
+
 div#page {
 	h2 {
 		font-size: 1.2em;
@@ -177,7 +197,10 @@ div#page {
 		border: 1px solid var(--line-color);
 		margin: 0;
 		padding: 0.75em 1em;
-		cursor: grab;
+		position: relative;
+	}
+	.plan-row-main {
+		padding: 0 2.5em 0 2.4em;
 	}
 	.plan-row + .plan-row {
 		border-top: 0;
@@ -200,33 +223,57 @@ div#page {
 		opacity: 0.6;
 	}
 	.plan-item {
-		display: flex;
-		align-items: center;
-		gap: 0.6em;
+		display: block;
 	}
 	.plan-item input {
+		appearance: none;
+		background: #fff;
+		border: 2px solid var(--line-color);
+		border-radius: 5px;
+		height: 1.5em;
+		left: 1.5em;
 		margin: 0;
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		width: 1.5em;
+	}
+	.plan-item input:checked {
+		background: var(--rubric-color);
+		border-color: var(--rubric-color);
+	}
+	.plan-item input:checked::after {
+		border: solid #fff;
+		border-width: 0 2px 2px 0;
+		content: '';
+		height: 0.55em;
+		left: 50%;
+		position: absolute;
+		top: 45%;
+		transform: translate(-50%, -50%) rotate(45deg);
+		width: 0.3em;
 	}
 	.plan-actions {
 		margin: 0.8em 0 0 0;
 	}
-	.plan-submit {
-		background: #f6f6f6;
-		border: 1px solid var(--line-color);
-		border-radius: 5px;
-		color: #555;
-		cursor: pointer;
-		font-family: var(--header-font-family);
-		font-size: 0.9em;
-		padding: 0.6em 1.2em;
-	}
-	.plan-submit:hover {
-		background-color: #fff;
-		color: var(--body-color);
-	}
 	.plan-title {
 		font-weight: 600;
 		cursor: pointer;
+	}
+	.plan-handle {
+		color: var(--rubric-color);
+		font-size: 1.2em;
+		cursor: grab;
+		user-select: none;
+		position: absolute;
+		padding: 0.5em;
+		margin: 0 -0.5em;
+		right: 1em;
+		top: 50%;
+		transform: translateY(-50%);
+	}
+	.plan-row small {
+		display: block;
 	}
 }
 

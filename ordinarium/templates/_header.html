@@ -2,5 +2,10 @@
 	<div class="inner">
 		<h1><a href="{{ url_for('main.index') }}">Ordinarium</a></h1>
 		<h2>A liturgy planning workspace</h2>
+		{% if user %}
+		<div class="user-info">
+			<span>{{ user.first_name }}</span>
+		</div>
+		{% endif %}
 	</div>
 </header>

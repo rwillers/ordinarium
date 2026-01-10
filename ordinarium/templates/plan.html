@@ -4,7 +4,7 @@
 
 <div id="page">
 
-	<h2>Plan</h2>
+	<h2>Plan a service</h2>
 
 	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “Generate” to create your service text.</p>
 
@@ -13,16 +13,25 @@
 	<ul class="plan-list">
 	{% for ordinary in ordinaries %}
 		<li class="plan-row" draggable="true">
-			<label class="plan-item">
-				<input type="checkbox" name="ordinaries" value="{{ ordinary.id }}" data-default-order="{{ ordinary.default_order }}" checked>
-				<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
-			</label>
-		{% if ordinary.text %}<small>{{ ordinary.text | markdown_template | striptags | truncate(240) }}</small>{% endif %}
+			<div class="plan-row-main">
+				<label class="plan-item">
+					<input type="checkbox" name="ordinaries" value="{{ ordinary.id }}" data-default-order="{{ ordinary.default_order }}" {% if not ordinary.disabled %}checked{% endif %}>
+					<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
+					{% if ordinary.text %}<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>{% endif %}
+				</label>
+				<span class="plan-handle" aria-hidden="true">⠿</span>
+			</div>
 		</li>
 	{% endfor %}
 	</ul>
 
-	<form class="plan-actions" id="plan-form" action="{{ url_for('main.text') }}" method="get">
+	<form class="plan-actions" id="plan-save-form" action="{{ url_for('main.persist_service') }}" method="post">
+		<input type="hidden" name="ids" id="plan-save-ids" value="">
+		<input type="hidden" name="disabled" id="plan-save-disabled" value="">
+		<button class="plan-submit" type="submit">Save</button>
+	</form>
+
+	<form class="plan-actions" id="plan-form" action="{{ url_for('main.text', rite_slug=rite_slug) }}" method="get">
 		<input type="hidden" name="ids" id="plan-ids" value="">
 		<button class="plan-submit" type="submit">Generate</button>
 	</form>
@@ -31,17 +40,40 @@
 		const planList = document.querySelector('.plan-list')
 		const planForm = document.querySelector('#plan-form')
 		const planIds = document.querySelector('#plan-ids')
+		const planSaveForm = document.querySelector('#plan-save-form')
+		const planSaveIds = document.querySelector('#plan-save-ids')
+		const planSaveDisabled = document.querySelector('#plan-save-disabled')
 		let draggedRow = null
+
+		const collectIds = () => {
+			if (!planList) {
+				return []
+			}
+			return Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
+				.filter((input) => input.checked)
+				.map((input) => input.value)
+		}
 
 		if (planForm) {
 			planForm.addEventListener('submit', () => {
-				if (!planList || !planIds) {
+				if (!planIds) {
 					return
 				}
-				const ids = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
-					.filter((input) => input.checked)
+				planIds.value = collectIds().join(',')
+			})
+		}
+
+		if (planSaveForm) {
+			planSaveForm.addEventListener('submit', () => {
+				if (!planSaveIds || !planSaveDisabled) {
+					return
+				}
+				const inputs = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
+				planSaveIds.value = inputs.map((input) => input.value).join(',')
+				planSaveDisabled.value = inputs
+					.filter((input) => !input.checked)
 					.map((input) => input.value)
-				planIds.value = ids.join(',')
+					.join(',')
 			})
 		}
 
