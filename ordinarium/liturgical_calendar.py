@@ -136,39 +136,43 @@ def resolve_subcycle(service_date):
     return match["handle"] if match else None
 
 
-def resolve_observance(service_date):
+def resolve_observance(service_date, handle=None):
     if not service_date:
         return None
-    holidays = _load_holidays()
-    if not holidays:
+    options = resolve_observance_options(service_date)
+    if not options:
         return None
-    matches = []
-    for holiday in holidays:
-        for match_date in _expand_date_rules(holiday["date"], service_date.year):
-            if match_date == service_date:
-                matches.append(holiday)
-                break
+    if handle:
+        for option in options:
+            if option.handle == handle:
+                return option
+    return options[0]
+
+
+def resolve_observance_options(service_date):
+    if not service_date:
+        return []
+    matches = _matching_holidays(service_date)
     if not matches:
-        return None
-    matches.sort(key=lambda item: (item["priority"], item["index"]))
-    primary = matches[0]
-    propers = list(primary["propers"])
-    for fragment in _load_fragments():
-        if fragment["behaviour"] != "Append":
-            continue
-        for match_date in _expand_date_rules(fragment["date"], service_date.year):
-            if match_date == service_date:
-                propers.extend(fragment["propers"])
-                break
-    return Observance(
-        handle=primary["handle"],
-        name=primary["name"],
-        alternative_name=primary["alternative_name"],
-        propers=tuple(_dedupe_list(propers)),
-        style=primary["style"],
-        priority=primary["priority"],
-        subcycle=resolve_subcycle(service_date),
-    )
+        return []
+    options = []
+    for holiday in matches:
+        propers = list(holiday["propers"])
+        if holiday["style"].lower() == "sunday":
+            propers = _apply_fragments(propers, service_date)
+        options.append(
+            Observance(
+                handle=holiday["handle"],
+                name=holiday["name"],
+                alternative_name=holiday["alternative_name"],
+                propers=tuple(_dedupe_list(propers)),
+                style=holiday["style"],
+                priority=holiday["priority"],
+                subcycle=resolve_subcycle(service_date),
+            )
+        )
+    options.sort(key=lambda item: (item.priority, _holiday_index(item.handle)))
+    return options
 
 
 def _resolve_liturgical_year(service_date):
@@ -176,6 +180,27 @@ def _resolve_liturgical_year(service_date):
     if service_date >= advent_start(current_year):
         return current_year + 1
     return current_year
+
+
+def _matching_holidays(service_date):
+    holidays = _load_holidays()
+    if not holidays:
+        return []
+    matches = []
+    for holiday in holidays:
+        for match_date in _expand_date_rules(holiday["date"], service_date.year):
+            if match_date == service_date:
+                matches.append(holiday)
+                break
+    matches.sort(key=lambda item: (item["priority"], item["index"]))
+    return matches
+
+
+def _holiday_index(handle):
+    for holiday in _load_holidays():
+        if holiday["handle"] == handle:
+            return holiday["index"]
+    return 0
 
 
 def _expand_date_rules(date_field, year):
@@ -199,6 +224,17 @@ def _expand_date_rules(date_field, year):
                     continue
         dates.append(base_date)
     return dates
+
+
+def _apply_fragments(propers, service_date):
+    for fragment in _load_fragments():
+        if fragment["behaviour"] != "Append":
+            continue
+        for match_date in _expand_date_rules(fragment["date"], service_date.year):
+            if match_date == service_date:
+                propers.extend(fragment["propers"])
+                break
+    return propers
 
 
 def _split_rule_condition(rule):

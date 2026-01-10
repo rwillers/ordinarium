@@ -33,13 +33,22 @@
 			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}" required>
 		</label></p>
 		<p><label class="plan-field">
-			<span>Service title:</span>
-			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas" required>
-		</label></p>
-		<p><label class="plan-field">
 			<span>Season:</span>
 			<strong class="plan-field-value" id="plan-season-display">{{ service.season or 'Auto-detect' }}</strong>
 		</label></p>
+		<p id="plan-observance-row"{% if not observance_options %} style="display: none;"{% endif %}>
+			<label class="plan-field">
+				<span>Observance:</span>
+				<strong class="plan-field-value" id="plan-observance-display"{% if observance_options and observance_options|length > 1 %} style="display: none;"{% endif %}>
+					{{ observance_title or 'Auto-detect' }}
+				</strong>
+				<select id="plan-observance-select" name="observance_handle"{% if not observance_options or observance_options|length == 1 %} style="display: none;"{% endif %}>
+					{% for option in observance_options %}
+					<option value="{{ option.handle }}"{% if option.selected %} selected{% endif %}>{{ option.title }}{% if option.is_default %} (default){% endif %}</option>
+					{% endfor %}
+				</select>
+			</label>
+		</p>
 		<input type="hidden" name="rite" value="{{ service.rite or rite }}">
 	</form>
 
@@ -63,7 +72,9 @@
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
 		const planSeasonDisplay = document.querySelector('#plan-season-display')
-		const planTitleInput = document.querySelector('input[name="title"]')
+		const planObservanceRow = document.querySelector('#plan-observance-row')
+		const planObservanceDisplay = document.querySelector('#plan-observance-display')
+		const planObservanceSelect = document.querySelector('#plan-observance-select')
 		let draggedRow = null
 
 		if (planList) {
@@ -120,6 +131,9 @@
 			const updateObservanceFromDate = async () => {
 				if (!planServiceDate.value) {
 					planSeasonDisplay.textContent = 'Auto-detect'
+					if (planObservanceRow) {
+						planObservanceRow.style.display = 'none'
+					}
 					return
 				}
 				try {
@@ -131,8 +145,32 @@
 					if (data && data.season) {
 						planSeasonDisplay.textContent = data.season
 					}
-					if (data && data.title && planTitleInput && !planTitleInput.value) {
-						planTitleInput.value = data.title
+					if (planObservanceRow) {
+						const options = Array.isArray(data?.options) ? data.options : []
+						const hasOptions = options.length > 0
+						planObservanceRow.style.display = hasOptions ? '' : 'none'
+						if (hasOptions && planObservanceSelect) {
+							const currentValue = planObservanceSelect.value
+							planObservanceSelect.innerHTML = ''
+							options.forEach((option, index) => {
+								const optionEl = document.createElement('option')
+								optionEl.value = option.handle
+								optionEl.textContent = option.title + (index === 0 ? ' (default)' : '')
+								planObservanceSelect.appendChild(optionEl)
+							})
+							const stillValid = options.some((option) => option.handle === currentValue)
+							const selectedHandle = stillValid
+								? currentValue
+								: data.default_handle || options[0].handle
+							if (selectedHandle) {
+								planObservanceSelect.value = selectedHandle
+							}
+							planObservanceSelect.style.display = options.length > 1 ? '' : 'none'
+						}
+						if (planObservanceDisplay) {
+							planObservanceDisplay.textContent = data.title || 'Auto-detect'
+							planObservanceDisplay.style.display = options.length > 1 ? 'none' : ''
+						}
 					}
 				} catch (error) {
 					// Ignore lookup failures.

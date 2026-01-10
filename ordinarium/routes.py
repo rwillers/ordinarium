@@ -16,7 +16,11 @@ from flask import (
 import ordinarium
 
 from .db import get_db
-from .liturgical_calendar import resolve_observance, resolve_season
+from .liturgical_calendar import (
+    resolve_observance,
+    resolve_observance_options,
+    resolve_season,
+)
 
 bp = Blueprint("main", __name__)
 
@@ -56,9 +60,12 @@ def build_plan_context(service_id, rite):
     rite_slug = rite.replace(" ", "_").lower()
     db = get_db()
     saved_plan = db.execute(
-        "select text_order, text_disabled, title, season, service_date, rite from services where id=? limit 1",
+        "select text_order, text_disabled, title, season, service_date, rite, data from services where id=? limit 1",
         (service_id,),
     ).fetchone()
+    saved_data = (
+        json.loads(saved_plan["data"]) if saved_plan and saved_plan["data"] else {}
+    )
     if saved_plan and saved_plan["text_order"]:
         ordinaries = db.execute(
             'select texts.id, texts.default_order, texts.title, texts.detailed_title, texts.text, saved_order.value, saved_disabled.value as "disabled" from texts left join json_each(?) saved_order on texts.id=saved_order.value left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? order by saved_order.key',
@@ -75,8 +82,45 @@ def build_plan_context(service_id, rite):
             "select id, default_order, title, detailed_title, text from texts where type=? and filter_type=? and filter_content=? order by default_order",
             ("ordinarium", "rite", rite),
         ).fetchall()
+    observance_options = []
+    observance_title = ""
+    observance_handle = saved_data.get("observance_handle")
+    if saved_plan and saved_plan["service_date"]:
+        try:
+            service_date = date.fromisoformat(saved_plan["service_date"])
+        except ValueError:
+            service_date = None
+        if service_date:
+            options = resolve_observance_options(service_date)
+            if options:
+                observance_options = []
+                selected_handle = observance_handle
+                if selected_handle and not any(
+                    option.handle == selected_handle for option in options
+                ):
+                    selected_handle = None
+                if not selected_handle:
+                    selected_handle = options[0].handle
+                for index, option in enumerate(options):
+                    title = option.name or option.alternative_name
+                    observance_options.append(
+                        {
+                            "handle": option.handle,
+                            "title": title,
+                            "is_default": index == 0,
+                            "selected": option.handle == selected_handle,
+                        }
+                    )
+                observance_title = next(
+                    (
+                        option["title"]
+                        for option in observance_options
+                        if option["selected"]
+                    ),
+                    "",
+                )
+
     service_data = {
-        "title": saved_plan["title"] if saved_plan else "",
         "season": saved_plan["season"] if saved_plan else "",
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite,
@@ -88,9 +132,9 @@ def build_plan_context(service_id, rite):
         "ordinaries": ordinaries,
         "service_id": service_id,
         "service": service_data,
-        "can_delete": bool(
-            saved_plan and saved_plan["title"] and saved_plan["service_date"]
-        ),
+        "observance_options": observance_options,
+        "observance_title": observance_title,
+        "can_delete": bool(saved_plan and saved_plan["service_date"]),
     }
 
 
@@ -124,11 +168,11 @@ def services():
     db = get_db()
     today = date.today().isoformat()
     current_services = db.execute(
-        "select id, title, service_date from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+        "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
         (user["id"], today),
     ).fetchall()
     past_services = db.execute(
-        "select id, title, service_date from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
+        "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (user["id"], today),
     ).fetchall()
 
@@ -141,10 +185,25 @@ def services():
                 display_date = f"{parsed.month}/{parsed.day}/{parsed.year}"
             except (TypeError, ValueError):
                 pass
+            title = None
+            saved_data = json.loads(service["data"]) if service["data"] else {}
+            observance_handle = saved_data.get("observance_handle")
+            if service["service_date"]:
+                try:
+                    observance = resolve_observance(
+                        date.fromisoformat(service["service_date"]),
+                        observance_handle,
+                    )
+                except ValueError:
+                    observance = None
+                if observance:
+                    title = observance.name or observance.alternative_name
+            if not title:
+                title = service["title"]
             formatted.append(
                 {
                     "id": service["id"],
-                    "title": service["title"],
+                    "title": title or "Untitled Service",
                     "service_date": service["service_date"],
                     "display_date": display_date,
                 }
@@ -188,11 +247,17 @@ def text(service_id):
 
     db = get_db()
     saved_service = None
+    saved_data = {}
     if service_id:
         saved_service = db.execute(
-            "select text_order, text_disabled, season, rite, service_date from services where id=? limit 1",
+            "select text_order, text_disabled, season, rite, service_date, data from services where id=? limit 1",
             (service_id,),
         ).fetchone()
+        saved_data = (
+            json.loads(saved_service["data"])
+            if saved_service and saved_service["data"]
+            else {}
+        )
     if not saved_service:
         return (
             render_template(
@@ -289,7 +354,8 @@ def text(service_id):
     if saved_service and saved_service["service_date"]:
         try:
             observance = resolve_observance(
-                date.fromisoformat(saved_service["service_date"])
+                date.fromisoformat(saved_service["service_date"]),
+                saved_data.get("observance_handle"),
             )
         except ValueError:
             observance = None
@@ -403,37 +469,43 @@ def persist_service():
     )
     payload = {
         "user_id": existing_data.get("user_id", 1),
-        "title": existing_data.get("title", "Untitled Service"),
+        "title": existing_data.get("title"),
         "rite": existing_data.get("rite", "Renewed Ancient Text"),
         "season": None,
         "service_date": existing_data.get("service_date"),
+        "observance_handle": existing_data.get("observance_handle"),
     }
     payload.update(
         {
             "user_id": normalize_value(request.form.get("user_id"))
             or payload["user_id"],
-            "title": normalize_value(request.form.get("title")) or payload["title"],
             "rite": normalize_value(request.form.get("rite")) or payload["rite"],
             "service_date": normalize_value(request.form.get("service_date"))
             or payload["service_date"],
             "text_order": order_json,
             "text_disabled": disabled_json,
+            "observance_handle": normalize_value(
+                request.form.get("observance_handle")
+            ),
         }
     )
-    if payload["service_date"] and not normalize_value(request.form.get("title")):
+    observance = None
+    if payload["service_date"]:
         try:
             observance = resolve_observance(
-                date.fromisoformat(payload["service_date"])
+                date.fromisoformat(payload["service_date"]),
+                payload["observance_handle"],
             )
         except ValueError:
             observance = None
         if observance:
-            payload["title"] = observance.name or observance.alternative_name or ""
-    if not payload["title"] or not payload["service_date"]:
+            payload["observance_handle"] = observance.handle
+    if observance:
+        payload["title"] = observance.name or observance.alternative_name or ""
+    if not payload["service_date"]:
         context = build_plan_context(service_id, payload["rite"])
-        context["service"]["title"] = payload["title"] or ""
         context["service"]["service_date"] = payload["service_date"] or ""
-        context["form_error"] = "Title and service date are required."
+        context["form_error"] = "Service date is required."
         return render_template("service.html", **context), 400
     if payload["service_date"]:
         try:
@@ -496,16 +568,52 @@ def season_from_date():
 def observance_from_date():
     raw_date = request.args.get("date", "")
     if not raw_date:
-        return jsonify({"title": None, "handle": None, "propers": [], "season": None})
+        return jsonify(
+            {
+                "title": None,
+                "handle": None,
+                "propers": [],
+                "season": None,
+                "options": [],
+                "default_handle": None,
+            }
+        )
     try:
         service_date = date.fromisoformat(raw_date)
     except ValueError:
-        return jsonify({"title": None, "handle": None, "propers": [], "season": None})
-    observance = resolve_observance(service_date)
+        return jsonify(
+            {
+                "title": None,
+                "handle": None,
+                "propers": [],
+                "season": None,
+                "options": [],
+                "default_handle": None,
+            }
+        )
+    options = resolve_observance_options(service_date)
+    observance = options[0] if options else None
     season = resolve_season(service_date)
     if not observance:
-        return jsonify({"title": None, "handle": None, "propers": [], "season": season})
+        return jsonify(
+            {
+                "title": None,
+                "handle": None,
+                "propers": [],
+                "season": season,
+                "options": [],
+                "default_handle": None,
+            }
+        )
     title = observance.name or observance.alternative_name
+    options_payload = [
+        {
+            "handle": option.handle,
+            "title": option.name or option.alternative_name,
+            "priority": option.priority,
+        }
+        for option in options
+    ]
     return jsonify(
         {
             "title": title,
@@ -513,5 +621,9 @@ def observance_from_date():
             "propers": list(observance.propers),
             "season": season,
             "subcycle": observance.subcycle,
+            "options": options_payload,
+            "default_handle": options_payload[0]["handle"]
+            if options_payload
+            else None,
         }
     )
