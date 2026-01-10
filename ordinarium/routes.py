@@ -1,18 +1,22 @@
+import json
+from datetime import date
+
 from flask import (
     Blueprint,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
     send_from_directory,
     url_for,
 )
-import json
 
 import ordinarium
 
 from .db import get_db
+from .liturgical_calendar import resolve_season
 
 bp = Blueprint("main", __name__)
 
@@ -61,7 +65,7 @@ def plan(rite="Renewed Ancient Text"):
         service_id = 1
 
     saved_plan = db.execute(
-        "select text_order, text_disabled, title, season, occasion, service_date, rite from services where id=? limit 1",
+        "select text_order, text_disabled, title, season, service_date, rite from services where id=? limit 1",
         (service_id,),
     ).fetchone()
     if saved_plan and saved_plan["text_order"]:
@@ -83,7 +87,6 @@ def plan(rite="Renewed Ancient Text"):
     service_data = {
         "title": saved_plan["title"] if saved_plan else "",
         "season": saved_plan["season"] if saved_plan else "",
-        "occasion": saved_plan["occasion"] if saved_plan else "",
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite,
     }
@@ -140,21 +143,47 @@ def text(rite_slug):
             404,
         )
 
+    service_id = request.args.get("service_id")
     season = request.args.get("season", "")
+    if service_id:
+        try:
+            service_id = int(service_id)
+        except (TypeError, ValueError):
+            service_id = None
+    if service_id:
+        saved_service = db.execute(
+            "select season from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        if saved_service and saved_service["season"]:
+            season = saved_service["season"]
 
     # Move propers selection to class
-    acclamation = db.execute(
-        "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
-        ("acclamation", "season", season),
-    ).fetchone()
+    acclamation = None
+    if season:
+        acclamation = db.execute(
+            "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
+            ("acclamation", "season", season),
+        ).fetchone()
+    if not acclamation:
+        acclamation = db.execute(
+            "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
+            ("acclamation", "other", "At Any Time", "day", "The Lord’s Day"),
+        ).fetchone()
     offertory_sentence = db.execute(
         "select text from texts where type=? order by random() limit 1",
         ("offertory_sentence",),
     ).fetchone()
-    proper_preface = db.execute(
-        "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
-        ("proper_preface", "season", season),
-    ).fetchone()
+    proper_preface = None
+    if season:
+        proper_preface = db.execute(
+            "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
+            ("proper_preface", "season", season),
+        ).fetchone()
+    if not proper_preface:
+        proper_preface = db.execute(
+            "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
+            ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
+        ).fetchone()
     propers = {
         "acclamation": (
             acclamation["text"] if acclamation else "*Error: No acclamation found.*"
@@ -214,8 +243,7 @@ def persist_service():
         "user_id": existing_data.get("user_id", 1),
         "title": existing_data.get("title", "Untitled Service"),
         "rite": existing_data.get("rite", "Renewed Ancient Text"),
-        "season": existing_data.get("season"),
-        "occasion": existing_data.get("occasion"),
+        "season": None,
         "service_date": existing_data.get("service_date"),
     }
     payload.update(
@@ -224,15 +252,21 @@ def persist_service():
             or payload["user_id"],
             "title": normalize_value(request.form.get("title")) or payload["title"],
             "rite": normalize_value(request.form.get("rite")) or payload["rite"],
-            "season": normalize_value(request.form.get("season")) or payload["season"],
-            "occasion": normalize_value(request.form.get("occasion"))
-            or payload["occasion"],
             "service_date": normalize_value(request.form.get("service_date"))
             or payload["service_date"],
             "text_order": order_json,
             "text_disabled": disabled_json,
         }
     )
+    if payload["service_date"]:
+        try:
+            payload["season"] = resolve_season(
+                date.fromisoformat(payload["service_date"])
+            )
+        except ValueError:
+            payload["season"] = None
+    else:
+        payload["season"] = None
 
     if existing:
         db.execute(
@@ -265,3 +299,15 @@ def page(slug):
             render_template("page.html", title="Error", content="Page not found"),
             404,
         )
+
+
+@bp.route("/season")
+def season_from_date():
+    raw_date = request.args.get("date", "")
+    if not raw_date:
+        return jsonify({"season": None})
+    try:
+        season = resolve_season(date.fromisoformat(raw_date))
+    except ValueError:
+        season = None
+    return jsonify({"season": season})

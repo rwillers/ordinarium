@@ -142,6 +142,15 @@ footer {
 	}
 }
 
+input[type="text"], input[type="date"], select {
+	background: #f6f6f6;
+	border: 1px solid var(--line-color);
+	border-radius: 5px;
+	color: #555 !important;
+	font-family: var(--header-font-family);
+	font-size: 0.9em;
+	padding: 0.3em;
+}
 .button {
   display: inline-block;
   text-decoration: none;
@@ -166,6 +175,17 @@ div#page {
 		font-size: 1.2em;
 		font-weight: 600;
 		margin: 20px 0;
+	}
+	.plan-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		flex-wrap: wrap;
+	}
+	.plan-header-actions {
+		display: flex;
+		gap: 0.75em;
 	}
 	p {
 		line-height: 1.5;
@@ -259,8 +279,7 @@ div#page {
 	.plan-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4em;
-		min-width: 220px;
+		gap: 0.35em;
 	}
 	.plan-field span {
 		font-size: 0.8em;
@@ -274,6 +293,11 @@ div#page {
 		border: 1px solid rgba(27, 27, 27, 0.2);
 		background: #fff;
 		font-size: 0.95em;
+	}
+	.plan-field-value {
+		font-size: 0.95em;
+		font-weight: 600;
+		color: var(--body-color);
 	}
 	.plan-title {
 		font-weight: 600;

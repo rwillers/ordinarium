@@ -4,7 +4,13 @@
 
 <div id="page">
 
-	<h2>Plan a service</h2>
+	<div class="plan-header">
+		<h2>Plan a service</h2>
+		<div class="plan-header-actions">
+			<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
+			<button class="plan-submit" type="submit" form="plan-form">Generate</button>
+		</div>
+	</div>
 
 	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “Generate” to create your service text.</p>
 
@@ -14,24 +20,19 @@
 		<input type="hidden" name="service_id" value="{{ service_id }}">
 		<input type="hidden" name="ids" value="">
 		<input type="hidden" name="disabled" value="">
-		<label class="plan-field">
-			<span>Service title</span>
+		<p><label class="plan-field">
+			<span>Service title:</span>
 			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas">
-		</label>
-		<label class="plan-field">
-			<span>Service date</span>
-			<input type="date" name="service_date" value="{{ service.service_date or '' }}">
-		</label>
-		<label class="plan-field">
-			<span>Season</span>
-			<input type="text" name="season" value="{{ service.season or '' }}" placeholder="e.g., Christmastide">
-		</label>
-		<label class="plan-field">
-			<span>Occasion</span>
-			<input type="text" name="occasion" value="{{ service.occasion or '' }}" placeholder="e.g., Feast of the Presentation of Christ">
-		</label>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Service date:</span>
+			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}">
+		</label></p>
+		<p><label class="plan-field">
+			<span>Season:</span>
+			<strong class="plan-field-value" id="plan-season-display">{{ service.season or 'Auto-detect' }}</strong>
+		</label></p>
 		<input type="hidden" name="rite" value="{{ service.rite or rite }}">
-		<button class="plan-submit" type="submit">Save Details</button>
 	</form>
 
 	<ul class="plan-list">
@@ -49,26 +50,18 @@
 	{% endfor %}
 	</ul>
 
-	<form class="plan-actions" id="plan-save-form" action="{{ url_for('main.persist_service') }}" method="post">
+	<form id="plan-form" action="{{ url_for('main.text', rite_slug=rite_slug) }}" method="get">
 		<input type="hidden" name="service_id" value="{{ service_id }}">
-		<input type="hidden" name="ids" id="plan-save-ids" value="">
-		<input type="hidden" name="disabled" id="plan-save-disabled" value="">
-		<button class="plan-submit" type="submit">Save</button>
-	</form>
-
-	<form class="plan-actions" id="plan-form" action="{{ url_for('main.text', rite_slug=rite_slug) }}" method="get">
 		<input type="hidden" name="ids" id="plan-ids" value="">
-		<button class="plan-submit" type="submit">Generate</button>
 	</form>
 
 	<script>
 		const planList = document.querySelector('.plan-list')
 		const planForm = document.querySelector('#plan-form')
 		const planIds = document.querySelector('#plan-ids')
-		const planSaveForm = document.querySelector('#plan-save-form')
-		const planSaveIds = document.querySelector('#plan-save-ids')
-		const planSaveDisabled = document.querySelector('#plan-save-disabled')
 		const planMetaForm = document.querySelector('#plan-meta-form')
+		const planServiceDate = document.querySelector('#plan-service-date')
+		const planSeasonDisplay = document.querySelector('#plan-season-display')
 		let draggedRow = null
 
 		const collectIds = () => {
@@ -86,20 +79,6 @@
 					return
 				}
 				planIds.value = collectIds().join(',')
-			})
-		}
-
-		if (planSaveForm) {
-			planSaveForm.addEventListener('submit', () => {
-				if (!planSaveIds || !planSaveDisabled) {
-					return
-				}
-				const inputs = Array.from(planList.querySelectorAll('.plan-row input[type="checkbox"]'))
-				planSaveIds.value = inputs.map((input) => input.value).join(',')
-				planSaveDisabled.value = inputs
-					.filter((input) => !input.checked)
-					.map((input) => input.value)
-					.join(',')
 			})
 		}
 
@@ -149,6 +128,32 @@
 					.map((input) => input.value)
 					.join(',')
 			})
+		}
+
+		if (planServiceDate && planSeasonDisplay) {
+			const updateSeasonFromDate = async () => {
+				if (!planServiceDate.value) {
+					planSeasonDisplay.textContent = 'Auto-detect'
+					return
+				}
+				try {
+					const response = await fetch(`/season?date=${planServiceDate.value}`)
+					if (!response.ok) {
+						return
+					}
+					const data = await response.json()
+					if (data && data.season) {
+						planSeasonDisplay.textContent = data.season
+					}
+				} catch (error) {
+					// Ignore lookup failures.
+				}
+			}
+
+			planServiceDate.addEventListener('change', updateSeasonFromDate)
+			if (planServiceDate.value) {
+				updateSeasonFromDate()
+			}
 		}
 	</script>
 

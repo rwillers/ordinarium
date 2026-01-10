@@ -23,10 +23,9 @@ CREATE TABLE services (
   text_order TEXT GENERATED ALWAYS AS (json_extract(data, '$.text_order')) VIRTUAL,
   text_disabled TEXT GENERATED ALWAYS AS (json_extract(data, '$.text_disabled')) VIRTUAL,
   season TEXT GENERATED ALWAYS AS (json_extract(data, '$.season')) VIRTUAL,
-  occasion TEXT GENERATED ALWAYS AS (json_extract(data, '$.occasion')) VIRTUAL,
   service_date TEXT GENERATED ALWAYS AS (json_extract(data, '$.service_date')) VIRTUAL
 );
-INSERT INTO "services" VALUES(1, '{"user_id": 1,"title": "First Sunday of Christmas","rite": "Renewed Ancient Text","text_order": "[]","text_disabled": "[]","season": null,"occasion": null,"service_date": null}');
+INSERT INTO "services" VALUES(1, '{"user_id": 1,"title": "First Sunday of Christmas","rite": "Renewed Ancient Text","text_order": "[]","text_disabled": "[]","season": null,"service_date": null}');
 CREATE INDEX idx_services_user_id ON services(user_id);
 CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
