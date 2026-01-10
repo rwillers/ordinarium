@@ -29,12 +29,12 @@
 		<input type="hidden" name="ids" value="">
 		<input type="hidden" name="disabled" value="">
 		<p><label class="plan-field">
-			<span>Service title:</span>
-			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas" required>
-		</label></p>
-		<p><label class="plan-field">
 			<span>Service date:</span>
 			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Service title:</span>
+			<input type="text" name="title" value="{{ service.title or '' }}" placeholder="e.g., First Sunday of Christmas" required>
 		</label></p>
 		<p><label class="plan-field">
 			<span>Season:</span>
