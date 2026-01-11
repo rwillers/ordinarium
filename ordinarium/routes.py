@@ -43,6 +43,11 @@ def favicon():
     )
 
 
+@bp.route("/health")
+def health():
+    return jsonify({"status": "ok"})
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if g.user:
