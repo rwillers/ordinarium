@@ -396,7 +396,10 @@ def text(service_id):
     def format_reference(lesson):
         if not lesson:
             return None
-        reference = lesson.get("reference_short") or lesson.get("reference_long")
+        reference_short = lesson.get("reference_short")
+        if reference_short and reference_short.strip() == "_":
+            reference_short = None
+        reference = reference_short or lesson.get("reference_long")
         if not reference:
             return None
         book_name = lesson.get("book_name") or lesson.get("book")
