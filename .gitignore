@@ -1,0 +1,9 @@
+*.pyc
+.DS_Store
+.gitignore
+.editorconfig
+.vscode/
+Source\ Liturgies/
+instance/ordinarium-old.db
+instance/ordinarium.db-shm
+instance/ordinarium.db-wal

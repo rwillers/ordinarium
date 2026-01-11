@@ -1,7 +1,10 @@
+import os
 import random
 import re
 from datetime import date, timedelta
 from urllib.request import urlopen
+
+import pytest
 
 from ordinarium.liturgical_calendar import (
     resolve_observance_options,
@@ -177,6 +180,8 @@ def _sunday_dates(start, end):
 
 
 def test_sunday_sample_matches_ics_observance_and_season():
+    if os.getenv("SKIP_ICS_TESTS"):
+        pytest.skip("Skipping ICS alignment test via SKIP_ICS_TESTS.")
     ics_text = _fetch_ics(ICS_URL)
     events = _parse_events(ics_text)
     events_by_date = {}
