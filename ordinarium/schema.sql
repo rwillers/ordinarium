@@ -68,92 +68,39 @@ INSERT INTO "texts" VALUES(31, '{"type": "proper_preface", "filter": {"type": "c
 INSERT INTO "texts" VALUES(32, '{"type": "proper_preface", "filter": {"type": "common", "content": "Common of a Renewer of Society"}, "text": "For you never turn away from us, and continually send among us those who seek justice, defend the oppressed, feed the poor, and bind up the brokenhearted."}');
 INSERT INTO "texts" VALUES(33, '{"type": "proper_preface", "filter": {"type": "common", "content": "Common of a Reformer of the Church"}, "text": "For you, the master builder, never abandon your Church, which you have built of living stones; you call your faithful servants to restore its ancient walls and reunite its broken ramparts, that it may be a holy temple of your presence."}');
 INSERT INTO "texts" VALUES(34, '{"type": "proper_preface", "filter": {"type": "common", "content": "Common of any Commemoration"}, "text": "For the grace and virtue manifest in [N. and all] your saints, who have been the chosen vessels of your love, and the lights of the world in their generations."}');
-INSERT INTO "texts" VALUES(35, '{"type": "acclamation", "filter": {"type": "other", "content": "At Any Time"}, "text": "*&nbsp;* Blessed be God: the Father, the Son, and the Holy Spirit.  
-*People* **And blessed be his kingdom, now and for ever. Amen.**"}');
-INSERT INTO "texts" VALUES(36, '{"type": "acclamation", "filter": {"type": "season", "content": "Advent"}, "text": "*&nbsp;* Surely the Lord is coming soon.  
-*People* **Amen. Come Lord Jesus!**
-###### Revelation 22:20"}');
-INSERT INTO "texts" VALUES(37, '{"type": "acclamation", "filter": {"type": "season", "content": "Christmastide"}, "text": "*&nbsp;* For unto us a child is born,  
-*People* **Unto us a son is given.**
-###### Isaiah 9:6T"}');
-INSERT INTO "texts" VALUES(38, '{"type": "acclamation", "filter": {"type": "season", "content": "Feast of the Presentation of Christ"}, "text": "*&nbsp;* For unto us a child is born,  
-*People* **Unto us a son is given.**
-###### Isaiah 9:6T"}');
-INSERT INTO "texts" VALUES(39, '{"type": "acclamation", "filter": {"type": "season", "content": "Epiphanytide"}, "text": "*&nbsp;* I will make you as a light for the nations,  
-*People* **That my salvation may reach to the end of the earth.**
-###### Isaiah 49:6"}');
-INSERT INTO "texts" VALUES(40, '{"type": "acclamation", "filter": {"type": "season", "content": "Lent"}, "text": "*&nbsp;* Bless the Lord who forgives all our sins.  
-*People* **His mercy endures for ever.**"}');
-INSERT INTO "texts" VALUES(41, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Penitential Occasions"}, "text": "*&nbsp;* Bless the Lord who forgives all our sins.  
-*People* **His mercy endures for ever.**"}');
-INSERT INTO "texts" VALUES(42, '{"type": "acclamation", "filter": {"type": "season", "content": "Holy Week"}, "text": "*&nbsp;* Blessed be our God.  
-*People* **Now and for ever. Amen.**"}');
-INSERT INTO "texts" VALUES(43, '{"type": "acclamation", "filter": {"type": "season", "content": "Easter"}, "text": "*&nbsp;* Alleluia! Christ is risen!  
-*People* **The Lord is risen indeed! Alleluia!**"}');
-INSERT INTO "texts" VALUES(44, '{"type": "acclamation", "filter": {"type": "season", "content": "Pentecost"}, "text": "*&nbsp;* The Lord will pour out his Spirit upon all flesh,  
-*People* **And your sons and daughters shall prophesy.**  
-*&nbsp;* Your old men shall dream dreams,  
-*People* **And your young men shall see visions.**  
-*&nbsp;* You shall know that the Lord is in the midst of his people,  
-*People* **That he is the Lord and there is none else.**  
-*&nbsp;* And it shall come to pass  
-*People* **That everyone who calls on the Name of the Lord shall be saved.**
-###### Joel 2:27-28, 32T; Acts 2:17, 21T"}');
-INSERT INTO "texts" VALUES(45, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Occasions of Confirmation and Ordination"}, "text": "*&nbsp;* The Lord will pour out his Spirit upon all flesh,  
-*People* **And your sons and daughters shall prophesy.**  
-*&nbsp;* Your old men shall dream dreams,  
-*People* **And your young men shall see visions.**  
-*&nbsp;* You shall know that the Lord is in the midst of his people,  
-*People* **That he is the Lord and there is none else.**  
-*&nbsp;* And it shall come to pass  
-*People* **That everyone who calls on the Name of the Lord shall be saved.**
-###### Joel 2:27-28, 32T; Acts 2:17, 21T"}');
-INSERT INTO "texts" VALUES(46, '{"type": "acclamation", "filter": {"type": "season", "content": "All Saints’ Day"}, "text": "*&nbsp;* Worthy is the Lord our God,  
-*People* **To receive glory and honor and power.**
-###### Revelation 4:11T"}');
-INSERT INTO "texts" VALUES(47, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Other Appropriate Occasions"}, "text": "*&nbsp;* Worthy is the Lord our God,  
-*People* **To receive glory and honor and power.**
-###### Revelation 4:11T"}');
-INSERT INTO "texts" VALUES(48, '{"type": "offertory_sentence", "text": "Remember the words of the Lord Jesus, how he himself said, “It is more blessed to give than to receive.”
-###### Acts 20:35"}');
-INSERT INTO "texts" VALUES(49, '{"type": "offertory_sentence", "text": "Let your light shine before others, so that they may see your good works and give glory to your Father who is in heaven.
-###### Matthew 5:16"}');
-INSERT INTO "texts" VALUES(50, '{"type": "offertory_sentence", "text": "Do not lay up for yourselves treasures on earth, where moth and rust destroy and where thieves break in and steal, but lay up for yourselves treasures in heaven, where neither moth nor rust destroys and where thieves do not break in and steal. For where your treasure is, there your heart will be also.
-###### Matthew 6:19-21"}');
-INSERT INTO "texts" VALUES(51, '{"type": "offertory_sentence", "text": "Not everyone who says to me, “Lord, Lord,” will enter the kingdom of heaven, but the one who does the will of my Father who is in heaven.
-###### Matthew 7:21"}');
-INSERT INTO "texts" VALUES(52, '{"type": "offertory_sentence", "text": "Whoever sows sparingly will also reap sparingly, and whoever sows bountifully will also reap bountifully. Each one must give as he has decided in his heart, not reluctantly or under compulsion, for God loves a cheerful giver.
-###### 2 Corinthians 9:6-7"}');
-INSERT INTO "texts" VALUES(53, '{"type": "offertory_sentence", "text": "As we have opportunity, let us do good to everyone, and especially to those who are of the household of faith.
-###### Galatians 6:10"}');
-INSERT INTO "texts" VALUES(54, '{"type": "offertory_sentence", "text": "For God is not unjust so as to overlook your work and the love that you have shown for his name in serving the saints, as you still do.
-###### Hebrews 6:10"}');
-INSERT INTO "texts" VALUES(55, '{"type": "offertory_sentence", "text": "Do not neglect to do good and to share what you have, for such sacrifices are pleasing to God.
-###### Hebrews 13:16"}');
-INSERT INTO "texts" VALUES(56, '{"type": "offertory_sentence", "text": "If anyone has the world’s goods and sees his brother in need, yet closes his heart against him, how does God’s love abide in him?
-###### 1 John 3:17"}');
-INSERT INTO "texts" VALUES(57, '{"type": "offertory_sentence", "text": "If you have many possessions, make your gift from them in proportion; if few, do not be afraid to give according to the little you have. So you will be laying up a good treasure for yourself against the day of necessity.
-###### Tobit 4:8-9"}');
-INSERT INTO "texts" VALUES(58, '{"type": "offertory_sentence", "text": "And the King will answer them, “Truly, I say to you, as you did it to one of the least of these my brothers, you did it to me.”
-###### Matthew 25:40"}');
-INSERT INTO "texts" VALUES(59, '{"type": "offertory_sentence", "text": "How then will they call on him in whom they have not believed? And how are they to believe in him of whom they have never heard? And how are they to hear without someone preaching? And how are they to preach unless they are sent?
-###### Romans 10:14-15"}');
-INSERT INTO "texts" VALUES(60, '{"type": "offertory_sentence", "text": "And Jesus said to them, “The harvest is plentiful, but the laborers are few. Therefore pray earnestly to the Lord of the harvest to send out laborers into his harvest.”
-###### Luke 10:2"}');
-INSERT INTO "texts" VALUES(61, '{"type": "offertory_sentence", "text": "They shall not appear before the LORD empty-handed. Every man shall give as he is able, according to the blessing of the LORD your God that he has given you.
-###### Deuteronomy 16:16-17"}');
-INSERT INTO "texts" VALUES(62, '{"type": "offertory_sentence", "text": "Offer unto God a sacrifice of thanksgiving, and pay your vows unto the Most High.
-###### Psalm 50:14"}');
-INSERT INTO "texts" VALUES(63, '{"type": "offertory_sentence", "text": "Ascribe unto the LORD the honor due unto his Name; bring offerings and come into his courts.
-###### Psalm 96:8"}');
-INSERT INTO "texts" VALUES(64, '{"type": "offertory_sentence", "text": "Walk in love, as Christ loved us and gave himself up for us, a fragrant offering and sacrifice to God.
-###### Ephesians 5:2"}');
-INSERT INTO "texts" VALUES(65, '{"type": "offertory_sentence", "text": "I appeal to you therefore, brothers and sisters, by the mercies of God, to present your bodies as a living sacrifice, holy and acceptable to God, which is your spiritual worship.
-###### Romans 12:1"}');
-INSERT INTO "texts" VALUES(66, '{"type": "offertory_sentence", "text": "For you know the grace of our Lord Jesus Christ, that though he was rich, yet for your sake he became poor, so that you by his poverty might become rich.
-###### 2 Corinthians 8:9"}');
-INSERT INTO "texts" VALUES(67, '{"type": "offertory_sentence", "text": "You are a chosen race, a royal priesthood, a holy nation, a people for his own possession, that you may proclaim the excellencies of him who called you out of darkness into his marvelous light.
-###### 1 Peter 2:9"}');
+INSERT INTO "texts" VALUES(35, '{"type": "acclamation", "filter": {"type": "other", "content": "At Any Time"}, "text": "*&nbsp;* Blessed be God: the Father, the Son, and the Holy Spirit.  \n*People* **And blessed be his kingdom, now and for ever. Amen.**"}');
+INSERT INTO "texts" VALUES(36, '{"type": "acclamation", "filter": {"type": "season", "content": "Advent"}, "text": "*&nbsp;* Surely the Lord is coming soon.  \n*People* **Amen. Come Lord Jesus!**\n###### Revelation 22:20"}');
+INSERT INTO "texts" VALUES(37, '{"type": "acclamation", "filter": {"type": "season", "content": "Christmastide"}, "text": "*&nbsp;* For unto us a child is born,  \n*People* **Unto us a son is given.**\n###### Isaiah 9:6T"}');
+INSERT INTO "texts" VALUES(38, '{"type": "acclamation", "filter": {"type": "season", "content": "Feast of the Presentation of Christ"}, "text": "*&nbsp;* For unto us a child is born,  \n*People* **Unto us a son is given.**\n###### Isaiah 9:6T"}');
+INSERT INTO "texts" VALUES(39, '{"type": "acclamation", "filter": {"type": "season", "content": "Epiphanytide"}, "text": "*&nbsp;* I will make you as a light for the nations,  \n*People* **That my salvation may reach to the end of the earth.**\n###### Isaiah 49:6"}');
+INSERT INTO "texts" VALUES(40, '{"type": "acclamation", "filter": {"type": "season", "content": "Lent"}, "text": "*&nbsp;* Bless the Lord who forgives all our sins.  \n*People* **His mercy endures for ever.**"}');
+INSERT INTO "texts" VALUES(41, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Penitential Occasions"}, "text": "*&nbsp;* Bless the Lord who forgives all our sins.  \n*People* **His mercy endures for ever.**"}');
+INSERT INTO "texts" VALUES(42, '{"type": "acclamation", "filter": {"type": "season", "content": "Holy Week"}, "text": "*&nbsp;* Blessed be our God.  \n*People* **Now and for ever. Amen.**"}');
+INSERT INTO "texts" VALUES(43, '{"type": "acclamation", "filter": {"type": "season", "content": "Easter"}, "text": "*&nbsp;* Alleluia! Christ is risen!  \n*People* **The Lord is risen indeed! Alleluia!**"}');
+INSERT INTO "texts" VALUES(44, '{"type": "acclamation", "filter": {"type": "season", "content": "Pentecost"}, "text": "*&nbsp;* The Lord will pour out his Spirit upon all flesh,  \n*People* **And your sons and daughters shall prophesy.**  \n*&nbsp;* Your old men shall dream dreams,  \n*People* **And your young men shall see visions.**  \n*&nbsp;* You shall know that the Lord is in the midst of his people,  \n*People* **That he is the Lord and there is none else.**  \n*&nbsp;* And it shall come to pass  \n*People* **That everyone who calls on the Name of the Lord shall be saved.**\n###### Joel 2:27-28, 32T; Acts 2:17, 21T"}');
+INSERT INTO "texts" VALUES(45, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Occasions of Confirmation and Ordination"}, "text": "*&nbsp;* The Lord will pour out his Spirit upon all flesh,  \n*People* **And your sons and daughters shall prophesy.**  \n*&nbsp;* Your old men shall dream dreams,  \n*People* **And your young men shall see visions.**  \n*&nbsp;* You shall know that the Lord is in the midst of his people,  \n*People* **That he is the Lord and there is none else.**  \n*&nbsp;* And it shall come to pass  \n*People* **That everyone who calls on the Name of the Lord shall be saved.**\n###### Joel 2:27-28, 32T; Acts 2:17, 21T"}');
+INSERT INTO "texts" VALUES(46, '{"type": "acclamation", "filter": {"type": "season", "content": "All Saints’ Day"}, "text": "*&nbsp;* Worthy is the Lord our God,  \n*People* **To receive glory and honor and power.**\n###### Revelation 4:11T"}');
+INSERT INTO "texts" VALUES(47, '{"type": "acclamation", "filter": {"type": "occasion", "content": "Other Appropriate Occasions"}, "text": "*&nbsp;* Worthy is the Lord our God,  \n*People* **To receive glory and honor and power.**\n###### Revelation 4:11T"}');
+INSERT INTO "texts" VALUES(48, '{"type": "offertory_sentence", "text": "Remember the words of the Lord Jesus, how he himself said, “It is more blessed to give than to receive.”\n###### Acts 20:35"}');
+INSERT INTO "texts" VALUES(49, '{"type": "offertory_sentence", "text": "Let your light shine before others, so that they may see your good works and give glory to your Father who is in heaven.\n###### Matthew 5:16"}');
+INSERT INTO "texts" VALUES(50, '{"type": "offertory_sentence", "text": "Do not lay up for yourselves treasures on earth, where moth and rust destroy and where thieves break in and steal, but lay up for yourselves treasures in heaven, where neither moth nor rust destroys and where thieves do not break in and steal. For where your treasure is, there your heart will be also.\n###### Matthew 6:19-21"}');
+INSERT INTO "texts" VALUES(51, '{"type": "offertory_sentence", "text": "Not everyone who says to me, “Lord, Lord,” will enter the kingdom of heaven, but the one who does the will of my Father who is in heaven.\n###### Matthew 7:21"}');
+INSERT INTO "texts" VALUES(52, '{"type": "offertory_sentence", "text": "Whoever sows sparingly will also reap sparingly, and whoever sows bountifully will also reap bountifully. Each one must give as he has decided in his heart, not reluctantly or under compulsion, for God loves a cheerful giver.\n###### 2 Corinthians 9:6-7"}');
+INSERT INTO "texts" VALUES(53, '{"type": "offertory_sentence", "text": "As we have opportunity, let us do good to everyone, and especially to those who are of the household of faith.\n###### Galatians 6:10"}');
+INSERT INTO "texts" VALUES(54, '{"type": "offertory_sentence", "text": "For God is not unjust so as to overlook your work and the love that you have shown for his name in serving the saints, as you still do.\n###### Hebrews 6:10"}');
+INSERT INTO "texts" VALUES(55, '{"type": "offertory_sentence", "text": "Do not neglect to do good and to share what you have, for such sacrifices are pleasing to God.\n###### Hebrews 13:16"}');
+INSERT INTO "texts" VALUES(56, '{"type": "offertory_sentence", "text": "If anyone has the world’s goods and sees his brother in need, yet closes his heart against him, how does God’s love abide in him?\n###### 1 John 3:17"}');
+INSERT INTO "texts" VALUES(57, '{"type": "offertory_sentence", "text": "If you have many possessions, make your gift from them in proportion; if few, do not be afraid to give according to the little you have. So you will be laying up a good treasure for yourself against the day of necessity.\n###### Tobit 4:8-9"}');
+INSERT INTO "texts" VALUES(58, '{"type": "offertory_sentence", "text": "And the King will answer them, “Truly, I say to you, as you did it to one of the least of these my brothers, you did it to me.”\n###### Matthew 25:40"}');
+INSERT INTO "texts" VALUES(59, '{"type": "offertory_sentence", "text": "How then will they call on him in whom they have not believed? And how are they to believe in him of whom they have never heard? And how are they to hear without someone preaching? And how are they to preach unless they are sent?\n###### Romans 10:14-15"}');
+INSERT INTO "texts" VALUES(60, '{"type": "offertory_sentence", "text": "And Jesus said to them, “The harvest is plentiful, but the laborers are few. Therefore pray earnestly to the Lord of the harvest to send out laborers into his harvest.”\n###### Luke 10:2"}');
+INSERT INTO "texts" VALUES(61, '{"type": "offertory_sentence", "text": "They shall not appear before the LORD empty-handed. Every man shall give as he is able, according to the blessing of the LORD your God that he has given you.\n###### Deuteronomy 16:16-17"}');
+INSERT INTO "texts" VALUES(62, '{"type": "offertory_sentence", "text": "Offer unto God a sacrifice of thanksgiving, and pay your vows unto the Most High.\n###### Psalm 50:14"}');
+INSERT INTO "texts" VALUES(63, '{"type": "offertory_sentence", "text": "Ascribe unto the LORD the honor due unto his Name; bring offerings and come into his courts.\n###### Psalm 96:8"}');
+INSERT INTO "texts" VALUES(64, '{"type": "offertory_sentence", "text": "Walk in love, as Christ loved us and gave himself up for us, a fragrant offering and sacrifice to God.\n###### Ephesians 5:2"}');
+INSERT INTO "texts" VALUES(65, '{"type": "offertory_sentence", "text": "I appeal to you therefore, brothers and sisters, by the mercies of God, to present your bodies as a living sacrifice, holy and acceptable to God, which is your spiritual worship.\n###### Romans 12:1"}');
+INSERT INTO "texts" VALUES(66, '{"type": "offertory_sentence", "text": "For you know the grace of our Lord Jesus Christ, that though he was rich, yet for your sake he became poor, so that you by his poverty might become rich.\n###### 2 Corinthians 8:9"}');
+INSERT INTO "texts" VALUES(67, '{"type": "offertory_sentence", "text": "You are a chosen race, a royal priesthood, a holy nation, a people for his own possession, that you may proclaim the excellencies of him who called you out of darkness into his marvelous light.\n###### 1 Peter 2:9"}');
 INSERT INTO "texts" VALUES(68, '{"type":"ordinarium","filter":{"type":"rite","content":"Renewed Ancient Text"},"text":"*The People standing, the Celebrant says*\n\n{{ acclamation | markdown }}","title":"The Acclamation","default_order":10}');
 INSERT INTO "texts" VALUES(69, '{"type":"ordinarium","filter":{"type":"rite","content":"Renewed Ancient Text"},"text":"*The Celebrant prays (and the People may be invited to join)*\n\nAlmighty God, to you all hearts are open, all desires known, and from you no secrets are hid: Cleanse the thoughts of our hearts by the inspiration of your Holy Spirit, that we may perfectly love you, and worthily magnify your holy Name; through Christ our Lord. **Amen.**","title":"The Collect for Purity","default_order":20}');
 INSERT INTO "texts" VALUES(70, '{"type":"ordinarium","filter":{"type":"rite","content":"Renewed Ancient Text"},"text":"*Then follows the Summary of the Law, or The Decalogue (page 100).*\n\nHear what our Lord Jesus Christ says:  \nYou shall love the Lord your God with all your heart and with all your soul and with all your mind. This is the first and great commandment. And the second is like it: You shall love your neighbor as yourself. On these two commandments depend all the Law and the Prophets.\n###### Matthew 22:37-40T","title":"The Summary of the Law","default_order":30}');
