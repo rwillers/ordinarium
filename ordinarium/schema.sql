@@ -199,7 +199,7 @@ CREATE TABLE users (
   last_name TEXT GENERATED ALWAYS AS (json_extract(data, '$.last_name')) VIRTUAL,
   email TEXT GENERATED ALWAYS AS (json_extract(data, '$.email')) VIRTUAL
 );
-INSERT INTO "users" VALUES(1, '{"first_name": "Ryan","last_name": "Willers","email": "ryanwillers@gmail.com"}');
+INSERT INTO "users" VALUES(1, '{"first_name": "Ryan","last_name": "Willers","email": "ryanwillers@gmail.com","password_hash": "scrypt:32768:8:1$fdx7ZmE2Q6Su4zbK$dbf93177130f9786ec6dd6afc3c1b88f55e9bcd85929539a3247dc6d5e3f0cb7b4bdf25d3b161542af4e226fffe4acb81fd33da136db8de02ccb79d7b61619c2"}');
 CREATE INDEX idx_users_email ON users(email);
 INSERT INTO "texts" VALUES(97, '{"type": "collect", "filter": {"type": "proper", "content": "AdventI"}, "text": "Almighty God, give us grace to cast away the works of darkness, and put on the armor of light, now in the time of this mortal life in which your Son Jesus Christ came to visit us in great humility; that in the last day, when he shall come again in his glorious majesty to judge both the living and the dead, we may rise to the life immortal; through him who lives and reigns with you and the Holy Spirit, one God, now and for ever. **Amen.**", "default_order": 0}');
 INSERT INTO "texts" VALUES(98, '{"type": "collect", "filter": {"type": "proper", "content": "AdventII"}, "text": "Blessed Lord, who caused all holy Scriptures to be written for our learning: Grant us so to hear them, read, mark, learn, and inwardly digest them, that by patience and the comfort of your holy Word we may embrace and ever hold fast the blessed hope of everlasting life, which you have given us in our Savior Jesus Christ; who lives and reigns with you and the Holy Spirit, one God, for ever and ever. **Amen.**", "default_order": 0}');

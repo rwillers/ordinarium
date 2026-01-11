@@ -71,6 +71,16 @@
 	{% endfor %}
 	</ul>
 
+	<div class="plan-footer-actions">
+		<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
+		<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
+		{% if can_delete %}
+		<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+			<button class="plan-submit" type="submit">Delete</button>
+		</form>
+		{% endif %}
+	</div>
+
 	<script>
 		const planList = document.querySelector('.plan-list')
 		const planMetaForm = document.querySelector('#plan-meta-form')

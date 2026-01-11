@@ -3,9 +3,19 @@
 		<h1><a href="{{ url_for('main.index') }}">Ordinarium</a></h1>
 		<h2>A liturgy planning workspace</h2>
 		{% if user %}
-		<div class="user-info">
-			<span>{{ user.first_name }}</span>
+		<div class="user-menu">
+			<button class="user-toggle" type="button">
+				<span class="user-name">{{ user.first_name }}</span>
+				<span class="user-caret">▼</span>
+			</button>
+			<div class="user-dropdown">
+				<a href="{{ url_for('main.services') }}">My services</a>
+				<a href="{{ url_for('main.account') }}">Update account</a>
+				<a href="{{ url_for('main.logout') }}">Log out</a>
+			</div>
 		</div>
+		{% else %}
+		<a class="account-link" href="{{ url_for('main.login') }}">Account</a>
 		{% endif %}
 	</div>
 </header>

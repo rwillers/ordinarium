@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+	<div class="plan-header">
+		<h2>Update account</h2>
+	</div>
+
+	{% if error %}
+	<p class="plan-error">{{ error }}</p>
+	{% endif %}
+
+	<form class="auth-form" method="post">
+		<p><label class="plan-field">
+			<span>First name:</span>
+			<input type="text" name="first_name" autocomplete="given-name" value="{{ first_name }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Last name:</span>
+			<input type="text" name="last_name" autocomplete="family-name" value="{{ last_name }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Email address:</span>
+			<input type="email" name="email" autocomplete="email" value="{{ email }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>New password:</span>
+			<input type="password" name="password" id="account-password" autocomplete="new-password" placeholder="Leave blank to keep current password">
+		</label></p>
+		<p class="auth-toggle-row"><label class="auth-toggle">
+			<input type="checkbox" id="account-show-password">
+			Show password
+		</label></p>
+		<div class="auth-actions">
+			<button class="plan-submit" type="submit">Save changes</button>
+		</div>
+	</form>
+</div>
+
+<script>
+	const accountPassword = document.querySelector('#account-password')
+	const accountToggle = document.querySelector('#account-show-password')
+	if (accountPassword && accountToggle) {
+		accountToggle.addEventListener('change', () => {
+			accountPassword.type = accountToggle.checked ? 'text' : 'password'
+		})
+	}
+</script>
+
+{% endblock %}
