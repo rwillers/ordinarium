@@ -68,7 +68,7 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 - Collaboration features: comments, approvals, version history.
 - Authentication and team roles.
 
-## Current to do items
+### Current to do items
 
 - Migrate TSVs into database
 - Add custom liturgy element support (markdown with visual editor?)
