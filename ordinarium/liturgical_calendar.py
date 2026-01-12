@@ -85,7 +85,7 @@ def resolve_season(service_date):
     return "Ordinary Time"
 
 
-DATA_DIR = Path(__file__).resolve().parents[1] / "Source Liturgies" / "ProperData"
+DATA_DIR = Path(__file__).resolve().parent / "data" / "properdata"
 HOLIDAYS_PATH = DATA_DIR / "Holidays.tsv"
 FRAGMENTS_PATH = DATA_DIR / "Fragments.tsv"
 SUBCYCLES_PATH = DATA_DIR / "Subcycles.tsv"
