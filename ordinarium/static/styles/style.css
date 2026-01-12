@@ -167,9 +167,9 @@ header {
 	}
 	.user-menu:focus-within .user-dropdown,
 	.user-menu:hover .user-dropdown {
-		opacity: 1;
-		pointer-events: auto;
-		transform: translateY(0);
+		opacity: 1 !important;
+		pointer-events: auto !important;
+		transform: translateY(0) !important;
 	}
 	.user-dropdown a {
 		display: block;
