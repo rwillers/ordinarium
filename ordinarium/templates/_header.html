@@ -8,7 +8,7 @@
 				<span class="user-name">{{ user.first_name }}</span>
 				<span class="user-caret">▼</span>
 			</button>
-			<div class="user-dropdown">
+			<div class="user-dropdown" style="opacity: 0; pointer-events: none; transform: translateY(-4px);">
 				<a href="{{ url_for('main.services') }}">My services</a>
 				<a href="{{ url_for('main.account') }}">Update account</a>
 				<a href="{{ url_for('main.logout') }}">Log out</a>
