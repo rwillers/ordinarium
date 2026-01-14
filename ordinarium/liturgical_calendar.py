@@ -1,10 +1,10 @@
-import csv
 import re
 from dataclasses import dataclass
 from datetime import date, timedelta
 from functools import lru_cache
-from pathlib import Path
 from typing import Optional
+
+from .db import get_db
 
 
 def easter_date(year):
@@ -84,11 +84,6 @@ def resolve_season(service_date):
 
     return "Ordinary Time"
 
-
-DATA_DIR = Path(__file__).resolve().parent / "data" / "properdata"
-HOLIDAYS_PATH = DATA_DIR / "Holidays.tsv"
-FRAGMENTS_PATH = DATA_DIR / "Fragments.tsv"
-SUBCYCLES_PATH = DATA_DIR / "Subcycles.tsv"
 
 WEEKDAY_MAP = {
     "Mon": 0,
@@ -301,49 +296,24 @@ def _parse_propers(value):
     return [item.strip() for item in value.split(",") if item.strip() and item != "_"]
 
 
-def _normalize_header(header):
-    header = header.strip()
-    header = re.sub(r"\[.*\]$", "", header)
-    return header.lstrip("$#!?*~")
-
-
-def _read_tsv(path):
-    if not path.exists():
-        return []
-    with path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.reader(handle, delimiter="\t")
-        rows = list(reader)
-    if not rows:
-        return []
-    headers = [_normalize_header(header) for header in rows[0]]
-    parsed = []
-    for row in rows[1:]:
-        if not row:
-            continue
-        item = {}
-        for index, header in enumerate(headers):
-            if index < len(row):
-                item[header] = row[index].strip()
-            else:
-                item[header] = ""
-        parsed.append(item)
-    return parsed
-
-
 @lru_cache(maxsize=1)
 def _load_holidays():
     holidays = []
-    for index, row in enumerate(_read_tsv(HOLIDAYS_PATH)):
+    db = get_db()
+    rows = db.execute(
+        "select id, handle, date_rule, style, priority, propers, name, alternative_name from holidays order by id"
+    ).fetchall()
+    for row in rows:
         holidays.append(
             {
-                "index": index,
-                "handle": row.get("Handle", ""),
-                "date": row.get("Date", ""),
-                "style": row.get("Style", ""),
-                "priority": _parse_int(row.get("Priority"), default=99),
-                "propers": _parse_propers(row.get("Propers", "")),
-                "name": row.get("Name", ""),
-                "alternative_name": row.get("AlternativeName", ""),
+                "index": row["id"] - 1,
+                "handle": row["handle"] or "",
+                "date": row["date_rule"] or "",
+                "style": row["style"] or "",
+                "priority": _parse_int(row["priority"], default=99),
+                "propers": _parse_propers(row["propers"]),
+                "name": row["name"] or "",
+                "alternative_name": row["alternative_name"] or "",
             }
         )
     return holidays
@@ -352,12 +322,16 @@ def _load_holidays():
 @lru_cache(maxsize=1)
 def _load_fragments():
     fragments = []
-    for row in _read_tsv(FRAGMENTS_PATH):
+    db = get_db()
+    rows = db.execute(
+        "select date_rule, behaviour, propers from fragments order by id"
+    ).fetchall()
+    for row in rows:
         fragments.append(
             {
-                "date": row.get("Date", ""),
-                "behaviour": row.get("Behaviour", ""),
-                "propers": _parse_propers(row.get("Propers", "")),
+                "date": row["date_rule"] or "",
+                "behaviour": row["behaviour"] or "",
+                "propers": _parse_propers(row["propers"]),
             }
         )
     return fragments
@@ -366,13 +340,17 @@ def _load_fragments():
 @lru_cache(maxsize=1)
 def _load_subcycles():
     subcycles = []
-    for row in _read_tsv(SUBCYCLES_PATH):
+    db = get_db()
+    rows = db.execute(
+        "select handle, epoch, order_value, full_cycle from subcycles order by id"
+    ).fetchall()
+    for row in rows:
         subcycles.append(
             {
-                "handle": row.get("Handle", ""),
-                "epoch": _parse_int(row.get("Epoch"), default=0),
-                "order": _parse_int(row.get("Order"), default=0),
-                "full_cycle": _parse_int(row.get("FullCycle"), default=1),
+                "handle": row["handle"] or "",
+                "epoch": _parse_int(row["epoch"], default=0),
+                "order": _parse_int(row["order_value"], default=0),
+                "full_cycle": _parse_int(row["full_cycle"], default=1),
             }
         )
     return subcycles

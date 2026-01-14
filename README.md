@@ -46,7 +46,7 @@ All service texts are represented in Markdown.
 
 ## Database structure
 
-Note that the SQLite database uses JSON data storage fields with virtual columns. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing).
+Note that the SQLite database uses JSON data storage fields with virtual columns. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
 
 ## Tech stack (planned)
 - Python 3.11+
@@ -59,12 +59,12 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 1) Create and activate a virtual environment.
 2) Install dependencies: `pip install -r requirements.txt`.
 3) Initialize the database: `flask --app ordinarium init-db`.
-4) Run the app: `flask --app ordinarium run`.
+4) If upgrading an existing database, run `python scripts/migrate_db.py`.
+5) Run the app: `flask --app ordinarium run`.
 
 ## Roadmap
 
 ### Short term
-- Migrate TSVs dependencies into database.
 - Add sharing links (enable generated service access via UUID?).
 - Add custom liturgy element support (markdown with visual editor?).
 - Add custom liturgy element library by account.
@@ -72,6 +72,7 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 - Fix narrow screen wrapping in generated services.
 - Convert in-app messaging to use flash().
 - Implement initial export formats: PDF and DOCX.
+- Code clean up.
 
 ### Long term
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).

@@ -34,6 +34,7 @@ git clone git@github.com:rwillers/ordinarium.git .
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+python scripts/migrate_db.py
 ```
 
 ### Repo deploy key (server -> GitHub)
@@ -121,6 +122,7 @@ Add GitHub secrets:
 - `LIGHTSAIL_SSH_KEY` (private key for deploy)
 
 The workflow in `.github/workflows/deploy.yml` runs `./scripts/deploy.sh` on push to `main`.
+`scripts/deploy.sh` now runs `python scripts/migrate_db.py` to apply any new migrations.
 
 If `deploy` cannot run `sudo systemctl restart ordinarium`, add a sudoers entry:
 ```
