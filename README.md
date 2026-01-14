@@ -61,18 +61,21 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 3) Initialize the database: `flask --app ordinarium init-db`.
 4) Run the app: `flask --app ordinarium run`.
 
-## Roadmap (high level)
-- Additional liturgy templates (Morning Prayer, Compline, funerals, weddings).
-- Rich propers search with calendar/season awareness.
-- Export formats: PDF, DOCX, HTML, Planning Center or ProPresenter-friendly outputs.
-- Collaboration features: comments, approvals, version history.
-- Authentication and team roles.
+## Roadmap
 
-### Current to do items
+### Short term
+- Migrate TSVs dependencies into database.
+- Add sharing links (enable generated service access via UUID?).
+- Add custom liturgy element support (markdown with visual editor?).
+- Add custom liturgy element library by account.
+- Add "copy from another service" when creating new or editing.
+- Fix narrow screen wrapping in generated services.
+- Convert in-app messaging to use flash().
+- Implement initial export formats: PDF and DOCX.
 
-- Migrate TSVs into database
-- Add custom liturgy element support (markdown with visual editor?)
-- Add custom liturgy element library by account
-- Add "copy from another service" when creating new or editing
-- Fix narrow screen wrapping in /text
-- Convert in-app messaging to flash()
+### Long term
+- Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
+- Add rich propers search with calendar/season awareness.
+- Implement additional export formats or integrations: Planning Center, ProPresenter, etc.
+- Add team accounts (shared services, element libraries).
+- Add collaboration features for team accounts: comments, approvals, version history.
