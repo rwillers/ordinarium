@@ -1,9 +1,14 @@
 #!/usr/bin/env python
 import sqlite3
+import sys
 from pathlib import Path
 
 
 def get_db_path():
+    repo_root = Path(__file__).resolve().parents[1]
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
     from ordinarium import create_app
 
     app = create_app()
