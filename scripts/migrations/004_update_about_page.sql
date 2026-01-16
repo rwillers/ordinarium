@@ -1,0 +1,3 @@
+UPDATE pages
+SET data = '{"title":"About","content":"Ordinarium is a liturgy planning workspace that incorporates the structure and rubrics of the ACNA 2019 Book of Common Prayer, enabling clergy and liturgists to assemble, order, and manage liturgical orders of service. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials.\n\n*The Rev. Ryan Willers*\n\nP.S. You can also find collects and other prayers from the *Book of Common Prayer*, the Anglican tradition, and the broader Church at <a href=\"https://occasionalprayers.com\" target=\"_blank\">Occasional Prayers</a>.","slug":"about"}'
+WHERE slug = 'about';
