@@ -77,7 +77,9 @@ def login():
                 "main.services"
             )
             return redirect(next_url)
-    return render_template("login.html", error=error)
+    if error:
+        flash(error, "error")
+    return render_template("login.html")
 
 
 @bp.route("/signup", methods=["GET", "POST"])
@@ -110,7 +112,9 @@ def signup():
             session.clear()
             session["user_id"] = user["id"]
             return redirect(url_for("main.services"))
-    return render_template("signup.html", error=error)
+    if error:
+        flash(error, "error")
+    return render_template("signup.html")
 
 
 def get_user_by_id(user_id):
@@ -153,6 +157,11 @@ def login_required(view):
             return redirect(url_for("main.login", next=request.path))
         return view(**kwargs)
     return wrapped
+
+
+def render_error(message, status_code=400):
+    flash(message, "error")
+    return render_template("page.html", title="Error", content=""), status_code
 
 
 @bp.route("/logout")
@@ -198,9 +207,10 @@ def account():
             )
             db.commit()
             return redirect(url_for("main.account"))
+    if error:
+        flash(error, "error")
     return render_template(
         "account.html",
-        error=error,
         first_name=user["first_name"] if user else "",
         last_name=user["last_name"] if user else "",
         email=user["email"] if user else "",
@@ -305,10 +315,7 @@ def service(service_id, rite="Renewed Ancient Text"):
         "select user_id from services where id=? limit 1", (service_id,)
     ).fetchone()
     if existing_owner and existing_owner["user_id"] != g.user["id"]:
-        return (
-            render_template("page.html", title="Error", content="Service not found."),
-            404,
-        )
+        return render_error("Service not found.", 404)
     context = build_plan_context(service_id, rite)
     return render_template("service.html", **context)
 
@@ -316,13 +323,8 @@ def service(service_id, rite="Renewed Ancient Text"):
 @bp.route("/service")
 @login_required
 def service_missing_id():
-    return (
-        render_template(
-            "page.html",
-            title="Error",
-            content="Service ID required. Open a service from the Services list.",
-        ),
-        400,
+    return render_error(
+        "Service ID required. Open a service from the Services list.", 400
     )
 
 
@@ -426,38 +428,21 @@ def load_service_for_text(service_id, user_id=None):
 
 def render_text_page(service_id, saved_service, saved_data):
     if not saved_service:
-        return (
-            render_template(
-                "page.html",
-                title="Error",
-                content="Service ID required to generate text.",
-            ),
-            400,
-        )
+        return render_error("Service ID required to generate text.", 400)
     db = get_db()
 
     # Update not to be hard coded:
     title = "<!--<small>The Order for the Administration of</small>  \nThe Lord’s Supper  \n<small>*or*</small>  \nHoly Communion,  \n<small>Commonly Called</small>  \n-->The Holy Eucharist"
 
     if not saved_service["rite"]:
-        return (
-            render_template(
-                "page.html",
-                title="Error",
-                content="Service rite is required to generate text.",
-            ),
-            400,
-        )
+        return render_error("Service rite is required to generate text.", 400)
     rite_name = saved_service["rite"]
     rite = db.execute(
         "select distinct filter_content from texts where type=? and filter_type=? and filter_content=? limit 1",
         ("ordinarium", "rite", rite_name),
     ).fetchone()
     if not rite:
-        return (
-            render_template("page.html", title="Error", content="Rite not found"),
-            404,
-        )
+        return render_error("Rite not found.", 404)
 
     disabled_json = "[]"
     if saved_service and saved_service["text_disabled"]:
@@ -480,10 +465,7 @@ def render_text_page(service_id, saved_service, saved_data):
             (disabled_json, "ordinarium", "rite", rite_name),
         ).fetchall()
     if not ordinaries:
-        return (
-            render_template("page.html", title="Error", content="Content not found"),
-            404,
-        )
+        return render_error("Content not found.", 404)
 
     season = request.args.get("season", "")
     if service_id:
@@ -629,20 +611,10 @@ def shared_text(share_uuid):
         (share_uuid,),
     ).fetchone()
     if not share:
-        return (
-            render_template(
-                "page.html", title="Error", content="Share link not found."
-            ),
-            404,
-        )
+        return render_error("Share link not found.", 404)
     saved_service, saved_data = load_service_for_text(share["service_id"])
     if not saved_service:
-        return (
-            render_template(
-                "page.html", title="Error", content="Service not found."
-            ),
-            404,
-        )
+        return render_error("Service not found.", 404)
     return render_text_page(share["service_id"], saved_service, saved_data)
 
 
@@ -654,10 +626,7 @@ def service_share(service_id):
         "select user_id from services where id=? limit 1", (service_id,)
     ).fetchone()
     if not existing_owner or existing_owner["user_id"] != g.user["id"]:
-        return (
-            render_template("page.html", title="Error", content="Service not found."),
-            404,
-        )
+        return render_error("Service not found.", 404)
     existing_share = db.execute(
         "select share_uuid from service_shares where service_id=? limit 1",
         (service_id,),
@@ -712,10 +681,7 @@ def persist_service():
             "select id from services where id=? limit 1", (service_id,)
         ).fetchone()
     if other_owner:
-        return (
-            render_template("page.html", title="Error", content="Service not found."),
-            404,
-        )
+        return render_error("Service not found.", 404)
     existing_data = (
         json.loads(existing["data"]) if existing and existing["data"] else {}
     )
@@ -755,7 +721,7 @@ def persist_service():
     if not payload["service_date"]:
         context = build_plan_context(service_id, payload["rite"])
         context["service"]["service_date"] = payload["service_date"] or ""
-        context["form_error"] = "Service date is required."
+        flash("Service date is required.", "error")
         return render_template("service.html", **context), 400
     if payload["service_date"]:
         try:
@@ -796,10 +762,7 @@ def page(slug):
             "page.html", title=page["title"], content=page["content"]
         )
     else:
-        return (
-            render_template("page.html", title="Error", content="Page not found"),
-            404,
-        )
+        return render_error("Page not found.", 404)
 
 
 @bp.route("/season")

@@ -199,6 +199,26 @@ main {
 	padding: 80px 20px 20px 20px;
 }
 
+.flash-list {
+	margin: 0.8em 0 1em 0;
+}
+.flash-banner {
+	border: 1px solid rgba(118, 50, 63, 0.35);
+	background: rgba(118, 50, 63, 0.12);
+	color: var(--rubric-color);
+	padding: 0.6em 0.8em;
+	border-radius: 0.5em;
+	margin: 0 0 0.6em 0;
+}
+.flash-banner:last-child {
+	margin-bottom: 0;
+}
+.flash-error {
+	border: 1px solid rgba(118, 50, 63, 0.35);
+	background: rgba(118, 50, 63, 0.12);
+	color: var(--rubric-color);
+}
+
 .share-modal {
 	position: fixed;
 	inset: 0;

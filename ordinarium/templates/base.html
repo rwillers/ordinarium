@@ -22,6 +22,15 @@
 		<div id="inner-body">
 			{% include '_header.html' %}
 			<main>
+				{% with messages = get_flashed_messages(with_categories=true) %}
+					{% if messages %}
+						<div class="flash-list">
+							{% for category, message in messages %}
+								<p class="flash-banner{% if category %} flash-{{ category }}{% endif %}">{{ message }}</p>
+							{% endfor %}
+						</div>
+					{% endif %}
+				{% endwith %}
 				{% block content %}{% endblock %}
 			</main>
 			{% include '_footer.html' %}

@@ -7,10 +7,6 @@
 		<h2>Log in</h2>
 	</div>
 
-	{% if error %}
-	<p class="plan-error">{{ error }}</p>
-	{% endif %}
-
 	<form class="auth-form" method="post">
 		<input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
 		<p><label class="plan-field">

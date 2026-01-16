@@ -69,7 +69,6 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 - Add custom liturgy element library by account.
 - Add "copy from another service" when creating new or editing.
 - Fix narrow screen wrapping in generated services.
-- Convert in-app messaging to use flash().
 - Implement initial export formats: PDF and DOCX.
 - Code clean up.
 
