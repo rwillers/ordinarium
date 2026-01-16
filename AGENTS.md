@@ -12,6 +12,7 @@
 - `python -m venv venv` and `source venv/bin/activate` to create/activate a virtual environment.
 - `pip install -r requirements.txt` installs Flask and Markdown tooling.
 - `flask --app ordinarium init-db` creates or resets `instance/ordinarium.db` from `ordinarium/schema.sql`.
+- `python scripts/migrate_db.py` applies any new SQL migrations in `scripts/migrations/`.
 - `flask --app ordinarium run` starts the dev server.
 - `python app.py` is a quick dev run alternative with debug enabled.
 
@@ -22,8 +23,9 @@
 - Liturgical text conventions are documented in `README.md`; preserve Markdown formatting rules when editing content.
 
 ## Testing Guidelines
-- No automated test suite is present yet.
-- Manual verification: run the dev server and check `/`, `/services`, `/service/<id>`, and `/text/<rite_slug>` flows. If you touch DB logic, re-run `init-db` and verify a fresh database works.
+- Automated tests live in `tests/` and use pytest.
+- Run the suite with `pytest` (or `pytest -q` for quiet output).
+- Manual verification: run the dev server and check `/`, `/services`, `/service/<id>`, and `/text/<rite_slug>` flows. If you touch DB logic, apply migrations and verify a fresh database works.
 
 ## Commit & Pull Request Guidelines
 - Existing commits use short, imperative, sentence-case summaries (e.g., “Add …”, “Enhance …”). Follow that pattern.
@@ -32,4 +34,5 @@
 
 ## Configuration & Data Tips
 - Treat `instance/ordinarium.db` as local state; reset it with `flask --app ordinarium init-db` after schema updates.
+- Use `scripts/migrations/*.sql` for incremental DB changes; `scripts/migrate_db.py` applies them and records in `schema_migrations`.
 - Keep secrets and environment-specific settings out of the repo; prefer `instance/` for local-only config.

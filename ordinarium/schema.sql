@@ -214,6 +214,14 @@ CREATE INDEX idx_services_user_id ON services(user_id);
 CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
 CREATE INDEX idx_services_service_date ON services(service_date);
+CREATE TABLE service_shares (
+  id INTEGER PRIMARY KEY,
+  service_id INTEGER NOT NULL,
+  share_uuid TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_service_shares_service_id ON service_shares(service_id);
+CREATE UNIQUE INDEX idx_service_shares_uuid ON service_shares(share_uuid);
 CREATE TABLE "texts" ("id" INTEGER PRIMARY KEY, "data" JSON, type TEXT
 generated always as (json_extract(data, '$.type')) virtual, filter_type TEXT
 generated always as (json_extract(data, '$.filter.type')) virtual, filter_content TEXT

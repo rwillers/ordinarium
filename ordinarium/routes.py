@@ -1,4 +1,5 @@
 import json
+import uuid
 from functools import wraps
 from datetime import date
 
@@ -292,6 +293,7 @@ def build_plan_context(service_id, rite):
         "observance_options": observance_options,
         "observance_title": observance_title,
         "can_delete": bool(saved_plan and saved_plan["service_date"]),
+        "can_share": bool(saved_plan),
     }
 
 
@@ -400,23 +402,29 @@ def service_delete(service_id):
     return redirect(url_for("main.services"))
 
 
-@bp.route("/text/<int:service_id>")
-@login_required
-def text(service_id):
-
+def load_service_for_text(service_id, user_id=None):
+    if not service_id:
+        return None, {}
     db = get_db()
-    saved_service = None
-    saved_data = {}
-    if service_id:
+    if user_id:
         saved_service = db.execute(
             "select text_order, text_disabled, season, rite, service_date, data from services where id=? and user_id=? limit 1",
-            (service_id, g.user["id"]),
+            (service_id, user_id),
         ).fetchone()
-        saved_data = (
-            json.loads(saved_service["data"])
-            if saved_service and saved_service["data"]
-            else {}
-        )
+    else:
+        saved_service = db.execute(
+            "select text_order, text_disabled, season, rite, service_date, data from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+    saved_data = (
+        json.loads(saved_service["data"])
+        if saved_service and saved_service["data"]
+        else {}
+    )
+    return saved_service, saved_data
+
+
+def render_text_page(service_id, saved_service, saved_data):
     if not saved_service:
         return (
             render_template(
@@ -426,6 +434,7 @@ def text(service_id):
             ),
             400,
         )
+    db = get_db()
 
     # Update not to be hard coded:
     title = "<!--<small>The Order for the Administration of</small>  \nThe Lord’s Supper  \n<small>*or*</small>  \nHoly Communion,  \n<small>Commonly Called</small>  \n-->The Holy Eucharist"
@@ -603,6 +612,69 @@ def text(service_id):
         ordinaries=ordinaries,
         **propers,
     )
+
+
+@bp.route("/text/<int:service_id>")
+@login_required
+def text(service_id):
+    saved_service, saved_data = load_service_for_text(service_id, g.user["id"])
+    return render_text_page(service_id, saved_service, saved_data)
+
+
+@bp.route("/share/<share_uuid>")
+def shared_text(share_uuid):
+    db = get_db()
+    share = db.execute(
+        "select service_id from service_shares where share_uuid=? limit 1",
+        (share_uuid,),
+    ).fetchone()
+    if not share:
+        return (
+            render_template(
+                "page.html", title="Error", content="Share link not found."
+            ),
+            404,
+        )
+    saved_service, saved_data = load_service_for_text(share["service_id"])
+    if not saved_service:
+        return (
+            render_template(
+                "page.html", title="Error", content="Service not found."
+            ),
+            404,
+        )
+    return render_text_page(share["service_id"], saved_service, saved_data)
+
+
+@bp.route("/service/<int:service_id>/share", methods=["POST"])
+@login_required
+def service_share(service_id):
+    db = get_db()
+    existing_owner = db.execute(
+        "select user_id from services where id=? limit 1", (service_id,)
+    ).fetchone()
+    if not existing_owner or existing_owner["user_id"] != g.user["id"]:
+        return (
+            render_template("page.html", title="Error", content="Service not found."),
+            404,
+        )
+    existing_share = db.execute(
+        "select share_uuid from service_shares where service_id=? limit 1",
+        (service_id,),
+    ).fetchone()
+    if existing_share:
+        share_uuid = existing_share["share_uuid"]
+        created = False
+    else:
+        share_uuid = str(uuid.uuid4())
+        db.execute(
+            "insert into service_shares (service_id, share_uuid) values (?, ?)",
+            (service_id, share_uuid),
+        )
+        db.commit()
+        created = True
+    share_url = url_for("main.shared_text", share_uuid=share_uuid, _external=True)
+    return jsonify({"share_uuid": share_uuid, "share_url": share_url, "created": created})
 
 
 @bp.route("/persist/service", methods=["POST"])

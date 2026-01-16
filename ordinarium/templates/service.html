@@ -9,11 +9,29 @@
 		<div class="plan-header-actions">
 			<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
 			<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
+			{% if can_share %}
+			<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
+			{% endif %}
 			{% if can_delete %}
 			<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
 				<button class="plan-submit" type="submit">Delete</button>
 			</form>
 			{% endif %}
+		</div>
+	</div>
+	<div class="share-modal" id="share-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-share-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
+			<h3 id="share-modal-title">Share link</h3>
+			<p>Anyone with this link can view the service text, and changes you make will appear automatically.</p>
+			<div class="share-modal-link">
+				<input type="text" id="share-modal-url" readonly>
+				<button type="button" class="plan-submit" id="share-copy-button">Copy</button>
+			</div>
+			<p class="share-modal-feedback" id="share-copy-feedback" aria-live="polite"></p>
+			<div class="share-modal-actions">
+				<button type="button" class="plan-submit" data-share-close>Close</button>
+			</div>
 		</div>
 	</div>
 	{% if form_error %}
@@ -82,6 +100,85 @@
 	</div>
 
 	<script>
+		const shareButton = document.querySelector('[data-share-url]')
+		const shareModal = document.querySelector('#share-modal')
+		const shareModalUrl = document.querySelector('#share-modal-url')
+		const shareCopyButton = document.querySelector('#share-copy-button')
+		const shareCopyFeedback = document.querySelector('#share-copy-feedback')
+
+		const openShareModal = (url) => {
+			if (!shareModal || !shareModalUrl) {
+				return
+			}
+			shareModalUrl.value = url
+			if (shareCopyFeedback) {
+				shareCopyFeedback.textContent = ''
+			}
+			shareModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			shareModalUrl.select()
+		}
+
+		const closeShareModal = () => {
+			if (!shareModal) {
+				return
+			}
+			shareModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+		}
+
+		if (shareButton) {
+			shareButton.addEventListener('click', async () => {
+				const shareUrl = shareButton.getAttribute('data-share-url')
+				if (!shareUrl) {
+					return
+				}
+				try {
+					const response = await fetch(shareUrl, { method: 'POST' })
+					if (!response.ok) {
+						return
+					}
+					const data = await response.json()
+					if (data && data.share_url) {
+						openShareModal(data.share_url)
+					}
+				} catch (error) {
+					// Ignore share failures.
+				}
+			})
+		}
+
+		if (shareModal) {
+			shareModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-share-close]')) {
+					closeShareModal()
+				}
+			})
+		}
+
+		if (shareCopyButton && shareModalUrl) {
+			shareCopyButton.addEventListener('click', async () => {
+				let copied = false
+				try {
+					await navigator.clipboard.writeText(shareModalUrl.value)
+					copied = true
+				} catch (error) {
+					shareModalUrl.select()
+					document.execCommand('copy')
+					copied = true
+				}
+				if (shareCopyFeedback) {
+					shareCopyFeedback.textContent = copied ? 'Link copied.' : 'Unable to copy link.'
+				}
+			})
+		}
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && shareModal && shareModal.getAttribute('aria-hidden') === 'false') {
+				closeShareModal()
+			}
+		})
+
 		const planList = document.querySelector('.plan-list')
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
