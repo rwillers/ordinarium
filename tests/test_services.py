@@ -130,3 +130,135 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
     response = client.get("/text/14")
     assert response.status_code == 200
     assert b"Holy Eucharist" in response.data
+
+
+def test_custom_element_added_to_service_plan_and_text(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=30,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([68, 69]),
+        text_disabled=json.dumps([]),
+    )
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "title": "Custom Blessing",
+            "text": "Custom text",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        element = db.execute(
+            "select id, title, text from service_custom_elements where service_id=? and user_id=? limit 1",
+            (service_id, user_id),
+        ).fetchone()
+        assert element is not None
+        assert element["title"] == "Custom Blessing"
+        assert element["text"] == "Custom text"
+        service = db.execute(
+            "select data from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        payload = json.loads(service["data"])
+        order_tokens = json.loads(payload["text_order"])
+        assert order_tokens[:2] == ["text:68", "text:69"]
+        assert order_tokens[-1] == f"custom:{element['id']}"
+
+    text_response = client.get(f"/text/{service_id}")
+    assert text_response.status_code == 200
+    assert b"Custom Blessing" in text_response.data
+    assert b"Custom text" in text_response.data
+
+
+def test_custom_element_edit_updates_content(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=31,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([68, 69]),
+        text_disabled=json.dumps([]),
+    )
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "title": "Custom Welcome",
+            "text": "Original",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        element = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? limit 1",
+            (service_id, user_id),
+        ).fetchone()
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "custom_id": str(element["id"]),
+            "title": "Custom Welcome",
+            "text": "Updated",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        updated = db.execute(
+            "select title, text from service_custom_elements where id=? limit 1",
+            (element["id"],),
+        ).fetchone()
+        assert updated["text"] == "Updated"
+
+
+def test_custom_element_delete_removes_from_plan(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=32,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([68, 69]),
+        text_disabled=json.dumps([]),
+    )
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "title": "Custom Dismissal",
+            "text": "Dismissal",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        element = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? limit 1",
+            (service_id, user_id),
+        ).fetchone()
+    response = client.post(
+        f"/service/{service_id}/custom-element/{element['id']}/delete"
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        deleted = db.execute(
+            "select id from service_custom_elements where id=? limit 1",
+            (element["id"],),
+        ).fetchone()
+        assert deleted is None
+        service = db.execute(
+            "select data from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        payload = json.loads(service["data"])
+        order_tokens = json.loads(payload["text_order"])
+        assert f"custom:{element['id']}" not in order_tokens

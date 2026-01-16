@@ -222,6 +222,16 @@ CREATE TABLE service_shares (
 );
 CREATE INDEX idx_service_shares_service_id ON service_shares(service_id);
 CREATE UNIQUE INDEX idx_service_shares_uuid ON service_shares(share_uuid);
+CREATE TABLE service_custom_elements (
+  id INTEGER PRIMARY KEY,
+  service_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_service_custom_elements_service_id ON service_custom_elements(service_id);
+CREATE INDEX idx_service_custom_elements_user_id ON service_custom_elements(user_id);
 CREATE TABLE "texts" ("id" INTEGER PRIMARY KEY, "data" JSON, type TEXT
 generated always as (json_extract(data, '$.type')) virtual, filter_type TEXT
 generated always as (json_extract(data, '$.filter.type')) virtual, filter_content TEXT

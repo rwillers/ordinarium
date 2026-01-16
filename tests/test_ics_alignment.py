@@ -92,7 +92,9 @@ def _unescape_ics_text(value):
 
 
 def _event_date(event):
-    dtstart = next((value for key, value in event.items() if key.startswith("DTSTART")), None)
+    dtstart = next(
+        (value for key, value in event.items() if key.startswith("DTSTART")), None
+    )
     if not dtstart:
         return None
     if "T" in dtstart:
@@ -110,7 +112,18 @@ def _normalize_title(title):
     title = title.replace("-", " ")
     title = re.sub(r"[^a-z0-9\\s]", " ", title)
     title = re.sub(r"\\s+", " ", title).strip()
-    stop_words = {"the", "of", "in", "after", "sunday", "day", "optional", "or", "year", "and"}
+    stop_words = {
+        "the",
+        "of",
+        "in",
+        "after",
+        "sunday",
+        "day",
+        "optional",
+        "or",
+        "year",
+        "and",
+    }
     tokens = [
         token
         for token in title.split()
@@ -208,7 +221,11 @@ def test_sunday_sample_matches_ics_observance_and_season():
         for event in events_for_date:
             value = event.get("SUMMARY", "")
             lower = value.lower()
-            if "sunday" in lower or lower.startswith("pentecost") or lower == "pentecost":
+            if (
+                "sunday" in lower
+                or lower.startswith("pentecost")
+                or lower == "pentecost"
+            ):
                 summary = value
                 break
         if not summary:

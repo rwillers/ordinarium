@@ -72,27 +72,59 @@
 
 	<ul class="plan-list">
 	{% for ordinary in ordinaries %}
-		<li class="plan-row" draggable="true">
+		<li class="plan-row"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %} draggable="true">
 			<div class="plan-row-main">
 				<label class="plan-item">
-					<input type="checkbox" name="ordinaries" value="{{ ordinary.id }}" data-default-order="{{ ordinary.default_order }}" {% if not ordinary.disabled %}checked{% endif %}>
+					<input type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 					<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
 					{% if ordinary.text %}<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>{% endif %}
 				</label>
+				{% if ordinary.type == 'custom' %}
+				<div class="plan-row-actions">
+					<button class="plan-icon-button" type="button" data-custom-edit aria-label="Edit custom element">✎</button>
+					<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" onsubmit="return confirm('Remove this custom element from the service plan?')">
+						<button class="plan-icon-button plan-icon-delete" type="submit" aria-label="Delete custom element">✕</button>
+					</form>
+				</div>
+				{% endif %}
 				<span class="plan-handle" aria-hidden="true">⠿</span>
 			</div>
 		</li>
 	{% endfor %}
 	</ul>
-
-	<div class="plan-footer-actions">
-		<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
-		<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
-		{% if can_delete %}
-		<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
-			<button class="plan-submit" type="submit">Delete</button>
-		</form>
-		{% endif %}
+	<div class="plan-custom">
+		<p>
+			<button class="plan-submit" type="button" id="custom-element-toggle" aria-expanded="false" aria-controls="custom-element-modal">Add custom element</button>
+		</p>
+	</div>
+	<div class="share-modal" id="custom-element-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-custom-element-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-element-title">
+			<h3 id="custom-element-title">Add custom element</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.service_add_custom_element', service_id=service_id) }}" method="post">
+				<input type="hidden" name="service_id" value="{{ service_id }}">
+				<input type="hidden" name="rite" value="{{ service.rite or rite }}">
+				<input type="hidden" name="custom_id" value="">
+				<input type="hidden" name="initial_title" value="">
+				<input type="hidden" name="initial_text" value="">
+				<p>
+					<label class="plan-field">
+						<span>Title</span>
+						<input type="text" name="title" required>
+					</label>
+				</p>
+				<p>
+					<label class="plan-field">
+						<span>Text</span>
+						<textarea name="text" rows="6" required></textarea>
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-custom-element-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
 	</div>
 
 	<script>
@@ -296,6 +328,146 @@
 				updateObservanceFromDate()
 			}
 		}
+
+		const customToggle = document.querySelector('#custom-element-toggle')
+		const customModal = document.querySelector('#custom-element-modal')
+		const customEditButtons = document.querySelectorAll('[data-custom-edit]')
+
+		const openCustomModal = (mode) => {
+			if (!customModal) {
+				return
+			}
+			const form = customModal.querySelector('form')
+			const titleInput = form?.querySelector('input[name="title"]')
+			const textInput = form?.querySelector('textarea[name="text"]')
+			const idInput = form?.querySelector('input[name="custom_id"]')
+			const modalTitle = customModal.querySelector('#custom-element-title')
+			const initialTitleInput = form?.querySelector('input[name="initial_title"]')
+			const initialTextInput = form?.querySelector('input[name="initial_text"]')
+			if (mode?.type === 'edit') {
+				if (titleInput) {
+					titleInput.value = mode.title || ''
+				}
+				if (textInput) {
+					textInput.value = mode.text || ''
+				}
+				if (idInput) {
+					idInput.value = mode.id || ''
+				}
+				if (initialTitleInput) {
+					initialTitleInput.value = mode.title || ''
+				}
+				if (initialTextInput) {
+					initialTextInput.value = mode.text || ''
+				}
+				if (modalTitle) {
+					modalTitle.textContent = 'Edit custom element'
+				}
+			} else {
+				if (titleInput) {
+					titleInput.value = ''
+				}
+				if (textInput) {
+					textInput.value = ''
+				}
+				if (idInput) {
+					idInput.value = ''
+				}
+				if (initialTitleInput) {
+					initialTitleInput.value = ''
+				}
+				if (initialTextInput) {
+					initialTextInput.value = ''
+				}
+				if (modalTitle) {
+					modalTitle.textContent = 'Add custom element'
+				}
+			}
+			customModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (customToggle) {
+				customToggle.setAttribute('aria-expanded', 'true')
+			}
+			if (titleInput) {
+				titleInput.focus()
+			}
+		}
+
+		const closeCustomModal = () => {
+			if (!customModal) {
+				return
+			}
+			customModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			if (customToggle) {
+				customToggle.setAttribute('aria-expanded', 'false')
+			}
+		}
+
+		if (customToggle) {
+			customToggle.addEventListener('click', () => {
+				openCustomModal()
+			})
+		}
+
+		if (customEditButtons.length) {
+			customEditButtons.forEach((button) => {
+				button.addEventListener('click', () => {
+					const row = button.closest('.plan-row')
+					if (!row) {
+						return
+					}
+					openCustomModal({
+						type: 'edit',
+						id: row.getAttribute('data-custom-id'),
+						title: row.getAttribute('data-custom-title'),
+						text: row.getAttribute('data-custom-text')
+					})
+				})
+			})
+		}
+
+		if (customModal) {
+			customModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-custom-element-close]')) {
+					const form = customModal.querySelector('form')
+					const titleInput = form?.querySelector('input[name="title"]')
+					const textInput = form?.querySelector('textarea[name="text"]')
+					const initialTitleInput = form?.querySelector('input[name="initial_title"]')
+					const initialTextInput = form?.querySelector('input[name="initial_text"]')
+					const currentTitle = titleInput ? titleInput.value.trim() : ''
+					const currentText = textInput ? textInput.value.trim() : ''
+					const initialTitle = initialTitleInput ? initialTitleInput.value : ''
+					const initialText = initialTextInput ? initialTextInput.value : ''
+					const hasChanges = currentTitle !== initialTitle || currentText !== initialText
+					if (hasChanges) {
+						const confirmed = window.confirm('Discard this custom element? Your changes will be lost.')
+						if (!confirmed) {
+							return
+						}
+					}
+					if (titleInput) {
+						titleInput.value = ''
+					}
+					if (textInput) {
+						textInput.value = ''
+					}
+					if (initialTitleInput) {
+						initialTitleInput.value = ''
+					}
+					if (initialTextInput) {
+						initialTextInput.value = ''
+					}
+					closeCustomModal()
+				}
+			})
+		}
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && customModal && customModal.getAttribute('aria-hidden') === 'false') {
+				closeCustomModal()
+			}
+		})
 	</script>
 
 </div>

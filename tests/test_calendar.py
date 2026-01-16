@@ -78,9 +78,7 @@ def test_resolve_observance_options_sorts_by_priority_and_index(monkeypatch):
             },
         ]
 
-    monkeypatch.setattr(
-        "ordinarium.liturgical_calendar._load_holidays", fake_holidays
-    )
+    monkeypatch.setattr("ordinarium.liturgical_calendar._load_holidays", fake_holidays)
     options = resolve_observance_options(date(2024, 12, 1))
     handles = [option.handle for option in options]
     assert handles == ["A", "B", "C"]
@@ -111,8 +109,6 @@ def test_resolve_observance_prefers_handle_match(monkeypatch):
             },
         ]
 
-    monkeypatch.setattr(
-        "ordinarium.liturgical_calendar._load_holidays", fake_holidays
-    )
+    monkeypatch.setattr("ordinarium.liturgical_calendar._load_holidays", fake_holidays)
     observance = resolve_observance(date(2024, 12, 1), handle="B")
     assert observance.handle == "B"

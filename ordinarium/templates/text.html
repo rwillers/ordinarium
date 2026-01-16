@@ -12,10 +12,12 @@
 		{% endif %}
 
 		{% for ordinary in ordinaries %}
-			{% if not loop.previtem or ordinary.title != loop.previtem.title %}
-				<h3>{{ ordinary.title | markdown_template }}</h3>
-			{% endif %}
-			{{ ordinary.text | markdown_template }}
+			<div class="text-element{% if ordinary.type == 'custom' %} text-element-custom{% endif %}">
+				{% if not loop.previtem or ordinary.title != loop.previtem.title %}
+					<h3>{{ ordinary.title | markdown_template }}</h3>
+				{% endif %}
+				{{ ordinary.text | markdown_template }}
+			</div>
 		{% endfor %}
 
 </div>

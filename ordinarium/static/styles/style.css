@@ -368,17 +368,6 @@ div#page {
 	.plan-header-actions form {
 		margin: 0;
 	}
-	.plan-footer-actions {
-		display: flex;
-		gap: 0.75em;
-		align-items: center;
-		flex-wrap: wrap;
-		margin-top: 1.5em;
-		justify-content: flex-end;
-	}
-	.plan-footer-actions form {
-		margin: 0;
-	}
 	p {
 		line-height: 1.5;
 		margin: 1em 0;
@@ -412,7 +401,7 @@ div#page {
 		position: relative;
 	}
 	.plan-row-main {
-		padding: 0 2.5em 0 2.4em;
+		padding: 0 5.6em 0 2.4em;
 	}
 	.plan-row + .plan-row {
 		border-top: 0;
@@ -496,6 +485,15 @@ div#page {
 		background: #fff;
 		font-size: 0.95em;
 	}
+	.plan-field textarea {
+		padding: 0.6em 0.75em;
+		border-radius: 0.5em;
+		border: 1px solid rgba(27, 27, 27, 0.2);
+		background: #fff;
+		font-size: 0.95em;
+		resize: vertical;
+		min-height: 4.5em;
+	}
 	.plan-field-value {
 		font-size: 0.95em;
 		font-weight: 600;
@@ -548,8 +546,71 @@ div#page {
 		top: 50%;
 		transform: translateY(-50%);
 	}
+	.plan-row-actions {
+		position: absolute;
+		right: 3.2em;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		gap: 0.3em;
+		color: var(--rubric-color);
+	}
+	.plan-row-actions form {
+		margin: 0;
+	}
+	.plan-icon-button {
+		background: transparent;
+		border: 1px solid transparent;
+		padding: 0.35em;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--rubric-color) !important;
+		cursor: pointer;
+		border-radius: 4px;
+		font-size: 1.05em;
+		line-height: 1;
+	}
+	.plan-icon-delete {
+		font-size: 1.2em;
+	}
+	.plan-icon-button:hover {
+		background: rgba(118, 50, 63, 0.08);
+	}
 	.plan-row small {
 		display: block;
+	}
+	.plan-custom {
+		margin: 1em 0 0 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.85em;
+	}
+	.plan-custom > p > .plan-submit {
+		width: 100%;
+	}
+	.plan-custom-form {
+		border: 1px solid var(--line-color);
+		border-radius: 0.6em;
+		padding: 1.1em 1.25em;
+		background: #fff;
+		display: flex;
+		flex-direction: column;
+		gap: 1em;
+	}
+	.plan-custom-actions {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 0.2em;
+		gap: 0.75em;
+	}
+	.share-modal-card .plan-custom-form {
+		border: none;
+		border-radius: 0;
+		padding: 0;
+		background: transparent;
+		gap: 0.6em;
 	}
 }
 
@@ -602,7 +663,7 @@ div#text {
 	strong {
 		font-weight: 600;
 	}
-	em:not(:where(h1, h2, h3, h4, h5, h6) em) {
+	:not(.text-element-custom) em:not(:where(h1, h2, h3, h4, h5, h6) em) {
 		/* Rubrics */
 		font-style: italic;
 		color: var(--rubric-color);
@@ -626,16 +687,16 @@ div#text {
 		white-space-collapse: preserve;
 		text-wrap-mode: nowrap;
 	}
-	ul {
+	:not(.text-element-custom) ul {
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
-	ul li {
+	:not(.text-element-custom) ul li {
 		display: inline-block;
 		box-sizing: border-box;
 	} 
-	ul li + li {
+	:not(.text-element-custom) ul li + li {
 		margin-left: 1em;
 		padding-left: 1em;
 		border-left: 1px solid var(--line-color);

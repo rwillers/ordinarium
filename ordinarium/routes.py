@@ -73,8 +73,10 @@ def login():
         if not error and user:
             session.clear()
             session["user_id"] = user["id"]
-            next_url = request.form.get("next") or request.args.get("next") or url_for(
-                "main.services"
+            next_url = (
+                request.form.get("next")
+                or request.args.get("next")
+                or url_for("main.services")
             )
             return redirect(next_url)
     if error:
@@ -156,12 +158,146 @@ def login_required(view):
         if g.user is None:
             return redirect(url_for("main.login", next=request.path))
         return view(**kwargs)
+
     return wrapped
 
 
 def render_error(message, status_code=400):
     flash(message, "error")
     return render_template("page.html", title="Error", content=""), status_code
+
+
+def normalize_plan_token(value):
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return f"text:{int(value)}"
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        if ":" in raw:
+            return raw
+        if raw.isdigit():
+            return f"text:{raw}"
+    return None
+
+
+def parse_plan_tokens(raw):
+    if not raw:
+        return []
+    data = raw
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return []
+    if not isinstance(data, list):
+        return []
+    tokens = []
+    for value in data:
+        token = normalize_plan_token(value)
+        if token:
+            tokens.append(token)
+    return tokens
+
+
+def load_custom_elements(service_id, user_id=None):
+    if not service_id:
+        return []
+    db = get_db()
+    if user_id:
+        rows = db.execute(
+            "select id, title, text, created_at from service_custom_elements where service_id=? and user_id=? order by created_at, id",
+            (service_id, user_id),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "select id, title, text, created_at from service_custom_elements where service_id=? order by created_at, id",
+            (service_id,),
+        ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "text": row["text"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def build_plan_items(service_id, rite, order_tokens, disabled_tokens, user_id=None):
+    db = get_db()
+    text_rows = db.execute(
+        "select id, default_order, title, detailed_title, text from texts where type=? and filter_type=? and filter_content=? order by default_order",
+        ("ordinarium", "rite", rite),
+    ).fetchall()
+    text_items = []
+    items_by_token = {}
+    for row in text_rows:
+        token = f"text:{row['id']}"
+        item = {
+            "id": row["id"],
+            "token": token,
+            "type": "text",
+            "title": row["title"],
+            "detailed_title": row["detailed_title"],
+            "text": row["text"],
+            "default_order": row["default_order"] or 0,
+        }
+        text_items.append(item)
+        items_by_token[token] = item
+
+    custom_items = []
+    for row in load_custom_elements(service_id, user_id=user_id):
+        token = f"custom:{row['id']}"
+        item = {
+            "id": row["id"],
+            "token": token,
+            "type": "custom",
+            "title": row["title"],
+            "detailed_title": None,
+            "text": row["text"],
+            "default_order": None,
+            "created_at": row["created_at"],
+        }
+        custom_items.append(item)
+        items_by_token[token] = item
+
+    used = set()
+    ordered_items = []
+    disabled_set = set(disabled_tokens or [])
+
+    def append_item(token):
+        item = items_by_token.get(token)
+        if not item or token in used:
+            return
+        output = dict(item)
+        output["disabled"] = token in disabled_set
+        ordered_items.append(output)
+        used.add(token)
+
+    if order_tokens:
+        for token in order_tokens:
+            append_item(token)
+    text_items_sorted = sorted(text_items, key=lambda item: item["default_order"] or 0)
+    custom_items_sorted = sorted(
+        custom_items,
+        key=lambda item: (item.get("created_at") or "", item["id"]),
+    )
+    if order_tokens:
+        for item in text_items_sorted:
+            append_item(item["token"])
+        for item in custom_items_sorted:
+            append_item(item["token"])
+    else:
+        for item in text_items_sorted + custom_items_sorted:
+            append_item(item["token"])
+
+    return ordered_items
 
 
 @bp.route("/logout")
@@ -235,22 +371,17 @@ def build_plan_context(service_id, rite):
     saved_data = (
         json.loads(saved_plan["data"]) if saved_plan and saved_plan["data"] else {}
     )
-    if saved_plan and saved_plan["text_order"]:
-        ordinaries = db.execute(
-            'select texts.id, texts.default_order, texts.title, texts.detailed_title, texts.text, saved_order.value, saved_disabled.value as "disabled" from texts left join json_each(?) saved_order on texts.id=saved_order.value left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? order by saved_order.key',
-            (
-                saved_plan["text_order"],
-                saved_plan["text_disabled"],
-                "ordinarium",
-                "rite",
-                rite,
-            ),
-        ).fetchall()
-    else:
-        ordinaries = db.execute(
-            "select id, default_order, title, detailed_title, text from texts where type=? and filter_type=? and filter_content=? order by default_order",
-            ("ordinarium", "rite", rite),
-        ).fetchall()
+    order_tokens = parse_plan_tokens(saved_plan["text_order"]) if saved_plan else []
+    disabled_tokens = (
+        parse_plan_tokens(saved_plan["text_disabled"]) if saved_plan else []
+    )
+    ordinaries = build_plan_items(
+        service_id,
+        rite,
+        order_tokens,
+        disabled_tokens,
+        user_id=g.user["id"],
+    )
     observance_options = []
     observance_title = ""
     observance_handle = saved_data.get("observance_handle")
@@ -426,7 +557,7 @@ def load_service_for_text(service_id, user_id=None):
     return saved_service, saved_data
 
 
-def render_text_page(service_id, saved_service, saved_data):
+def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not saved_service:
         return render_error("Service ID required to generate text.", 400)
     db = get_db()
@@ -444,26 +575,20 @@ def render_text_page(service_id, saved_service, saved_data):
     if not rite:
         return render_error("Rite not found.", 404)
 
-    disabled_json = "[]"
-    if saved_service and saved_service["text_disabled"]:
-        disabled_json = saved_service["text_disabled"]
-
-    if saved_service["text_order"]:
-        ordinaries = db.execute(
-            'select texts.title, texts.text from texts join json_each(?) saved_order on texts.id=saved_order.value left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? and saved_disabled.value is null order by saved_order.key;',
-            (
-                saved_service["text_order"],
-                disabled_json,
-                "ordinarium",
-                "rite",
-                rite_name,
-            ),
-        ).fetchall()
-    else:
-        ordinaries = db.execute(
-            "select texts.title, texts.text from texts left join json_each(?) saved_disabled on texts.id=saved_disabled.value where texts.type=? and texts.filter_type=? and texts.filter_content=? and saved_disabled.value is null order by default_order;",
-            (disabled_json, "ordinarium", "rite", rite_name),
-        ).fetchall()
+    order_tokens = parse_plan_tokens(saved_service["text_order"])
+    disabled_tokens = parse_plan_tokens(saved_service["text_disabled"])
+    plan_items = build_plan_items(
+        service_id,
+        rite_name,
+        order_tokens,
+        disabled_tokens,
+        user_id=user_id,
+    )
+    ordinaries = [
+        {"title": item["title"], "text": item["text"], "type": item.get("type")}
+        for item in plan_items
+        if not item.get("disabled")
+    ]
     if not ordinaries:
         return render_error("Content not found.", 404)
 
@@ -600,7 +725,7 @@ def render_text_page(service_id, saved_service, saved_data):
 @login_required
 def text(service_id):
     saved_service, saved_data = load_service_for_text(service_id, g.user["id"])
-    return render_text_page(service_id, saved_service, saved_data)
+    return render_text_page(service_id, saved_service, saved_data, user_id=g.user["id"])
 
 
 @bp.route("/share/<share_uuid>")
@@ -643,7 +768,146 @@ def service_share(service_id):
         db.commit()
         created = True
     share_url = url_for("main.shared_text", share_uuid=share_uuid, _external=True)
-    return jsonify({"share_uuid": share_uuid, "share_url": share_url, "created": created})
+    return jsonify(
+        {"share_uuid": share_uuid, "share_url": share_url, "created": created}
+    )
+
+
+@bp.route("/service/<int:service_id>/custom-element", methods=["POST"])
+@login_required
+def service_add_custom_element(service_id):
+    def normalize_value(value):
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    title = normalize_value(request.form.get("title"))
+    text = request.form.get("text") or ""
+    text_value = text.strip()
+    rite = normalize_value(request.form.get("rite")) or "Renewed Ancient Text"
+    custom_id = normalize_value(request.form.get("custom_id"))
+    if custom_id:
+        try:
+            custom_id = int(custom_id)
+        except (TypeError, ValueError):
+            custom_id = None
+    if not title or not text_value:
+        flash("Title and text are required for a custom element.", "error")
+        return redirect(url_for("main.service", service_id=service_id))
+
+    db = get_db()
+    existing = db.execute(
+        "select user_id, data from services where id=? limit 1", (service_id,)
+    ).fetchone()
+    if existing and existing["user_id"] != g.user["id"]:
+        return render_error("Service not found.", 404)
+    if custom_id:
+        element = db.execute(
+            "select id from service_custom_elements where id=? and service_id=? and user_id=? limit 1",
+            (custom_id, service_id, g.user["id"]),
+        ).fetchone()
+        if not element:
+            return render_error("Custom element not found.", 404)
+        db.execute(
+            "update service_custom_elements set title=?, text=? where id=?",
+            (title, text_value, custom_id),
+        )
+        db.commit()
+        return redirect(url_for("main.service", service_id=service_id))
+
+    if existing:
+        service_data = json.loads(existing["data"]) if existing["data"] else {}
+    else:
+        service_data = {
+            "user_id": g.user["id"],
+            "title": None,
+            "rite": rite,
+            "season": None,
+            "service_date": None,
+            "text_order": None,
+            "text_disabled": None,
+            "observance_handle": None,
+        }
+
+    if not service_data.get("rite"):
+        service_data["rite"] = rite
+
+    cursor = db.execute(
+        "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+        (service_id, g.user["id"], title, text_value),
+    )
+    custom_token = f"custom:{cursor.lastrowid}"
+
+    order_tokens = parse_plan_tokens(service_data.get("text_order"))
+    if not order_tokens:
+        text_rows = db.execute(
+            "select id from texts where type=? and filter_type=? and filter_content=? order by default_order",
+            ("ordinarium", "rite", service_data["rite"]),
+        ).fetchall()
+        order_tokens = [f"text:{row['id']}" for row in text_rows]
+        custom_rows = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? order by created_at, id",
+            (service_id, g.user["id"]),
+        ).fetchall()
+        order_tokens.extend([f"custom:{row['id']}" for row in custom_rows])
+    else:
+        order_tokens = [token for token in order_tokens if token != custom_token]
+        order_tokens.append(custom_token)
+    service_data["text_order"] = json.dumps(order_tokens)
+
+    if existing:
+        db.execute(
+            "update services set data=? where id=?",
+            (json.dumps(service_data), service_id),
+        )
+    else:
+        db.execute(
+            "insert into services (id, data) values (?, ?)",
+            (service_id, json.dumps(service_data)),
+        )
+    db.commit()
+    return redirect(url_for("main.service", service_id=service_id))
+
+
+@bp.route(
+    "/service/<int:service_id>/custom-element/<int:custom_id>/delete", methods=["POST"]
+)
+@login_required
+def service_delete_custom_element(service_id, custom_id):
+    db = get_db()
+    existing = db.execute(
+        "select user_id, data from services where id=? limit 1", (service_id,)
+    ).fetchone()
+    if not existing or existing["user_id"] != g.user["id"]:
+        return render_error("Service not found.", 404)
+    element = db.execute(
+        "select id from service_custom_elements where id=? and service_id=? and user_id=? limit 1",
+        (custom_id, service_id, g.user["id"]),
+    ).fetchone()
+    if not element:
+        return render_error("Custom element not found.", 404)
+    db.execute(
+        "delete from service_custom_elements where id=? and service_id=? and user_id=?",
+        (custom_id, service_id, g.user["id"]),
+    )
+
+    service_data = json.loads(existing["data"]) if existing["data"] else {}
+    token = f"custom:{custom_id}"
+    order_tokens = parse_plan_tokens(service_data.get("text_order"))
+    disabled_tokens = parse_plan_tokens(service_data.get("text_disabled"))
+    if order_tokens:
+        order_tokens = [value for value in order_tokens if value != token]
+        service_data["text_order"] = json.dumps(order_tokens)
+    if disabled_tokens:
+        disabled_tokens = [value for value in disabled_tokens if value != token]
+        service_data["text_disabled"] = json.dumps(disabled_tokens)
+    db.execute(
+        "update services set data=? where id=?",
+        (json.dumps(service_data), service_id),
+    )
+    db.commit()
+    return redirect(url_for("main.service", service_id=service_id))
 
 
 @bp.route("/persist/service", methods=["POST"])
@@ -661,14 +925,23 @@ def persist_service():
     except (TypeError, ValueError):
         service_id = 1
 
-    order = request.form.get("ids", "").split(",") if request.form.get("ids") else []
-    order_json = "[" + ",".join(order) + "]"
-    disabled = (
-        request.form.get("disabled", "").split(",")
-        if request.form.get("disabled")
-        else []
-    )
-    disabled_json = "[" + ",".join(disabled) + "]"
+    raw_order = request.form.get("ids", "")
+    order_tokens = []
+    if raw_order:
+        for value in raw_order.split(","):
+            token = normalize_plan_token(value)
+            if token:
+                order_tokens.append(token)
+    order_json = json.dumps(order_tokens)
+
+    raw_disabled = request.form.get("disabled", "")
+    disabled_tokens = []
+    if raw_disabled:
+        for value in raw_disabled.split(","):
+            token = normalize_plan_token(value)
+            if token:
+                disabled_tokens.append(token)
+    disabled_json = json.dumps(disabled_tokens)
 
     db = get_db()
     existing = db.execute(
@@ -700,9 +973,7 @@ def persist_service():
             or payload["service_date"],
             "text_order": order_json,
             "text_disabled": disabled_json,
-            "observance_handle": normalize_value(
-                request.form.get("observance_handle")
-            ),
+            "observance_handle": normalize_value(request.form.get("observance_handle")),
         }
     )
     observance = None
@@ -835,8 +1106,6 @@ def observance_from_date():
             "season": season,
             "subcycle": observance.subcycle,
             "options": options_payload,
-            "default_handle": options_payload[0]["handle"]
-            if options_payload
-            else None,
+            "default_handle": options_payload[0]["handle"] if options_payload else None,
         }
     )
