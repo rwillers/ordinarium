@@ -362,11 +362,53 @@ div#page {
 	}
 	.plan-header-actions {
 		display: flex;
-		gap: 0.75em;
+		gap: 0;
 		align-items: center;
+	}
+	.plan-header-actions > * + * {
+		margin-left: -1px;
+	}
+	.plan-header-actions form + * button,
+	.plan-header-actions form + * input[type="submit"],
+	.plan-header-actions form + * .button {
+		margin-left: -1px;
+	}
+	.plan-header-actions > form button,
+	.plan-header-actions > form input[type="submit"],
+	.plan-header-actions > form .button {
+		margin-left: -1px;
 	}
 	.plan-header-actions form {
 		margin: 0;
+	}
+	.plan-header-actions button,
+	.plan-header-actions input[type="submit"],
+	.plan-header-actions .button {
+		border-radius: 0;
+	}
+	.plan-header-actions > :first-child button,
+	.plan-header-actions > :first-child input[type="submit"],
+	.plan-header-actions > :first-child .button {
+		border-top-left-radius: 5px;
+		border-bottom-left-radius: 5px;
+	}
+	.plan-header-actions > button:first-child,
+	.plan-header-actions > input[type="submit"]:first-child,
+	.plan-header-actions > .button:first-child {
+		border-top-left-radius: 5px;
+		border-bottom-left-radius: 5px;
+	}
+	.plan-header-actions > :last-child button,
+	.plan-header-actions > :last-child input[type="submit"],
+	.plan-header-actions > :last-child .button {
+		border-top-right-radius: 5px;
+		border-bottom-right-radius: 5px;
+	}
+	.plan-header-actions > button:last-child,
+	.plan-header-actions > input[type="submit"]:last-child,
+	.plan-header-actions > .button:last-child {
+		border-top-right-radius: 5px;
+		border-bottom-right-radius: 5px;
 	}
 	p {
 		line-height: 1.5;
