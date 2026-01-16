@@ -64,16 +64,17 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 
 ## Roadmap
 
-### Short term
+### MVP
 - Add custom liturgy element library by account.
 - Add "copy from another service" when creating new or editing.
-- Fix narrow screen wrapping in generated services.
+- Fix narrow screen wrapping in generated services (wrapping for pre/code tags and long prefixed antiphonal lines).
 - Implement initial export formats: PDF and DOCX.
 - Code clean up.
 
-### Long term
+### Post-MVP
+- Add second BCP 2019 rite (Anglican Standard Text).
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
 - Add rich propers search with calendar/season awareness.
-- Implement additional export formats or integrations: Planning Center, ProPresenter, etc.
+- Implement additional export formats and integrations: Planning Center, ProPresenter, etc.
 - Add team accounts (shared services, element libraries).
 - Add collaboration features for team accounts: comments, approvals, version history.
