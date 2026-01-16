@@ -4,12 +4,13 @@
 
 <div id="text">
 
-	<h1>{{ title | markdown_template }}</h1>
-		{% if service_title %}
-			<h2>{{ service_title }} ({{ rite }})</h2>
-		{% else %}
-			<h2>{{ rite | markdown_template }}</h2>
-		{% endif %}
+	<h1>
+		{{ title }}<br>
+		<small><em>{{ rite }}</em></small>
+	</h1>
+	{% if service_title %}
+		<h2>{{ service_title }}</h2>
+	{% endif %}
 
 		{% for ordinary in ordinaries %}
 			<div class="text-element{% if ordinary.type == 'custom' %} text-element-custom{% endif %}">
@@ -19,6 +20,12 @@
 				{{ ordinary.text | markdown_template }}
 			</div>
 		{% endfor %}
+		<p class="text-footer">
+			{{ title }} &mdash; {{ rite }}
+			{% if service_title %}<br>{{ service_title }}{% endif %}
+			{% if service_date_display %}({{ service_date_display }}){% endif %}
+			<br>Generated as of {{ generated_at_display }}
+		</p>
 
 </div>
 

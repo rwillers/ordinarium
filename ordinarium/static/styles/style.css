@@ -758,4 +758,10 @@ div#text {
 			vertical-align: top;
 		}
 	}
+	.text-footer {
+		font-size: 0.8em;
+		text-align: center;
+		margin-top: 2em;
+		color: var(--rubric-color);
+	}
 }

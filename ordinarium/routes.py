@@ -1,7 +1,7 @@
 import json
 import uuid
 from functools import wraps
-from datetime import date
+from datetime import date, datetime
 
 from flask import (
     Blueprint,
@@ -563,7 +563,8 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
     db = get_db()
 
     # Update not to be hard coded:
-    title = "<!--<small>The Order for the Administration of</small>  \nThe Lord’s Supper  \n<small>*or*</small>  \nHoly Communion,  \n<small>Commonly Called</small>  \n-->The Holy Eucharist"
+    # title = "<!--<small>The Order for the Administration of</small>  \nThe Lord’s Supper  \n<small>*or*</small>  \nHoly Communion,  \n<small>Commonly Called</small>  \n-->The Holy Eucharist"
+    title = "The Holy Eucharist"
 
     if not saved_service["rite"]:
         return render_error("Service rite is required to generate text.", 400)
@@ -711,11 +712,27 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         ),
     }
     service_title = observance.name or observance.alternative_name if observance else ""
+    service_date_display = ""
+    if saved_service and saved_service["service_date"]:
+        try:
+            parsed_date = date.fromisoformat(saved_service["service_date"])
+            service_date_display = (
+                f"{parsed_date.strftime('%B')} {parsed_date.day}, {parsed_date.year}"
+            )
+        except ValueError:
+            service_date_display = ""
+    generated_at = datetime.now()
+    generated_at_display = (
+        f"{generated_at.strftime('%B')} {generated_at.day}, {generated_at.year} "
+        f"at {generated_at.strftime('%I:%M %p').lstrip('0')}"
+    )
     return render_template(
         "text.html",
         title=title,
         rite=rite_name,
         service_title=service_title,
+        service_date_display=service_date_display,
+        generated_at_display=generated_at_display,
         ordinaries=ordinaries,
         **propers,
     )
@@ -792,8 +809,8 @@ def service_add_custom_element(service_id):
             custom_id = int(custom_id)
         except (TypeError, ValueError):
             custom_id = None
-    if not title or not text_value:
-        flash("Title and text are required for a custom element.", "error")
+    if not title:
+        flash("Title is required for a custom element.", "error")
         return redirect(url_for("main.service", service_id=service_id))
 
     db = get_db()
