@@ -65,7 +65,6 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### Short term
-- Add custom liturgy element support (markdown with visual editor?).
 - Add custom liturgy element library by account.
 - Add "copy from another service" when creating new or editing.
 - Fix narrow screen wrapping in generated services.
