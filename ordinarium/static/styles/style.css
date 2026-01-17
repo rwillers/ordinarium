@@ -446,6 +446,15 @@ div#page {
 	.plan-row-main {
 		padding: 0 5.6em 0 2.4em;
 	}
+	.plan-row.plan-row-template {
+		padding: 0.75em;
+	}
+	.plan-row.plan-row-template .plan-row-main {
+		padding: 0 3.6em 0 0;
+	}
+	.plan-row.plan-row-template .plan-row-menu {
+		right: 0.75em;
+	}
 	.plan-row + .plan-row {
 		border-top: 0;
 	}

@@ -229,6 +229,26 @@ def load_custom_elements(service_id, user_id=None):
     ]
 
 
+def load_custom_templates(user_id):
+    if not user_id:
+        return []
+    db = get_db()
+    rows = db.execute(
+        "select id, title, text, created_at, updated_at from service_custom_templates where user_id=? order by updated_at desc, id desc",
+        (user_id,),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "text": row["text"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
 def build_plan_items(service_id, rite, order_tokens, disabled_tokens, user_id=None):
     db = get_db()
     text_rows = db.execute(
@@ -353,6 +373,67 @@ def account():
     )
 
 
+@bp.route("/templates", methods=["GET", "POST"])
+@login_required
+def templates():
+    error = None
+    if request.method == "POST":
+        title = (request.form.get("title") or "").strip()
+        text_value = (request.form.get("text") or "").strip()
+        template_id = (request.form.get("template_id") or "").strip()
+        if not title:
+            error = "Title is required for a template."
+        if template_id:
+            try:
+                template_id = int(template_id)
+            except (TypeError, ValueError):
+                template_id = None
+        if not error:
+            db = get_db()
+            if template_id:
+                existing = db.execute(
+                    "select id from service_custom_templates where id=? and user_id=? limit 1",
+                    (template_id, g.user["id"]),
+                ).fetchone()
+                if not existing:
+                    return render_error("Template not found.", 404)
+                db.execute(
+                    "update service_custom_templates set title=?, text=?, updated_at=CURRENT_TIMESTAMP where id=? and user_id=?",
+                    (title, text_value, template_id, g.user["id"]),
+                )
+            else:
+                db.execute(
+                    "insert into service_custom_templates (user_id, title, text) values (?, ?, ?)",
+                    (g.user["id"], title, text_value),
+                )
+            db.commit()
+            return redirect(url_for("main.templates"))
+
+    if error:
+        flash(error, "error")
+    return render_template(
+        "templates.html", templates=load_custom_templates(g.user["id"])
+    )
+
+
+@bp.route("/templates/<int:template_id>/delete", methods=["POST"])
+@login_required
+def templates_delete(template_id):
+    db = get_db()
+    existing = db.execute(
+        "select id from service_custom_templates where id=? and user_id=? limit 1",
+        (template_id, g.user["id"]),
+    ).fetchone()
+    if not existing:
+        return render_error("Template not found.", 404)
+    db.execute(
+        "delete from service_custom_templates where id=? and user_id=?",
+        (template_id, g.user["id"]),
+    )
+    db.commit()
+    return redirect(url_for("main.templates"))
+
+
 # Main routes
 
 
@@ -435,6 +516,7 @@ def build_plan_context(service_id, rite):
         "observance_title": observance_title,
         "can_delete": bool(saved_plan and saved_plan["service_date"]),
         "can_share": bool(saved_plan),
+        "custom_templates": load_custom_templates(g.user["id"]),
     }
 
 

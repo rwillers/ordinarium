@@ -109,6 +109,21 @@
 				<input type="hidden" name="initial_text" value="">
 				<p>
 					<label class="plan-field">
+						<span>Apply template</span>
+						<select id="custom-template-select">
+							<option value="">Choose a template</option>
+							{% if custom_templates %}
+								{% for template in custom_templates %}
+								<option value="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">{{ template.title }}</option>
+								{% endfor %}
+							{% else %}
+								<option value="" disabled>No templates available</option>
+							{% endif %}
+						</select>
+					</label>
+				</p>
+				<p>
+					<label class="plan-field">
 						<span>Title</span>
 						<input type="text" name="title" required>
 					</label>
@@ -332,6 +347,7 @@
 		const customModal = document.querySelector('#custom-element-modal')
 		const customEditButtons = document.querySelectorAll('[data-custom-edit]')
 		const customAddButtons = document.querySelectorAll('[data-custom-add]')
+		const templateSelect = document.querySelector('#custom-template-select')
 		const rowMenus = document.querySelectorAll('[data-row-menu]')
 		const rowMenuToggles = document.querySelectorAll('[data-row-menu-toggle]')
 
@@ -390,6 +406,9 @@
 			const modalTitle = customModal.querySelector('#custom-element-title')
 			const initialTitleInput = form?.querySelector('input[name="initial_title"]')
 			const initialTextInput = form?.querySelector('input[name="initial_text"]')
+			if (templateSelect) {
+				templateSelect.value = ''
+			}
 			if (mode?.type === 'edit') {
 				if (titleInput) {
 					titleInput.value = mode.title || ''
@@ -513,6 +532,9 @@
 					if (insertAfterInput) {
 						insertAfterInput.value = ''
 					}
+					if (templateSelect) {
+						templateSelect.value = ''
+					}
 					if (initialTitleInput) {
 						initialTitleInput.value = ''
 					}
@@ -520,6 +542,29 @@
 						initialTextInput.value = ''
 					}
 					closeCustomModal()
+				}
+			})
+		}
+
+		if (templateSelect) {
+			templateSelect.addEventListener('change', () => {
+				const selectedOption = templateSelect.options[templateSelect.selectedIndex]
+				if (!selectedOption) {
+					return
+				}
+				const templateTitle = selectedOption.getAttribute('data-template-title')
+				const templateText = selectedOption.getAttribute('data-template-text')
+				if (templateTitle === null && templateText === null) {
+					return
+				}
+				const form = customModal?.querySelector('form')
+				const titleInput = form?.querySelector('input[name="title"]')
+				const textInput = form?.querySelector('textarea[name="text"]')
+				if (titleInput && templateTitle !== null) {
+					titleInput.value = templateTitle
+				}
+				if (textInput && templateText !== null) {
+					textInput.value = templateText
 				}
 			})
 		}

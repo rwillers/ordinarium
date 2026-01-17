@@ -65,8 +65,8 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### MVP
-- Add custom liturgy element library by account.
 - Add "copy from another service" when creating new or editing.
+- Move /service controls to fixed UI element.
 - Fix narrow screen wrapping in generated services (wrapping for pre/code tags and long prefixed antiphonal lines).
 - Implement initial export formats: PDF and DOCX.
 - Code clean up.

@@ -1,0 +1,261 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+
+	<div class="plan-header">
+		<h2>Templates</h2>
+		<div class="plan-header-actions">
+			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add template</button>
+		</div>
+	</div>
+
+	{% if templates %}
+	<ul class="plan-list">
+	{% for template in templates %}
+		<li class="plan-row plan-row-template" data-template-id="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">
+			<div class="plan-row-main">
+				<div class="plan-item">
+					<span class="plan-title">{{ template.title }}</span>
+					{% if template.text %}<small>{{ template.text | markdown_template | striptags | clean | truncate(200) }}</small>{% endif %}
+				</div>
+			</div>
+			<div class="plan-row-menu" data-row-menu>
+				<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Template actions">▾</button>
+				<div class="plan-row-menu-panel" role="menu">
+					<button class="plan-row-menu-item" type="button" data-template-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
+					<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this template?')">
+						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+					</form>
+				</div>
+			</div>
+		</li>
+	{% endfor %}
+	</ul>
+	{% else %}
+	<p>No templates yet.</p>
+	{% endif %}
+
+	<div class="share-modal" id="template-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-template-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
+			<h3 id="template-modal-title">Add template</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.templates') }}" method="post">
+				<input type="hidden" name="template_id" value="">
+				<input type="hidden" name="initial_title" value="">
+				<input type="hidden" name="initial_text" value="">
+				<p>
+					<label class="plan-field">
+						<span>Title</span>
+						<input type="text" name="title" required>
+					</label>
+				</p>
+				<p>
+					<label class="plan-field">
+						<span>Text</span>
+						<textarea name="text" rows="6"></textarea>
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-template-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
+	<script>
+		const templateToggle = document.querySelector('#template-toggle')
+		const templateModal = document.querySelector('#template-modal')
+		const templateEditButtons = document.querySelectorAll('[data-template-edit]')
+		const rowMenus = document.querySelectorAll('[data-row-menu]')
+		const rowMenuToggles = document.querySelectorAll('[data-row-menu-toggle]')
+
+		const closeRowMenus = (exceptMenu = null) => {
+			rowMenus.forEach((menu) => {
+				if (menu === exceptMenu) {
+					return
+				}
+				menu.classList.remove('is-open')
+				const toggle = menu.querySelector('[data-row-menu-toggle]')
+				if (toggle) {
+					toggle.setAttribute('aria-expanded', 'false')
+				}
+				const row = menu.closest('.plan-row')
+				if (row) {
+					row.classList.remove('is-menu-open')
+				}
+			})
+		}
+
+		if (rowMenuToggles.length) {
+			rowMenuToggles.forEach((toggle) => {
+				toggle.addEventListener('click', (event) => {
+					event.stopPropagation()
+					const menu = toggle.closest('[data-row-menu]')
+					if (!menu) {
+						return
+					}
+					const isOpen = !menu.classList.contains('is-open')
+					closeRowMenus(menu)
+					menu.classList.toggle('is-open', isOpen)
+					toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
+					const row = menu.closest('.plan-row')
+					if (row) {
+						row.classList.toggle('is-menu-open', isOpen)
+					}
+				})
+			})
+		}
+
+		document.addEventListener('click', (event) => {
+			if (!event.target.closest('[data-row-menu]')) {
+				closeRowMenus()
+			}
+		})
+
+		const openTemplateModal = (mode) => {
+			if (!templateModal) {
+				return
+			}
+			const form = templateModal.querySelector('form')
+			const titleInput = form?.querySelector('input[name="title"]')
+			const textInput = form?.querySelector('textarea[name="text"]')
+			const idInput = form?.querySelector('input[name="template_id"]')
+			const modalTitle = templateModal.querySelector('#template-modal-title')
+			const initialTitleInput = form?.querySelector('input[name="initial_title"]')
+			const initialTextInput = form?.querySelector('input[name="initial_text"]')
+			if (mode?.type === 'edit') {
+				if (titleInput) {
+					titleInput.value = mode.title || ''
+				}
+				if (textInput) {
+					textInput.value = mode.text || ''
+				}
+				if (idInput) {
+					idInput.value = mode.id || ''
+				}
+				if (initialTitleInput) {
+					initialTitleInput.value = mode.title || ''
+				}
+				if (initialTextInput) {
+					initialTextInput.value = mode.text || ''
+				}
+				if (modalTitle) {
+					modalTitle.textContent = 'Edit template'
+				}
+			} else {
+				if (titleInput) {
+					titleInput.value = ''
+				}
+				if (textInput) {
+					textInput.value = ''
+				}
+				if (idInput) {
+					idInput.value = ''
+				}
+				if (initialTitleInput) {
+					initialTitleInput.value = ''
+				}
+				if (initialTextInput) {
+					initialTextInput.value = ''
+				}
+				if (modalTitle) {
+					modalTitle.textContent = 'Add template'
+				}
+			}
+			templateModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (templateToggle) {
+				templateToggle.setAttribute('aria-expanded', 'true')
+			}
+			if (titleInput) {
+				titleInput.focus()
+			}
+		}
+
+		const closeTemplateModal = () => {
+			if (!templateModal) {
+				return
+			}
+			templateModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			if (templateToggle) {
+				templateToggle.setAttribute('aria-expanded', 'false')
+			}
+		}
+
+		if (templateToggle) {
+			templateToggle.addEventListener('click', () => {
+				openTemplateModal()
+			})
+		}
+
+		if (templateEditButtons.length) {
+			templateEditButtons.forEach((button) => {
+				button.addEventListener('click', () => {
+					const row = button.closest('.plan-row')
+					if (!row) {
+						return
+					}
+					closeRowMenus()
+					openTemplateModal({
+						type: 'edit',
+						id: row.getAttribute('data-template-id'),
+						title: row.getAttribute('data-template-title'),
+						text: row.getAttribute('data-template-text')
+					})
+				})
+			})
+		}
+
+		if (templateModal) {
+			templateModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-template-close]')) {
+					const form = templateModal.querySelector('form')
+					const titleInput = form?.querySelector('input[name="title"]')
+					const textInput = form?.querySelector('textarea[name="text"]')
+					const initialTitleInput = form?.querySelector('input[name="initial_title"]')
+					const initialTextInput = form?.querySelector('input[name="initial_text"]')
+					const currentTitle = titleInput ? titleInput.value.trim() : ''
+					const currentText = textInput ? textInput.value.trim() : ''
+					const initialTitle = initialTitleInput ? initialTitleInput.value : ''
+					const initialText = initialTextInput ? initialTextInput.value : ''
+					const hasChanges = currentTitle !== initialTitle || currentText !== initialText
+					if (hasChanges) {
+						const confirmed = window.confirm('Discard this template? Your changes will be lost.')
+						if (!confirmed) {
+							return
+						}
+					}
+					if (titleInput) {
+						titleInput.value = ''
+					}
+					if (textInput) {
+						textInput.value = ''
+					}
+					if (initialTitleInput) {
+						initialTitleInput.value = ''
+					}
+					if (initialTextInput) {
+						initialTextInput.value = ''
+					}
+					closeTemplateModal()
+				}
+			})
+		}
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && templateModal && templateModal.getAttribute('aria-hidden') === 'false') {
+				closeTemplateModal()
+			}
+			if (event.key === 'Escape') {
+				closeRowMenus()
+			}
+		})
+	</script>
+
+</div>
+
+{% endblock %}

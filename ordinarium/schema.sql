@@ -232,6 +232,16 @@ CREATE TABLE service_custom_elements (
 );
 CREATE INDEX idx_service_custom_elements_service_id ON service_custom_elements(service_id);
 CREATE INDEX idx_service_custom_elements_user_id ON service_custom_elements(user_id);
+CREATE TABLE service_custom_templates (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_service_custom_templates_user_id ON service_custom_templates(user_id);
+CREATE INDEX idx_service_custom_templates_updated_at ON service_custom_templates(updated_at);
 CREATE TABLE "texts" ("id" INTEGER PRIMARY KEY, "data" JSON, type TEXT
 generated always as (json_extract(data, '$.type')) virtual, filter_type TEXT
 generated always as (json_extract(data, '$.filter.type')) virtual, filter_content TEXT
