@@ -804,6 +804,7 @@ def service_add_custom_element(service_id):
     text_value = text.strip()
     rite = normalize_value(request.form.get("rite")) or "Renewed Ancient Text"
     custom_id = normalize_value(request.form.get("custom_id"))
+    insert_after = normalize_value(request.form.get("insert_after"))
     if custom_id:
         try:
             custom_id = int(custom_id)
@@ -871,6 +872,14 @@ def service_add_custom_element(service_id):
     else:
         order_tokens = [token for token in order_tokens if token != custom_token]
         order_tokens.append(custom_token)
+    if insert_after:
+        order_tokens = [token for token in order_tokens if token != custom_token]
+        try:
+            insert_index = order_tokens.index(insert_after)
+        except ValueError:
+            order_tokens.append(custom_token)
+        else:
+            order_tokens.insert(insert_index + 1, custom_token)
     service_data["text_order"] = json.dumps(order_tokens)
 
     if existing:

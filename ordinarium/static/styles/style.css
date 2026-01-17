@@ -441,6 +441,7 @@ div#page {
 		margin: 0;
 		padding: 0.75em 1em;
 		position: relative;
+		overflow: visible;
 	}
 	.plan-row-main {
 		padding: 0 5.6em 0 2.4em;
@@ -464,6 +465,9 @@ div#page {
 		background-color: #fff;
 		color: var(--body-color);
 		opacity: 0.6;
+	}
+	.plan-row.is-menu-open {
+		z-index: 3;
 	}
 	.plan-item {
 		display: block;
@@ -588,19 +592,6 @@ div#page {
 		top: 50%;
 		transform: translateY(-50%);
 	}
-	.plan-row-actions {
-		position: absolute;
-		right: 3.2em;
-		top: 50%;
-		transform: translateY(-50%);
-		display: flex;
-		align-items: center;
-		gap: 0.3em;
-		color: var(--rubric-color);
-	}
-	.plan-row-actions form {
-		margin: 0;
-	}
 	.plan-icon-button {
 		background: transparent;
 		border: 1px solid transparent;
@@ -614,11 +605,80 @@ div#page {
 		font-size: 1.05em;
 		line-height: 1;
 	}
-	.plan-icon-delete {
-		font-size: 1.2em;
-	}
 	.plan-icon-button:hover {
 		background: rgba(118, 50, 63, 0.08);
+	}
+	.plan-row-menu {
+		position: absolute;
+		right: 3.2em;
+		top: 50%;
+		transform: translateY(-50%);
+	}
+	.plan-menu-toggle {
+		width: 2em;
+		height: 2em;
+		border-radius: 5px;
+		font-size: 1em;
+		line-height: 1;
+	}
+	.plan-row-menu-panel {
+		position: absolute;
+		right: 0;
+		top: calc(100% + 0.35em);
+		background: #fff;
+		border: 1px solid rgba(27, 27, 27, 0.15);
+		border-radius: 5px;
+		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+		min-width: 8.5em;
+		padding: 0.4em;
+		display: flex;
+		flex-direction: column;
+		gap: 0.2em;
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-6px);
+		transition: opacity 0.15s ease, transform 0.15s ease;
+		z-index: 2;
+	}
+	.plan-row-menu.is-open .plan-row-menu-panel {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateY(0);
+	}
+	.plan-row-menu-panel form {
+		margin: 0;
+	}
+	.plan-row-menu-item {
+		background: transparent;
+		border: none;
+		padding: 0.45em 0.6em;
+		text-align: left;
+		border-radius: 5px;
+		font-family: var(--header-font-family);
+		font-size: 0.9em;
+		color: var(--body-color);
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
+		width: 100%;
+	}
+	.plan-row-menu-item:hover {
+		background: rgba(118, 50, 63, 0.08);
+		color: var(--rubric-color);
+	}
+	.plan-row-menu-delete {
+		color: #7c1e1a;
+	}
+	.plan-row-menu-item.is-disabled {
+		color: rgba(27, 27, 27, 0.35);
+		cursor: not-allowed;
+	}
+	.plan-row-menu-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.1em;
 	}
 	.plan-row small {
 		display: block;
