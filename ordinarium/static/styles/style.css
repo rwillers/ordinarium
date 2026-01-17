@@ -905,6 +905,10 @@ div#text {
 		overflow-x: auto;
 		scroll-snap-type: x mandatory;
 		scroll-padding-inline: 0;
+		scrollbar-width: none;
+	}
+	:not(.text-element-custom) ul.text-carousel::-webkit-scrollbar {
+		display: none;
 	}
 	:not(.text-element-custom) ul.text-carousel li {
 		flex: 0 0 100%;
