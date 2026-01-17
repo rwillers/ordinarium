@@ -229,6 +229,41 @@ def load_custom_elements(service_id, user_id=None):
     ]
 
 
+def format_services(services):
+    formatted = []
+    for service in services:
+        display_date = service["service_date"]
+        try:
+            parsed = date.fromisoformat(service["service_date"])
+            display_date = f"{parsed.month}/{parsed.day}/{parsed.year}"
+        except (TypeError, ValueError):
+            pass
+        title = None
+        saved_data = json.loads(service["data"]) if service["data"] else {}
+        observance_handle = saved_data.get("observance_handle")
+        if service["service_date"]:
+            try:
+                observance = resolve_observance(
+                    date.fromisoformat(service["service_date"]),
+                    observance_handle,
+                )
+            except ValueError:
+                observance = None
+            if observance:
+                title = observance.name or observance.alternative_name
+        if not title:
+            title = service["title"]
+        formatted.append(
+            {
+                "id": service["id"],
+                "title": title or "Untitled Service",
+                "service_date": service["service_date"],
+                "display_date": display_date,
+            }
+        )
+    return formatted
+
+
 def load_custom_templates(user_id):
     if not user_id:
         return []
@@ -439,7 +474,16 @@ def templates_delete(template_id):
 
 @bp.route("/")
 def index():
-    return page("home")
+    upcoming_services = []
+    if g.user:
+        db = get_db()
+        today = date.today().isoformat()
+        rows = db.execute(
+            "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
+            (g.user["id"], today),
+        ).fetchall()
+        upcoming_services = format_services(rows)
+    return render_template("home.html", upcoming_services=upcoming_services)
 
 
 def build_plan_context(service_id, rite):
@@ -554,40 +598,6 @@ def services():
         "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (g.user["id"], today),
     ).fetchall()
-
-    def format_services(services):
-        formatted = []
-        for service in services:
-            display_date = service["service_date"]
-            try:
-                parsed = date.fromisoformat(service["service_date"])
-                display_date = f"{parsed.month}/{parsed.day}/{parsed.year}"
-            except (TypeError, ValueError):
-                pass
-            title = None
-            saved_data = json.loads(service["data"]) if service["data"] else {}
-            observance_handle = saved_data.get("observance_handle")
-            if service["service_date"]:
-                try:
-                    observance = resolve_observance(
-                        date.fromisoformat(service["service_date"]),
-                        observance_handle,
-                    )
-                except ValueError:
-                    observance = None
-                if observance:
-                    title = observance.name or observance.alternative_name
-            if not title:
-                title = service["title"]
-            formatted.append(
-                {
-                    "id": service["id"],
-                    "title": title or "Untitled Service",
-                    "service_date": service["service_date"],
-                    "display_date": display_date,
-                }
-            )
-        return formatted
 
     return render_template(
         "services.html",
