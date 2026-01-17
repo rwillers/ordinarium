@@ -16,8 +16,8 @@ Ordinarium is a liturgy planning workspace that incorporates the structure and r
 ## Features
 - Compose a full liturgical order by selecting propers, readings, and prayers from the ACNA 2019 BCP.
 - Enforce rubrical sequencing while allowing flexible overrides for local practice.
-- Export or share services for worship planning, presentation software, or printable leaflets.
-- Planned: role-based access (clergy, musicians, readers), history/audit trail, and additional rite modules.
+- Export or share services for worship planning and, in the future, presentation software or printable leaflets.
+- Planned: role-based access (clergy, musicians, readers), history/audit trail, and support for additional rites.
 
 ## Liturgical text conventions
 
@@ -29,7 +29,7 @@ All service texts are represented in Markdown.
 - Rubrics use italic face.
 - Celebrant text uses regular face.
 - People text uses bold face (**Text**).
-- References use H6.
+- Scripture references use H6.
 - When there is optionality on the rendition of a piece of text (e.g., the Kyrie), an unordered list is used; for example (note double-space line breaks to preserve formatting):
     -   Lord, have mercy upon us.  
         **Christ, have mercy upon us.**  
@@ -40,13 +40,13 @@ All service texts are represented in Markdown.
     -   Kyrie eleison.  
         **Christe eleison.**  
         Kyrie eleison.
-- Preformatted text use double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
-- Preformatted paragraphs (e.g., the Creeds) use code (four spaces, resulting in <pre><code> blocks).
+- Preformatted text uses double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
+- Preformatted paragraphs (e.g., the Creeds) use code formatting (four spaces, resulting in \<pre\>\<code\> blocks).
 - Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
 
 ## Database structure
 
-Note that the SQLite database uses JSON data storage fields with virtual columns. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
+Note that the SQLite database uses JSON data storage fields with virtual columns for several tables. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
 
 ## Tech stack (planned)
 - Python 3.11+
