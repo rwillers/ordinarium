@@ -2,23 +2,25 @@
 
 {% block content %}
 
-<div id="page">
+<div id="page" class="plan-page">
 
 	<div class="plan-header">
-		<h2>Plan a service</h2>
-		<div class="plan-header-actions">
-			<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
-			<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
-			{% if can_share %}
-			<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
-			{% endif %}
-			{% if can_delete %}
-			<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
-				<button class="plan-submit" type="submit">Delete</button>
-			</form>
-			{% endif %}
+		<div class="plan-header-actions-fixed">
+			<div class="plan-header-actions">
+				<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
+				<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
+				{% if can_share %}
+				<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
+				{% endif %}
+				{% if can_delete %}
+				<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+					<button class="plan-submit" type="submit">Delete</button>
+				</form>
+				{% endif %}
+			</div>
 		</div>
 	</div>
+	<h2 class="plan-title">Plan a service</h2>
 	<div class="share-modal" id="share-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-share-close></div>
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="share-modal-title">
