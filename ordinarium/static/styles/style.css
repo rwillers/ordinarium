@@ -304,13 +304,21 @@ main {
 	text-align: right;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
 	.share-modal-link {
 		flex-direction: column;
 		align-items: stretch;
 	}
 	.share-modal-actions {
 		text-align: left;
+	}
+	div#text {
+		:not(.text-element-custom) ul {
+			white-space: normal;
+		}
+		.text-carousel-dots {
+			display: flex;
+		}
 	}
 }
 
@@ -430,7 +438,7 @@ div#page {
 	.plan-header-actions-fixed .plan-header-actions input[type="submit"],
 	.plan-header-actions-fixed .plan-header-actions .button {
 		border: none;
-		border-radius: 0;
+		border-radius: 5px;
 	}
 	.plan-header-actions > * + * {
 		margin-left: -1px;
@@ -451,7 +459,7 @@ div#page {
 	.plan-header-actions button,
 	.plan-header-actions input[type="submit"],
 	.plan-header-actions .button {
-		border-radius: 0;
+		border-radius: 5px;
 	}
 	.plan-header-actions > :first-child button,
 	.plan-header-actions > :first-child input[type="submit"],
@@ -858,6 +866,8 @@ div#text {
 	}
 	pre {
 		margin: 0 auto;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 	}
 	code {
 		color: var(--body-color);
@@ -867,10 +877,18 @@ div#text {
 		white-space-collapse: preserve;
 		text-wrap-mode: nowrap;
 	}
+	pre code {
+		white-space: inherit;
+		text-wrap-mode: wrap;
+	}
 	:not(.text-element-custom) ul {
 		margin: 0;
 		padding: 0;
 		list-style: none;
+		white-space: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
 	}
 	:not(.text-element-custom) ul li {
 		display: inline-block;
@@ -880,6 +898,51 @@ div#text {
 		margin-left: 1em;
 		padding-left: 1em;
 		border-left: 1px solid var(--line-color);
+	}
+	:not(.text-element-custom) ul.text-carousel {
+		display: flex;
+		white-space: normal;
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		scroll-padding-inline: 0;
+	}
+	:not(.text-element-custom) ul.text-carousel li {
+		flex: 0 0 100%;
+		display: block;
+		scroll-snap-align: start;
+		margin: 0;
+		padding: 0;
+		border: none;
+	}
+	:not(.text-element-custom) ul.text-carousel li + li {
+		margin: 0;
+		padding: 0;
+		border: none;
+	}
+	.text-carousel-dots {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		margin: 0.6em 0 0.2em;
+	}
+	.text-carousel-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 999px;
+		border: 1px solid var(--line-color);
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
+	}
+	.text-carousel-dot[aria-current="true"] {
+		background: var(--rubric-color);
+		border-color: var(--rubric-color);
+	}
+	@media (max-width: 700px) {
+		.text-carousel-dots {
+			display: flex;
+		}
 	}
 	p:has(> em:first-child):has(:not(em)) {
 		> em {
