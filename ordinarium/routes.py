@@ -28,6 +28,7 @@ from .liturgical_calendar import (
 )
 
 bp = Blueprint("main", __name__)
+DEFAULT_RITE = "Renewed Ancient Text"
 
 
 # Utility functions
@@ -566,7 +567,7 @@ def build_plan_context(service_id, rite):
 
 @bp.route("/service/<int:service_id>")
 @login_required
-def service(service_id, rite="Renewed Ancient Text"):
+def service(service_id, rite=DEFAULT_RITE):
     db = get_db()
     existing_owner = db.execute(
         "select user_id from services where id=? limit 1", (service_id,)
@@ -598,21 +599,99 @@ def services():
         "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (g.user["id"], today),
     ).fetchall()
+    copy_services = db.execute(
+        "select id, title, service_date, data from services where user_id=? and rite=? order by service_date desc",
+        (g.user["id"], DEFAULT_RITE),
+    ).fetchall()
 
     return render_template(
         "services.html",
         current_services=format_services(current_services),
         past_services=format_services(past_services),
+        copy_services=format_services(copy_services),
+        default_rite=DEFAULT_RITE,
     )
 
 
-@bp.route("/services/new")
+@bp.route("/services/new", methods=["GET", "POST"])
 @login_required
 def services_new():
     db = get_db()
     next_id = db.execute(
         "select coalesce(max(id), 0) + 1 as next_id from services"
     ).fetchone()
+    if request.method == "POST":
+        mode = request.form.get("mode", "defaults")
+        if mode == "copy":
+            raw_source_id = request.form.get("from_service_id")
+            try:
+                source_id = int(raw_source_id)
+            except (TypeError, ValueError):
+                source_id = None
+            if not source_id:
+                return render_error("Select a service to copy.", 400)
+            rite = request.form.get("rite") or DEFAULT_RITE
+            source = db.execute(
+                "select data from services where id=? and user_id=? limit 1",
+                (source_id, g.user["id"]),
+            ).fetchone()
+            if not source:
+                return render_error("Service not found.", 404)
+            source_data = json.loads(source["data"]) if source["data"] else {}
+            if source_data.get("rite") != rite:
+                return render_error("Service rite does not match.", 400)
+
+            custom_rows = db.execute(
+                "select id, title, text, created_at from service_custom_elements where service_id=? and user_id=? order by created_at, id",
+                (source_id, g.user["id"]),
+            ).fetchall()
+            custom_id_map = {}
+            for row in custom_rows:
+                cursor = db.execute(
+                    "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+                    (next_id["next_id"], g.user["id"], row["title"], row["text"]),
+                )
+                custom_id_map[row["id"]] = cursor.lastrowid
+
+            def remap_tokens(tokens):
+                remapped = []
+                for token in tokens:
+                    if token.startswith("custom:"):
+                        try:
+                            old_id = int(token.split(":", 1)[1])
+                        except (IndexError, ValueError):
+                            continue
+                        new_id = custom_id_map.get(old_id)
+                        if new_id:
+                            remapped.append(f"custom:{new_id}")
+                        continue
+                    remapped.append(token)
+                return remapped
+
+            order_tokens = remap_tokens(
+                parse_plan_tokens(source_data.get("text_order"))
+            )
+            disabled_tokens = remap_tokens(
+                parse_plan_tokens(source_data.get("text_disabled"))
+            )
+            payload = {
+                "user_id": g.user["id"],
+                "title": None,
+                "rite": source_data.get("rite", DEFAULT_RITE),
+                "season": None,
+                "service_date": None,
+                "observance_handle": None,
+                "text_order": json.dumps(order_tokens),
+                "text_disabled": json.dumps(disabled_tokens),
+            }
+            db.execute(
+                "insert into services (id, data) values (?, ?)",
+                (next_id["next_id"], json.dumps(payload)),
+            )
+            db.commit()
+            return redirect(
+                url_for("main.service", service_id=next_id["next_id"])
+            )
     return redirect(url_for("main.service", service_id=next_id["next_id"]))
 
 
@@ -894,7 +973,7 @@ def service_add_custom_element(service_id):
     title = normalize_value(request.form.get("title"))
     text = request.form.get("text") or ""
     text_value = text.strip()
-    rite = normalize_value(request.form.get("rite")) or "Renewed Ancient Text"
+    rite = normalize_value(request.form.get("rite")) or DEFAULT_RITE
     custom_id = normalize_value(request.form.get("custom_id"))
     insert_after = normalize_value(request.form.get("insert_after"))
     if custom_id:
@@ -1079,7 +1158,7 @@ def persist_service():
     payload = {
         "user_id": g.user["id"],
         "title": existing_data.get("title"),
-        "rite": existing_data.get("rite", "Renewed Ancient Text"),
+        "rite": existing_data.get("rite", DEFAULT_RITE),
         "season": None,
         "service_date": existing_data.get("service_date"),
         "observance_handle": existing_data.get("observance_handle"),

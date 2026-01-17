@@ -7,7 +7,7 @@
 	<div class="plan-header">
 		<h2>Services</h2>
 		<div class="plan-header-actions">
-			<a class="button" href="{{ url_for('main.services_new') }}">Add a service</a>
+			<button class="button" type="button" id="service-add-toggle" aria-expanded="false" aria-controls="service-add-modal">Add a service</button>
 		</div>
 	</div>
 
@@ -41,6 +41,93 @@
 	<p>No past services.</p>
 	{% endif %}
 
+	<div class="share-modal" id="service-add-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-service-add-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-add-title">
+			<h3 id="service-add-title">Add a service</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.services_new') }}" method="post">
+				<input type="hidden" name="rite" value="{{ default_rite }}">
+				<p class="plan-field">
+					<span>Start with</span>
+					<label class="auth-toggle">
+						<input type="radio" name="mode" value="defaults" checked>
+						Use rite defaults
+					</label>
+					<label class="auth-toggle">
+						<input type="radio" name="mode" value="copy"{% if not copy_services %} disabled{% endif %}>
+						Copy from existing service
+					</label>
+				</p>
+				<div id="service-copy-fields"{% if not copy_services %} style="display: none;"{% endif %}>
+					<p>
+						<label class="plan-field">
+							<span>Service to copy</span>
+							<select name="from_service_id" id="service-copy-select"{% if not copy_services %} disabled{% endif %}>
+								{% for service in copy_services %}
+									<option value="{{ service.id }}">{{ service.title }}{% if service.display_date %} — {{ service.display_date }}{% endif %}</option>
+								{% endfor %}
+							</select>
+						</label>
+					</p>
+				</div>
+				{% if not copy_services %}
+				<p>No services from this rite yet.</p>
+				{% endif %}
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-service-add-close>Cancel</button>
+					<button class="plan-submit" type="submit">Continue</button>
+				</div>
+			</form>
+		</div>
+	</div>
+
 </div>
+
+<script>
+	const serviceAddToggle = document.querySelector('#service-add-toggle')
+	const serviceAddModal = document.querySelector('#service-add-modal')
+	const serviceAddCloseButtons = document.querySelectorAll('[data-service-add-close]')
+	const serviceAddModes = document.querySelectorAll('input[name="mode"]')
+	const serviceCopyFields = document.querySelector('#service-copy-fields')
+	const serviceCopySelect = document.querySelector('#service-copy-select')
+
+	const updateServiceAddMode = () => {
+		const selected = document.querySelector('input[name="mode"]:checked')
+		const isCopy = selected && selected.value === 'copy'
+		if (serviceCopyFields) {
+			serviceCopyFields.style.display = isCopy ? '' : 'none'
+		}
+		if (serviceCopySelect) {
+			serviceCopySelect.disabled = !isCopy
+			serviceCopySelect.required = isCopy
+		}
+	}
+
+	if (serviceAddToggle && serviceAddModal) {
+		serviceAddToggle.addEventListener('click', () => {
+			serviceAddModal.setAttribute('aria-hidden', 'false')
+			serviceAddToggle.setAttribute('aria-expanded', 'true')
+			document.body.classList.add('is-modal-open')
+			updateServiceAddMode()
+		})
+	}
+
+	serviceAddCloseButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			if (!serviceAddModal) {
+				return
+			}
+			serviceAddModal.setAttribute('aria-hidden', 'true')
+			if (serviceAddToggle) {
+				serviceAddToggle.setAttribute('aria-expanded', 'false')
+			}
+			document.body.classList.remove('is-modal-open')
+		})
+	})
+
+	serviceAddModes.forEach((mode) => {
+		mode.addEventListener('change', updateServiceAddMode)
+	})
+</script>
 
 {% endblock %}

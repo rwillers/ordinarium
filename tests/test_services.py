@@ -11,6 +11,96 @@ def test_services_new_redirects_to_next_id(auth_client, service_factory):
     assert response.headers["Location"].endswith("/service/11")
 
 
+def test_services_new_copies_service_template(app, auth_client, service_factory):
+    client, user_id = auth_client
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=20,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([68, 69]),
+        text_disabled=json.dumps([]),
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (source_id, user_id, "Custom Blessing", "Custom text"),
+        )
+        element = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? limit 1",
+            (source_id, user_id),
+        ).fetchone()
+        service = db.execute(
+            "select data from services where id=? limit 1", (source_id,)
+        ).fetchone()
+        payload = json.loads(service["data"])
+        payload["text_order"] = json.dumps(
+            ["text:68", f"custom:{element['id']}", "text:69"]
+        )
+        payload["text_disabled"] = json.dumps([f"custom:{element['id']}"])
+        db.execute(
+            "update services set data=? where id=?",
+            (json.dumps(payload), source_id),
+        )
+        db.commit()
+
+    response = client.post(
+        "/services/new",
+        data={
+            "mode": "copy",
+            "from_service_id": str(source_id),
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/service/21")
+    with app.app_context():
+        db = get_db()
+        copied = db.execute(
+            "select data from services where id=? limit 1", (21,)
+        ).fetchone()
+        payload = json.loads(copied["data"])
+        assert payload["user_id"] == user_id
+        assert payload["service_date"] is None
+        assert payload["season"] is None
+        assert payload["observance_handle"] is None
+        assert payload["title"] is None
+        assert payload["rite"] == "Renewed Ancient Text"
+        order_tokens = json.loads(payload["text_order"])
+        disabled_tokens = json.loads(payload["text_disabled"])
+        custom_elements = db.execute(
+            "select id, title, text from service_custom_elements where service_id=?",
+            (21,),
+        ).fetchall()
+        assert len(custom_elements) == 1
+        new_custom_id = custom_elements[0]["id"]
+        assert custom_elements[0]["title"] == "Custom Blessing"
+        assert custom_elements[0]["text"] == "Custom text"
+        assert order_tokens[1] == f"custom:{new_custom_id}"
+        assert f"custom:{new_custom_id}" in disabled_tokens
+
+
+def test_services_new_rejects_mismatched_rite(auth_client, service_factory):
+    client, user_id = auth_client
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=22,
+        service_date="2026-01-04",
+        rite="Another Rite",
+    )
+    response = client.post(
+        "/services/new",
+        data={
+            "mode": "copy",
+            "from_service_id": str(source_id),
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 400
+    assert b"Service rite does not match" in response.data
+
+
 def test_service_missing_id_returns_error(auth_client):
     client, _ = auth_client
     response = client.get("/service")
