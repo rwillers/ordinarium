@@ -30,16 +30,7 @@ All service texts are represented in Markdown.
 - Celebrant text uses regular face.
 - People text uses bold face (**Text**).
 - Scripture references use H6.
-- When there is optionality on the rendition of a piece of text (e.g., the Kyrie), an unordered list is used; for example (note double-space line breaks to preserve formatting):
-    -   Lord, have mercy upon us.  
-        **Christ, have mercy upon us.**  
-        Lord, have mercy upon us.
-    -   Lord, have mercy.  
-        **Christ, have mercy.**  
-        Lord, have mercy.
-    -   Kyrie eleison.  
-        **Christe eleison.**  
-        Kyrie eleison.
+- When there is optionality on the rendition of a piece of text (e.g., the Kyrie), an unordered list is used, including use of double-space line breaks to preserve formatting.
 - Preformatted text uses double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
 - Preformatted paragraphs (e.g., the Creeds) use code formatting (four spaces, resulting in \<pre\>\<code\> blocks).
 - Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
@@ -48,7 +39,7 @@ All service texts are represented in Markdown.
 
 Note that the SQLite database uses JSON data storage fields with virtual columns for several tables. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
 
-## Tech stack (planned)
+## Tech stack
 - Python 3.11+
 - Flask (Jinja templates, blueprints)
 - SQLite
