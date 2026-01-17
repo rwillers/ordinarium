@@ -65,7 +65,6 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### MVP
-- Fix narrow screen wrapping in generated services (wrapping for pre/code tags and long prefixed antiphonal lines).
 - Implement initial export formats: PDF and DOCX.
 - Code clean up.
 
