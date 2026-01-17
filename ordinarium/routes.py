@@ -1,5 +1,6 @@
 import json
 import uuid
+from urllib.parse import urlparse
 from functools import wraps
 from datetime import date, datetime
 
@@ -32,6 +33,19 @@ DEFAULT_RITE = "Renewed Ancient Text"
 
 
 # Utility functions
+
+
+def _safe_redirect_target(target, fallback_endpoint="main.services"):
+    if not target:
+        return url_for(fallback_endpoint)
+    if target.startswith(("//", "\\\\")):
+        return url_for(fallback_endpoint)
+    parsed = urlparse(target)
+    if parsed.scheme or parsed.netloc:
+        return url_for(fallback_endpoint)
+    if not target.startswith("/"):
+        return url_for(fallback_endpoint)
+    return target
 
 
 @bp.route("/favicon.ico")
@@ -79,7 +93,7 @@ def login():
                 or request.args.get("next")
                 or url_for("main.services")
             )
-            return redirect(next_url)
+            return redirect(_safe_redirect_target(next_url))
     if error:
         flash(error, "error")
     return render_template("login.html")

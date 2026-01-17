@@ -52,6 +52,7 @@ Create `/srv/ordinarium/.env`:
 FLASK_ENV=production
 SECRET_KEY=REPLACE_WITH_LONG_RANDOM
 ```
+Note: debug is disabled by default; do not set `ORDINARIUM_DEBUG` or `FLASK_DEBUG` in production.
 
 ## systemd (gunicorn)
 

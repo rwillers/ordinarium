@@ -52,6 +52,7 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 3) Initialize the database: `flask --app ordinarium init-db`.
 4) If upgrading an existing database, run `python scripts/migrate_db.py`.
 5) Run the app: `flask --app ordinarium run`.
+6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
 ## Roadmap
 
