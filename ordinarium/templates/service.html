@@ -4,22 +4,26 @@
 
 <div id="page" class="plan-page">
 
-	<div class="plan-header">
-		<div class="plan-header-actions-fixed">
-			<div class="plan-header-actions">
-				<button class="plan-submit" type="submit" form="plan-meta-form">Save</button>
-				<button class="plan-submit" type="submit" form="plan-meta-form" name="action" value="generate">Generate</button>
-				{% if can_share %}
-				<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
-				{% endif %}
-				{% if can_delete %}
-				<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
-					<button class="plan-submit" type="submit">Delete</button>
-				</form>
-				{% endif %}
+		<div class="plan-header">
+			<div class="plan-header-actions-fixed">
+				<div class="plan-header-actions">
+					<div class="plan-header-buttons">
+						<a class="button" id="plan-view-link" href="{{ url_for('main.text', service_id=service_id) }}">View</a>
+						{% if can_share %}
+						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
+						{% endif %}
+						{% if can_delete %}
+						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+							<button class="plan-submit" type="submit">Delete</button>
+						</form>
+						{% endif %}
+					</div>
+					<div class="plan-header-status">
+						<span class="plan-save-status" id="plan-save-status" aria-live="polite"></span>
+					</div>
+				</div>
 			</div>
 		</div>
-	</div>
 	<h2 class="plan-title">Plan a service</h2>
 	<div class="share-modal" id="share-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-share-close></div>
@@ -36,7 +40,7 @@
 			</div>
 		</div>
 	</div>
-	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “Generate” to create your service text.</p>
+	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “View” to see your service text.</p>
 
 	<strong>{{ rite }}</strong>
 
@@ -48,6 +52,7 @@
 			<span>Service date:</span>
 			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}" required>
 		</label></p>
+		<p class="plan-save-error" id="plan-save-error" aria-live="polite"></p>
 		<div class="plan-inline-fields">
 			<p id="plan-season-row"{% if not service.service_date %} style="display: none;"{% endif %}>
 				<label class="plan-field">
@@ -232,7 +237,117 @@
 		const planObservanceRow = document.querySelector('#plan-observance-row')
 		const planObservanceDisplay = document.querySelector('#plan-observance-display')
 		const planObservanceSelect = document.querySelector('#plan-observance-select')
+		const planSaveStatus = document.querySelector('#plan-save-status')
+		const planSaveError = document.querySelector('#plan-save-error')
 		let draggedRow = null
+
+		const updatePlanInputs = () => {
+			if (!planMetaForm || !planList) {
+				return false
+			}
+			const ids = planMetaForm.querySelector('input[name="ids"]')
+			const disabled = planMetaForm.querySelector('input[name="disabled"]')
+			if (!ids || !disabled) {
+				return false
+			}
+			const inputs = Array.from(
+				planList.querySelectorAll('.plan-row input[type="checkbox"]')
+			)
+			ids.value = inputs.map((input) => input.value).join(',')
+			disabled.value = inputs
+				.filter((input) => !input.checked)
+				.map((input) => input.value)
+				.join(',')
+			return true
+		}
+
+		const setSaveStatus = (message, variant = '') => {
+			if (!planSaveStatus) {
+				return
+			}
+			planSaveStatus.textContent = message
+			planSaveStatus.style.display = message ? 'inline-flex' : 'none'
+			planSaveStatus.dataset.status = variant
+		}
+
+		const setSaveError = (message) => {
+			if (!planSaveError) {
+				return
+			}
+			planSaveError.textContent = message
+			planSaveError.style.display = message ? 'block' : 'none'
+		}
+
+		let autosaveTimer = null
+		let autosaveInFlight = false
+		let autosaveQueued = false
+
+		const runAutosave = async () => {
+			if (!planMetaForm) {
+				return true
+			}
+			if (!planServiceDate || !planServiceDate.value) {
+				setSaveError('Service date is required before changes can be saved.')
+				setSaveStatus('Not saved', 'error')
+				return false
+			}
+			setSaveError('')
+			updatePlanInputs()
+			const formData = new FormData(planMetaForm)
+			formData.set('autosave', '1')
+			setSaveStatus('Saving...', 'saving')
+			try {
+				const response = await fetch(planMetaForm.action, {
+					method: 'POST',
+					body: formData,
+					headers: {
+						Accept: 'application/json'
+					}
+				})
+				if (!response.ok) {
+					const data = await response.json().catch(() => null)
+					const message = data?.error || 'Unable to save changes.'
+					setSaveError(message)
+					setSaveStatus('Not saved', 'error')
+					return false
+				}
+				setSaveStatus('Saved', 'saved')
+				return true
+			} catch (error) {
+				setSaveError('Unable to save changes.')
+				setSaveStatus('Not saved', 'error')
+				return false
+			}
+		}
+
+		const scheduleAutosave = (delay = 700) => {
+			autosaveQueued = true
+			if (autosaveInFlight) {
+				return
+			}
+			if (autosaveTimer) {
+				clearTimeout(autosaveTimer)
+			}
+			autosaveTimer = setTimeout(async () => {
+				if (autosaveInFlight) {
+					return
+				}
+				autosaveInFlight = true
+				autosaveQueued = false
+				try {
+					await runAutosave()
+				} finally {
+					autosaveInFlight = false
+					if (autosaveQueued) {
+						scheduleAutosave()
+					}
+				}
+			}, delay)
+		}
+
+		if (planServiceDate && planServiceDate.value) {
+			setSaveStatus('Saved', 'saved')
+		}
 
 		if (planList) {
 			planList.addEventListener('dragstart', (event) => {
@@ -252,6 +367,7 @@
 					row.classList.remove('is-dragging')
 				}
 				draggedRow = null
+				scheduleAutosave()
 			})
 
 			planList.addEventListener('dragover', (event) => {
@@ -264,23 +380,18 @@
 				const insertAfter = event.clientY - rect.top > rect.height / 2
 				planList.insertBefore(draggedRow, insertAfter ? target.nextSibling : target)
 			})
+
+			planList.addEventListener('change', (event) => {
+				if (event.target && event.target.matches('input[type="checkbox"]')) {
+					scheduleAutosave()
+				}
+			})
 		}
 
 		if (planMetaForm) {
-			planMetaForm.addEventListener('submit', () => {
-				const ids = planMetaForm.querySelector('input[name="ids"]')
-				const disabled = planMetaForm.querySelector('input[name="disabled"]')
-				if (!ids || !disabled) {
-					return
-				}
-				const inputs = Array.from(
-					planList.querySelectorAll('.plan-row input[type="checkbox"]')
-				)
-				ids.value = inputs.map((input) => input.value).join(',')
-				disabled.value = inputs
-					.filter((input) => !input.checked)
-					.map((input) => input.value)
-					.join(',')
+			planMetaForm.addEventListener('submit', (event) => {
+				event.preventDefault()
+				scheduleAutosave(0)
 			})
 		}
 
@@ -340,10 +451,19 @@
 				}
 			}
 
-			planServiceDate.addEventListener('change', updateObservanceFromDate)
+			planServiceDate.addEventListener('change', () => {
+				updateObservanceFromDate()
+				scheduleAutosave()
+			})
 			if (planServiceDate.value) {
 				updateObservanceFromDate()
 			}
+		}
+
+		if (planObservanceSelect) {
+			planObservanceSelect.addEventListener('change', () => {
+				scheduleAutosave()
+			})
 		}
 
 		const customModal = document.querySelector('#custom-element-modal')
@@ -433,6 +553,7 @@
 				if (modalTitle) {
 					modalTitle.textContent = 'Edit custom element'
 				}
+				customModal.dataset.mode = 'edit'
 			} else {
 				if (titleInput) {
 					titleInput.value = ''
@@ -455,6 +576,7 @@
 				if (modalTitle) {
 					modalTitle.textContent = 'Add custom element'
 				}
+				customModal.dataset.mode = 'add'
 			}
 			customModal.setAttribute('aria-hidden', 'false')
 			document.body.classList.add('is-modal-open')
@@ -469,6 +591,7 @@
 			}
 			customModal.setAttribute('aria-hidden', 'true')
 			document.body.classList.remove('is-modal-open')
+			customModal.dataset.mode = ''
 		}
 
 		if (customEditButtons.length) {
@@ -568,6 +691,122 @@
 				if (textInput && templateText !== null) {
 					textInput.value = templateText
 				}
+			})
+		}
+
+		const truncateText = (text, limit = 200) => {
+			if (!text || text.length <= limit) {
+				return text
+			}
+			return text.slice(0, limit - 1) + '…'
+		}
+
+		const updateCustomRow = (customId, title, text) => {
+			if (!customId) {
+				return
+			}
+			const row = document.querySelector(`.plan-row[data-custom-id="${customId}"]`)
+			if (!row) {
+				return
+			}
+			if (title !== undefined) {
+				row.setAttribute('data-custom-title', title)
+				const titleEl = row.querySelector('.plan-title')
+				if (titleEl) {
+					titleEl.textContent = title
+				}
+			}
+			if (text !== undefined) {
+				row.setAttribute('data-custom-text', text)
+				const textEl = row.querySelector('small')
+				if (textEl) {
+					textEl.textContent = truncateText(text)
+				}
+			}
+		}
+
+		let customAutosaveTimer = null
+		let customAutosaveInFlight = false
+		let customAutosaveQueued = false
+
+		const scheduleCustomAutosave = (delay = 900) => {
+			customAutosaveQueued = true
+			if (customAutosaveInFlight) {
+				return
+			}
+			if (customAutosaveTimer) {
+				clearTimeout(customAutosaveTimer)
+			}
+			customAutosaveTimer = setTimeout(async () => {
+				if (customAutosaveInFlight) {
+					return
+				}
+				customAutosaveInFlight = true
+				customAutosaveQueued = false
+				try {
+					await runCustomAutosave()
+				} finally {
+					customAutosaveInFlight = false
+					if (customAutosaveQueued) {
+						scheduleCustomAutosave()
+					}
+				}
+			}, delay)
+		}
+
+		const runCustomAutosave = async () => {
+			if (!customModal || customModal.dataset.mode !== 'edit') {
+				return
+			}
+			const form = customModal.querySelector('form')
+			if (!form) {
+				return
+			}
+			const customId = form.querySelector('input[name="custom_id"]')?.value
+			if (!customId) {
+				return
+			}
+			const titleValue = form.querySelector('input[name="title"]')?.value?.trim()
+			const textValue = form.querySelector('textarea[name="text"]')?.value || ''
+			const initialTitleInput = form.querySelector('input[name="initial_title"]')
+			const initialTextInput = form.querySelector('input[name="initial_text"]')
+			if (!titleValue) {
+				return
+			}
+			const formData = new FormData(form)
+			formData.set('autosave', '1')
+			try {
+				const response = await fetch(form.action, {
+					method: 'POST',
+					body: formData,
+					headers: {
+						Accept: 'application/json'
+					}
+				})
+				if (!response.ok) {
+					return
+				}
+				const data = await response.json().catch(() => null)
+				if (data?.custom_id) {
+					updateCustomRow(data.custom_id, data.title, data.text)
+					if (initialTitleInput) {
+						initialTitleInput.value = titleValue
+					}
+					if (initialTextInput) {
+						initialTextInput.value = textValue
+					}
+				}
+			} catch (error) {
+				// Ignore autosave errors for custom elements.
+			}
+		}
+
+		if (customModal) {
+			customModal.addEventListener('input', (event) => {
+				if (!event.target.closest('input[name="title"], textarea[name="text"]')) {
+					return
+				}
+				scheduleCustomAutosave()
 			})
 		}
 

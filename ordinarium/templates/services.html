@@ -18,7 +18,7 @@
 			<li>
 				{{ service.display_date }} —
 				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-				(<a href="{{ url_for('main.text', service_id=service.id) }}">generate</a>)
+				(<a href="{{ url_for('main.text', service_id=service.id) }}">view</a>)
 			</li>
 		{% endfor %}
 	</ul>
@@ -33,7 +33,7 @@
 			<li>
 				{{ service.display_date }} —
 				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-				(<a href="{{ url_for('main.text', service_id=service.id) }}">generate</a>)
+				(<a href="{{ url_for('main.text', service_id=service.id) }}">view</a>)
 			</li>
 		{% endfor %}
 	</ul>

@@ -394,6 +394,37 @@ div#page {
 		display: flex;
 		gap: 0;
 		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+	}
+	.plan-header-status {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		min-width: 0;
+		margin-left: auto;
+	}
+	.plan-header-buttons {
+		display: flex;
+		align-items: center;
+		justify-content: flex-start;
+	}
+	.plan-save-status {
+		font-family: var(--header-font-family);
+		font-size: 0.85em;
+		color: var(--body-color);
+		display: none;
+		padding: 0 0 0 0.75em;
+		font-style: italic;
+	}
+	.plan-save-status[data-status="saving"] {
+		color: var(--rubric-color);
+	}
+	.plan-save-status[data-status="error"] {
+		color: #7c1e1a;
+	}
+	.plan-save-status[data-status="saved"] {
+		color: var(--body-color);
 	}
 	&.plan-page {
 		padding-top: calc(var(--action-bar-height) + 20px);
@@ -412,7 +443,7 @@ div#page {
 		max-width: 820px;
 		margin: 0 auto;
 		padding: 0 20px;
-		justify-content: center;
+		justify-content: space-between;
 		min-height: var(--action-bar-height);
 		flex-wrap: wrap;
 	}
@@ -441,7 +472,7 @@ div#page {
 		border-radius: 5px;
 	}
 	.plan-header-actions > * + * {
-		margin-left: -1px;
+		margin-left: 0;
 	}
 	.plan-header-actions form + * button,
 	.plan-header-actions form + * input[type="submit"],
@@ -485,6 +516,48 @@ div#page {
 		border-top-right-radius: 5px;
 		border-bottom-right-radius: 5px;
 	}
+	.plan-header-buttons > * + * {
+		margin-left: -1px;
+	}
+	.plan-header-buttons form + * button,
+	.plan-header-buttons form + * input[type="submit"],
+	.plan-header-buttons form + * .button {
+		margin-left: -1px;
+	}
+	.plan-header-buttons > form button,
+	.plan-header-buttons > form input[type="submit"],
+	.plan-header-buttons > form .button {
+		margin-left: -1px;
+	}
+	.plan-header-buttons button,
+	.plan-header-buttons input[type="submit"],
+	.plan-header-buttons .button {
+		border-radius: 5px;
+	}
+	.plan-header-buttons > :first-child button,
+	.plan-header-buttons > :first-child input[type="submit"],
+	.plan-header-buttons > :first-child .button {
+		border-top-left-radius: 5px;
+		border-bottom-left-radius: 5px;
+	}
+	.plan-header-buttons > button:first-child,
+	.plan-header-buttons > input[type="submit"]:first-child,
+	.plan-header-buttons > .button:first-child {
+		border-top-left-radius: 5px;
+		border-bottom-left-radius: 5px;
+	}
+	.plan-header-buttons > :last-child button,
+	.plan-header-buttons > :last-child input[type="submit"],
+	.plan-header-buttons > :last-child .button {
+		border-top-right-radius: 5px;
+		border-bottom-right-radius: 5px;
+	}
+	.plan-header-buttons > button:last-child,
+	.plan-header-buttons > input[type="submit"]:last-child,
+	.plan-header-buttons > .button:last-child {
+		border-top-right-radius: 5px;
+		border-bottom-right-radius: 5px;
+	}
 	p {
 		line-height: 1.5;
 		margin: 1em 0;
@@ -506,6 +579,12 @@ div#page {
 		list-style: none;
 		margin: 1em 0;
 		padding: 0;
+	}
+	.plan-save-error {
+		color: #7c1e1a;
+		font-size: 0.85em;
+		display: none;
+		margin-top: -0.6em;
 	}
 	.plan-row {
 		background: #f6f6f6;

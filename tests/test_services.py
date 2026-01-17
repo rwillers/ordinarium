@@ -127,6 +127,24 @@ def test_persist_service_requires_date(auth_client):
     assert b"Service date is required." in response.data
 
 
+def test_persist_service_autosave_requires_date(auth_client):
+    client, _ = auth_client
+    response = client.post(
+        "/persist/service",
+        data={
+            "service_id": "5",
+            "rite": "Renewed Ancient Text",
+            "ids": "68,69",
+            "autosave": "1",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Service date is required" in payload["error"]
+
+
 def test_persist_service_saves_and_generates_text(app, auth_client):
     client, user_id = auth_client
     response = client.post(
@@ -150,6 +168,32 @@ def test_persist_service_saves_and_generates_text(app, auth_client):
         payload = json.loads(service["data"])
         assert payload["user_id"] == user_id
         assert payload["service_date"] == "2026-01-04"
+
+
+def test_persist_service_autosave_saves_data(app, auth_client):
+    client, user_id = auth_client
+    response = client.post(
+        "/persist/service",
+        data={
+            "service_id": "8",
+            "rite": "Renewed Ancient Text",
+            "service_date": "2026-01-04",
+            "ids": "68,69",
+            "autosave": "1",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select data from services where id=? limit 1", (8,)
+        ).fetchone()
+        saved = json.loads(service["data"])
+        assert saved["user_id"] == user_id
+        assert saved["service_date"] == "2026-01-04"
 
 
 def test_persist_service_defaults_invalid_id_to_one(app, auth_client):
@@ -200,6 +244,29 @@ def test_persist_service_normalizes_observance_handle(app, auth_client):
         assert payload["user_id"] == user_id
         assert payload["observance_handle"] == "AdventI"
         assert payload["title"] == "The First Sunday in Advent"
+
+
+def test_persist_service_autosave_denies_other_user(
+    auth_client, service_factory, user_factory
+):
+    client, _ = auth_client
+    other_user_id = user_factory(email="other-autosave@example.com")
+    service_factory(user_id=other_user_id, service_id=90, service_date="2026-01-04")
+    response = client.post(
+        "/persist/service",
+        data={
+            "service_id": "90",
+            "rite": "Renewed Ancient Text",
+            "service_date": "2026-01-04",
+            "ids": "68,69",
+            "autosave": "1",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 404
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Service not found" in payload["error"]
 
 
 def test_text_missing_service_returns_error(auth_client):
@@ -308,6 +375,84 @@ def test_custom_element_edit_updates_content(app, auth_client, service_factory):
             (element["id"],),
         ).fetchone()
         assert updated["text"] == "Updated"
+
+
+def test_custom_element_autosave_edit_returns_json(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=33,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([68, 69]),
+        text_disabled=json.dumps([]),
+    )
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "title": "Custom Sending",
+            "text": "Original",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        element = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? limit 1",
+            (service_id, user_id),
+        ).fetchone()
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "custom_id": str(element["id"]),
+            "title": "Custom Sending",
+            "text": "Updated by autosave",
+            "rite": "Renewed Ancient Text",
+            "autosave": "1",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["custom_id"] == element["id"]
+    with app.app_context():
+        db = get_db()
+        updated = db.execute(
+            "select text from service_custom_elements where id=? limit 1",
+            (element["id"],),
+        ).fetchone()
+        assert updated["text"] == "Updated by autosave"
+
+
+def test_custom_element_autosave_missing_title_returns_error(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=34,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "custom_id": "1",
+            "title": "",
+            "text": "Updated by autosave",
+            "rite": "Renewed Ancient Text",
+            "autosave": "1",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Title is required" in payload["error"]
 
 
 def test_custom_element_delete_removes_from_plan(app, auth_client, service_factory):

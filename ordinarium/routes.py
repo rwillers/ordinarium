@@ -990,12 +990,26 @@ def service_add_custom_element(service_id):
     rite = normalize_value(request.form.get("rite")) or DEFAULT_RITE
     custom_id = normalize_value(request.form.get("custom_id"))
     insert_after = normalize_value(request.form.get("insert_after"))
+    is_autosave = (
+        request.form.get("autosave") == "1"
+        or "application/json" in request.headers.get("Accept", "")
+    )
     if custom_id:
         try:
             custom_id = int(custom_id)
         except (TypeError, ValueError):
             custom_id = None
     if not title:
+        if is_autosave:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "Title is required for a custom element.",
+                    }
+                ),
+                400,
+            )
         flash("Title is required for a custom element.", "error")
         return redirect(url_for("main.service", service_id=service_id))
 
@@ -1004,6 +1018,8 @@ def service_add_custom_element(service_id):
         "select user_id, data from services where id=? limit 1", (service_id,)
     ).fetchone()
     if existing and existing["user_id"] != g.user["id"]:
+        if is_autosave:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
     if custom_id:
         element = db.execute(
@@ -1011,12 +1027,21 @@ def service_add_custom_element(service_id):
             (custom_id, service_id, g.user["id"]),
         ).fetchone()
         if not element:
+            if is_autosave:
+                return (
+                    jsonify({"ok": False, "error": "Custom element not found."}),
+                    404,
+                )
             return render_error("Custom element not found.", 404)
         db.execute(
             "update service_custom_elements set title=?, text=? where id=?",
             (title, text_value, custom_id),
         )
         db.commit()
+        if is_autosave:
+            return jsonify(
+                {"ok": True, "custom_id": custom_id, "title": title, "text": text_value}
+            )
         return redirect(url_for("main.service", service_id=service_id))
 
     if existing:
@@ -1130,6 +1155,11 @@ def persist_service():
         value = value.strip()
         return value or None
 
+    is_autosave = (
+        request.form.get("autosave") == "1"
+        or "application/json" in request.headers.get("Accept", "")
+    )
+
     service_id = request.form.get("service_id", 1)
     try:
         service_id = int(service_id)
@@ -1165,6 +1195,8 @@ def persist_service():
             "select id from services where id=? limit 1", (service_id,)
         ).fetchone()
     if other_owner:
+        if is_autosave:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
     existing_data = (
         json.loads(existing["data"]) if existing and existing["data"] else {}
@@ -1201,6 +1233,16 @@ def persist_service():
     if observance:
         payload["title"] = observance.name or observance.alternative_name or ""
     if not payload["service_date"]:
+        if is_autosave:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "Service date is required before changes can be saved.",
+                    }
+                ),
+                400,
+            )
         context = build_plan_context(service_id, payload["rite"])
         context["service"]["service_date"] = payload["service_date"] or ""
         flash("Service date is required.", "error")
@@ -1227,6 +1269,8 @@ def persist_service():
         )
     db.commit()
     # flash('Service saved.')
+    if is_autosave:
+        return jsonify({"ok": True})
     action = request.form.get("action", "")
     if action == "generate":
         return redirect(url_for("main.text", service_id=service_id))
