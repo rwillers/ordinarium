@@ -194,6 +194,22 @@ header {
 	}
 }
 
+@supports (container-type: inline-size) {
+	header div.inner {
+		container-type: inline-size;
+	}
+	header h2 {
+		display: none;
+	}
+	@container (min-width: 560px) {
+		header h2 {
+			display: inline;
+			overflow: visible;
+			text-overflow: clip;
+		}
+	}
+}
+
 main {
 	max-width: 820px;
 	margin: 0 auto;
