@@ -18,7 +18,7 @@
 			<div class="plan-row-main">
 				<div class="plan-item">
 					<span class="plan-title">{{ template.title }}</span>
-					{% if template.text %}<small>{{ template.text | markdown_template | striptags | clean | truncate(200) }}</small>{% endif %}
+					{% if template.text %}<small>{{ template.text | markdown_user | striptags | clean | truncate(200) }}</small>{% endif %}
 				</div>
 			</div>
 			<div class="plan-row-menu" data-row-menu>

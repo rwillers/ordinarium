@@ -497,3 +497,33 @@ def test_custom_element_delete_removes_from_plan(app, auth_client, service_facto
         payload = json.loads(service["data"])
         order_tokens = json.loads(payload["text_order"])
         assert f"custom:{element['id']}" not in order_tokens
+
+
+def test_custom_elements_escape_html_in_text(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=40,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        text_order=json.dumps([]),
+        text_disabled=json.dumps([]),
+    )
+    title = "<script>custom-title</script>"
+    text = "<img src=x onerror=alert(1)> **bold**"
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (service_id, user_id, title, text),
+        )
+        db.commit()
+
+    response = client.get(f"/text/{service_id}")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "<script>custom-title</script>" not in body
+    assert "&lt;script&gt;custom-title&lt;/script&gt;" in body
+    assert "<img src=x onerror=alert(1)>" not in body
+    assert "&lt;img src=x onerror=alert(1)&gt;" in body
+    assert "<strong>bold</strong>" in body

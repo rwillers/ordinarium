@@ -45,6 +45,21 @@ def test_templates_create_and_list(app, auth_client):
     assert b"Blessing text" in response.data
 
 
+def test_templates_escape_html_in_preview(app, auth_client):
+    client, _ = auth_client
+    response = client.post(
+        "/templates",
+        data={"title": "HTML Escape", "text": "<script>bad</script> **Blessing**"},
+    )
+    assert response.status_code == 302
+    response = client.get("/templates")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "<script>bad</script>" not in body
+    assert "&lt;script&gt;bad&lt;/script&gt;" in body
+    assert "Blessing" in body
+
+
 def test_templates_edit_updates_content(app, auth_client):
     client, user_id = auth_client
     template_id = create_template(app, user_id, title="Old", text="Original")

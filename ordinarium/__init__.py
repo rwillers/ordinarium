@@ -30,12 +30,22 @@ def create_app():
         "footnotes",
     ]
 
+    def render_markdown(value, safe_mode=None):
+        return markdown2.markdown(
+            value or "",
+            extras=extras,
+            safe_mode=safe_mode,
+        )
+
     @pass_context
     def markdown_template(context, value):
         template = context.environment.from_string(value or "")
         rendered = template.render(context.get_all())
-        html_text = markdown2.markdown(rendered, extras=extras)
+        html_text = render_markdown(rendered)
         return Markup(html_text)
+
+    def markdown_user(value):
+        return Markup(render_markdown(value, safe_mode="escape"))
 
     def wrap_trailing_indent(value):
         if not value:
@@ -68,13 +78,9 @@ def create_app():
 
         return Markup(paragraph_re.sub(wrap_paragraph, str(value)))
 
-    app.jinja_env.filters["markdown"] = lambda value: Markup(
-        markdown2.markdown(
-            value or "",
-            extras=extras,
-        )
-    )
+    app.jinja_env.filters["markdown"] = lambda value: Markup(render_markdown(value))
     app.jinja_env.filters["markdown_template"] = markdown_template
+    app.jinja_env.filters["markdown_user"] = markdown_user
     app.jinja_env.filters["trailing_indent"] = wrap_trailing_indent
     app.jinja_env.filters["clean"] = lambda value: re.sub(
         r"\s+", " ", value or ""

@@ -84,7 +84,13 @@
 				<label class="plan-item">
 					<input type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 					<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
-					{% if ordinary.text %}<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>{% endif %}
+					{% if ordinary.text %}
+						{% if ordinary.type == 'custom' %}
+							<small>{{ ordinary.text | markdown_user | striptags | clean | truncate(200) }}</small>
+						{% else %}
+							<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>
+						{% endif %}
+					{% endif %}
 				</label>
 				<span class="plan-handle" aria-hidden="true">⠿</span>
 			</div>
