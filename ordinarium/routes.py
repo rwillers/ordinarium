@@ -1,8 +1,13 @@
 import json
 import uuid
+import hashlib
+import smtplib
+from email.message import EmailMessage
+import hmac
+import secrets
 from urllib.parse import urlparse
 from functools import wraps
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 
 from flask import (
     Blueprint,
@@ -46,6 +51,68 @@ def _safe_redirect_target(target, fallback_endpoint="main.services"):
     if not target.startswith("/"):
         return url_for(fallback_endpoint)
     return target
+
+
+def _config_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _password_reset_token_hash(token):
+    secret = (current_app.config.get("SECRET_KEY") or "dev").encode("utf-8")
+    return hmac.new(secret, token.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _password_reset_expires_at():
+    minutes = current_app.config.get("PASSWORD_RESET_EXPIRY_MINUTES", 60)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    return expires_at.isoformat(timespec="seconds")
+
+
+def _send_email(recipient, subject, body):
+    host = current_app.config.get("SMTP_HOST")
+    if not host:
+        current_app.logger.info("Email to %s\nSubject: %s\n\n%s", recipient, subject, body)
+        return True
+    port = int(current_app.config.get("SMTP_PORT", 587))
+    username = current_app.config.get("SMTP_USERNAME")
+    password = current_app.config.get("SMTP_PASSWORD")
+    use_tls = _config_bool(current_app.config.get("SMTP_USE_TLS", True), True)
+    use_ssl = _config_bool(current_app.config.get("SMTP_USE_SSL", False), False)
+    sender = current_app.config.get("SMTP_SENDER") or username or "no-reply@ordinarium"
+
+    message = EmailMessage()
+    message["From"] = sender
+    message["To"] = recipient
+    message["Subject"] = subject
+    message.set_content(body)
+
+    smtp = None
+    try:
+        if use_ssl:
+            smtp = smtplib.SMTP_SSL(host, port)
+        else:
+            smtp = smtplib.SMTP(host, port)
+        smtp.ehlo()
+        if use_tls and not use_ssl:
+            smtp.starttls()
+            smtp.ehlo()
+        if username and password:
+            smtp.login(username, password)
+        smtp.send_message(message)
+        return True
+    except Exception:
+        current_app.logger.exception("Failed to send email to %s", recipient)
+        return False
+    finally:
+        if smtp is not None:
+            try:
+                smtp.quit()
+            except Exception:
+                current_app.logger.debug("Failed to close SMTP connection")
 
 
 @bp.route("/favicon.ico")
@@ -97,6 +164,71 @@ def login():
     if error:
         flash(error, "error")
     return render_template("login.html")
+
+
+@bp.route("/reset-password", methods=["GET", "POST"])
+def request_password_reset():
+    if g.user:
+        return redirect(url_for("main.account"))
+    error = None
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        if not email:
+            error = "Email address is required."
+        else:
+            user = get_user_by_email(email)
+            if user:
+                token = create_password_reset_token(user["id"])
+                reset_url = url_for("main.reset_password", token=token, _external=True)
+                body = (
+                    "A password reset was requested for your Ordinarium account.\n\n"
+                    f"Reset your password: {reset_url}\n\n"
+                    "If you did not request this, you can ignore this email."
+                )
+                _send_email(user["email"], "Reset your Ordinarium password", body)
+            flash(
+                "If an account exists for that email, a reset link is on its way.",
+                "info",
+            )
+            return redirect(url_for("main.login"))
+    if error:
+        flash(error, "error")
+    return render_template("reset_request.html")
+
+
+@bp.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    record = get_password_reset_record(token)
+    if not record:
+        flash("This reset link is invalid or expired.", "error")
+        return redirect(url_for("main.request_password_reset"))
+    error = None
+    if request.method == "POST":
+        password = request.form.get("password") or ""
+        if len(password) < 8:
+            error = "Password must be at least 8 characters."
+        if not error:
+            user = get_user_by_id(record["user_id"])
+            if not user:
+                flash("Account not found.", "error")
+                return redirect(url_for("main.request_password_reset"))
+            data = json.loads(user["data"]) if user["data"] else {}
+            data["password_hash"] = generate_password_hash(password)
+            db = get_db()
+            db.execute(
+                "update users set data=? where id=?",
+                (json.dumps(data), user["id"]),
+            )
+            db.execute(
+                "update password_reset_tokens set used_at=CURRENT_TIMESTAMP where id=?",
+                (record["id"],),
+            )
+            db.commit()
+            flash("Password updated. Please log in.", "info")
+            return redirect(url_for("main.login"))
+    if error:
+        flash(error, "error")
+    return render_template("reset_password.html", token=token)
 
 
 @bp.route("/signup", methods=["GET", "POST"])
@@ -154,6 +286,41 @@ def get_user_by_email(email):
         (email,),
     ).fetchone()
     return user
+
+
+def create_password_reset_token(user_id):
+    token = secrets.token_urlsafe(32)
+    token_hash = _password_reset_token_hash(token)
+    expires_at = _password_reset_expires_at()
+    db = get_db()
+    db.execute(
+        "update password_reset_tokens set used_at=CURRENT_TIMESTAMP where user_id=? and used_at is null",
+        (user_id,),
+    )
+    db.execute(
+        "insert into password_reset_tokens (user_id, token_hash, expires_at) values (?, ?, ?)",
+        (user_id, token_hash, expires_at),
+    )
+    db.commit()
+    return token
+
+
+def get_password_reset_record(token):
+    if not token:
+        return None
+    token_hash = _password_reset_token_hash(token)
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    db = get_db()
+    record = db.execute(
+        """
+        select id, user_id, expires_at, used_at
+        from password_reset_tokens
+        where token_hash=? and used_at is null and expires_at > ?
+        limit 1
+        """,
+        (token_hash, now),
+    ).fetchone()
+    return record
 
 
 @bp.before_app_request

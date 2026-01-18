@@ -17,6 +17,16 @@ def create_app():
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "ordinarium.db"),
         SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
+        PASSWORD_RESET_EXPIRY_MINUTES=int(
+            os.environ.get("PASSWORD_RESET_EXPIRY_MINUTES", "60")
+        ),
+        SMTP_HOST=os.environ.get("SMTP_HOST"),
+        SMTP_PORT=int(os.environ.get("SMTP_PORT", "587")),
+        SMTP_USERNAME=os.environ.get("SMTP_USERNAME"),
+        SMTP_PASSWORD=os.environ.get("SMTP_PASSWORD"),
+        SMTP_USE_TLS=os.environ.get("SMTP_USE_TLS", "true"),
+        SMTP_USE_SSL=os.environ.get("SMTP_USE_SSL", "false"),
+        SMTP_SENDER=os.environ.get("SMTP_SENDER"),
     )
 
     os.makedirs(app.instance_path, exist_ok=True)

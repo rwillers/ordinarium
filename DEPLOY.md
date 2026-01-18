@@ -51,6 +51,17 @@ Create `/srv/ordinarium/.env`:
 ```
 FLASK_ENV=production
 SECRET_KEY=REPLACE_WITH_LONG_RANDOM
+PASSWORD_RESET_EXPIRY_MINUTES=60
+
+# SMTP (optional: required for real password reset emails)
+# If SMTP_HOST is not set, reset emails are logged in the app logs.
+SMTP_HOST=mail.example.com
+SMTP_PORT=587
+SMTP_USERNAME=ordinarium@example.com
+SMTP_PASSWORD=REPLACE_WITH_SMTP_PASSWORD
+SMTP_USE_TLS=true
+SMTP_USE_SSL=false
+SMTP_SENDER="Ordinarium <no-reply@ordinarium.com>"
 ```
 Note: debug is disabled by default; do not set `ORDINARIUM_DEBUG` or `FLASK_DEBUG` in production.
 

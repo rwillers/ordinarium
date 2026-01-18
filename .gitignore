@@ -3,6 +3,7 @@
 .gitignore
 .editorconfig
 .vscode/
+.env
 Source\ Liturgies/
 instance/ordinarium.db
 instance/ordinarium.db-shm
