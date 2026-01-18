@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from flask.testing import FlaskClient
 from werkzeug.security import generate_password_hash
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,6 +14,27 @@ from ordinarium import create_app
 from ordinarium.db import get_db, init_db
 
 
+class CSRFClient(FlaskClient):
+    def _ensure_csrf_token(self):
+        token = None
+        with self.session_transaction() as session:
+            token = session.get("_csrf_token")
+            if not token:
+                token = "test-csrf-token"
+                session["_csrf_token"] = token
+        return token
+
+    def open(self, *args, **kwargs):
+        method = kwargs.get("method", "GET")
+        if method and method.upper() == "POST":
+            token = self._ensure_csrf_token()
+            headers = kwargs.pop("headers", {}) or {}
+            headers = dict(headers)
+            headers.setdefault("X-CSRF-Token", token)
+            kwargs["headers"] = headers
+        return super().open(*args, **kwargs)
+
+
 @pytest.fixture()
 def app(tmp_path):
     app = create_app()
@@ -21,6 +43,7 @@ def app(tmp_path):
         DATABASE=str(tmp_path / "test.db"),
         SECRET_KEY="test",
     )
+    app.test_client_class = CSRFClient
     with app.app_context():
         init_db()
     return app

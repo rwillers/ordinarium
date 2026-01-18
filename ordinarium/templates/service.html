@@ -14,6 +14,7 @@
 						{% endif %}
 						{% if can_delete %}
 						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 							<button class="plan-submit" type="submit">Delete</button>
 						</form>
 						{% endif %}
@@ -45,6 +46,7 @@
 	<strong>{{ rite }}</strong>
 
 	<form class="plan-actions" id="plan-meta-form" action="{{ url_for('main.persist_service') }}" method="post">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<input type="hidden" name="service_id" value="{{ service_id }}">
 		<input type="hidden" name="ids" value="">
 		<input type="hidden" name="disabled" value="">
@@ -100,6 +102,7 @@
 					{% if ordinary.type == 'custom' %}
 					<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
 					<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" onsubmit="return confirm('Remove this custom element from the service plan?')">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
 					</form>
 					{% endif %}
@@ -114,6 +117,7 @@
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-element-title">
 			<h3 id="custom-element-title">Add custom element</h3>
 			<form class="plan-custom-form" action="{{ url_for('main.service_add_custom_element', service_id=service_id) }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<input type="hidden" name="service_id" value="{{ service_id }}">
 				<input type="hidden" name="rite" value="{{ service.rite or rite }}">
 				<input type="hidden" name="custom_id" value="">
@@ -156,6 +160,8 @@
 	</div>
 
 	<script>
+		const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+		const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
 		const shareButton = document.querySelector('[data-share-url]')
 		const shareModal = document.querySelector('#share-modal')
 		const shareModalUrl = document.querySelector('#share-modal-url')
@@ -190,7 +196,7 @@
 					return
 				}
 				try {
-					const response = await fetch(shareUrl, { method: 'POST' })
+					const response = await fetch(shareUrl, { method: 'POST', headers: csrfHeaders })
 					if (!response.ok) {
 						return
 					}
@@ -307,7 +313,8 @@
 					method: 'POST',
 					body: formData,
 					headers: {
-						Accept: 'application/json'
+						Accept: 'application/json',
+						...csrfHeaders
 					}
 				})
 				if (!response.ok) {
@@ -786,7 +793,8 @@
 					method: 'POST',
 					body: formData,
 					headers: {
-						Accept: 'application/json'
+						Accept: 'application/json',
+						...csrfHeaders
 					}
 				})
 				if (!response.ok) {

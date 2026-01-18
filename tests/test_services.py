@@ -117,8 +117,9 @@ def test_service_denies_other_user(auth_client, service_factory, user_factory):
     assert b"Service not found" in response.data
 
 
-def test_persist_service_requires_date(auth_client):
-    client, _ = auth_client
+def test_persist_service_requires_date(auth_client, service_factory):
+    client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=5, rite="Renewed Ancient Text")
     response = client.post(
         "/persist/service",
         data={"service_id": "5", "rite": "Renewed Ancient Text", "ids": "68,69"},
@@ -127,8 +128,9 @@ def test_persist_service_requires_date(auth_client):
     assert b"Service date is required." in response.data
 
 
-def test_persist_service_autosave_requires_date(auth_client):
-    client, _ = auth_client
+def test_persist_service_autosave_requires_date(auth_client, service_factory):
+    client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=5, rite="Renewed Ancient Text")
     response = client.post(
         "/persist/service",
         data={
@@ -145,8 +147,11 @@ def test_persist_service_autosave_requires_date(auth_client):
     assert "Service date is required" in payload["error"]
 
 
-def test_persist_service_saves_and_generates_text(app, auth_client):
+def test_persist_service_saves_and_generates_text(
+    app, auth_client, service_factory
+):
     client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=7, rite="Renewed Ancient Text")
     response = client.post(
         "/persist/service",
         data={
@@ -170,8 +175,11 @@ def test_persist_service_saves_and_generates_text(app, auth_client):
         assert payload["service_date"] == "2026-01-04"
 
 
-def test_persist_service_autosave_saves_data(app, auth_client):
+def test_persist_service_autosave_saves_data(
+    app, auth_client, service_factory
+):
     client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=8, rite="Renewed Ancient Text")
     response = client.post(
         "/persist/service",
         data={
@@ -196,12 +204,13 @@ def test_persist_service_autosave_saves_data(app, auth_client):
         assert saved["service_date"] == "2026-01-04"
 
 
-def test_persist_service_defaults_invalid_id_to_one(app, auth_client):
-    client, user_id = auth_client
+def test_persist_service_invalid_id_returns_error(app, auth_client):
+    client, _ = auth_client
     with app.app_context():
         db = get_db()
-        db.execute("delete from services")
-        db.commit()
+        before = db.execute("select count(*) as count from services").fetchone()[
+            "count"
+        ]
     response = client.post(
         "/persist/service",
         data={
@@ -211,19 +220,21 @@ def test_persist_service_defaults_invalid_id_to_one(app, auth_client):
             "ids": "68,69",
         },
     )
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/service/1")
+    assert response.status_code == 400
+    assert b"Service ID is required" in response.data
     with app.app_context():
         db = get_db()
-        service = db.execute(
-            "select data from services where id=? limit 1", (1,)
-        ).fetchone()
-        payload = json.loads(service["data"])
-        assert payload["user_id"] == user_id
+        after = db.execute("select count(*) as count from services").fetchone()[
+            "count"
+        ]
+        assert after == before
 
 
-def test_persist_service_normalizes_observance_handle(app, auth_client):
+def test_persist_service_normalizes_observance_handle(
+    app, auth_client, service_factory
+):
     client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=12, rite="Renewed Ancient Text")
     response = client.post(
         "/persist/service",
         data={

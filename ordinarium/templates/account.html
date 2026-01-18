@@ -8,6 +8,7 @@
 	</div>
 
 	<form class="auth-form" method="post">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<p><label class="plan-field">
 			<span>First name:</span>
 			<input type="text" name="first_name" autocomplete="given-name" value="{{ first_name }}" required>

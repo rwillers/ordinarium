@@ -46,6 +46,7 @@
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-add-title">
 			<h3 id="service-add-title">Add a service</h3>
 			<form class="plan-custom-form" action="{{ url_for('main.services_new') }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<input type="hidden" name="rite" value="{{ default_rite }}">
 				<p class="plan-field">
 					<span>Start with</span>

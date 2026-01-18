@@ -1,23 +1,21 @@
 # Ordinarium: a liturgy planning workspace
 
-> Work in progress as of December 2025.
-
 Ordinarium is a liturgy planning workspace that incorporates the structure and rubrics of the Anglican Church in North America (ACNA) *Book of Common Prayer* (2019), enabling clergy and liturgists to assemble, order, and manage liturgical orders of service. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials. Though focused initially on Anglican eucharistic services, Ordinarium is designed to accommodate additional rites and traditions as the platform develops.
 
 ## Table of contents
 - Overview
 - Features
 - Liturgical text conventions
-- Data structure
+- Database structure
 - Tech stack
+- Development
 - Roadmap
-- License
 
 ## Features
 - Compose a full liturgical order by selecting propers, readings, and prayers from the ACNA 2019 BCP.
 - Enforce rubrical sequencing while allowing flexible overrides for local practice.
 - Export or share services for worship planning and, in the future, presentation software or printable leaflets.
-- Planned: role-based access (clergy, musicians, readers), history/audit trail, and support for additional rites.
+- Planned: role-based access (e.g., clergy, musicians, readers), history/audit trail, and support for additional rites.
 
 ## Liturgical text conventions
 
@@ -58,12 +56,12 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 
 ### MVP
 - Code clean up.
+- Add second BCP 2019 rite (Anglican Standard Text).
 
 ### Post-MVP
 - Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
-- Add second BCP 2019 rite (Anglican Standard Text).
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
 - Add rich propers search with calendar/season awareness.
 - Implement additional export formats and integrations: Planning Center, ProPresenter, etc.
-- Add team accounts (shared services, element libraries).
+- Add team accounts (shared services and element libraries).
 - Add collaboration features for team accounts: comments, approvals, version history.

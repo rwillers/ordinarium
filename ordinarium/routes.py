@@ -61,8 +61,51 @@ def _config_bool(value, default=False):
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _csrf_token_matches(request_token):
+    session_token = session.get("_csrf_token")
+    if not session_token or not request_token:
+        return False
+    return secrets.compare_digest(session_token, request_token)
+
+
+def _blank_service_payload(user_id, rite=DEFAULT_RITE):
+    return {
+        "user_id": user_id,
+        "title": None,
+        "rite": rite,
+        "season": None,
+        "service_date": None,
+        "text_order": None,
+        "text_disabled": None,
+        "observance_handle": None,
+    }
+
+
+def _create_service(db, payload):
+    cursor = db.execute(
+        "insert into services (data) values (?)",
+        (json.dumps(payload),),
+    )
+    return cursor.lastrowid
+
+
+@bp.before_request
+def _enforce_csrf():
+    if request.method != "POST":
+        return None
+    token = request.form.get("csrf_token") or request.headers.get(
+        "X-CSRF-Token"
+    ) or request.headers.get("X-CSRFToken")
+    if not _csrf_token_matches(token):
+        return ("Invalid CSRF token.", 400)
+    return None
+
+
 def _password_reset_token_hash(token):
-    secret = (current_app.config.get("SECRET_KEY") or "dev").encode("utf-8")
+    secret_value = current_app.config.get("SECRET_KEY")
+    if not secret_value:
+        raise RuntimeError("SECRET_KEY must be set before generating reset tokens.")
+    secret = secret_value.encode("utf-8")
     return hmac.new(secret, token.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
@@ -753,7 +796,7 @@ def service(service_id, rite=DEFAULT_RITE):
     existing_owner = db.execute(
         "select user_id from services where id=? limit 1", (service_id,)
     ).fetchone()
-    if existing_owner and existing_owner["user_id"] != g.user["id"]:
+    if not existing_owner or existing_owner["user_id"] != g.user["id"]:
         return render_error("Service not found.", 404)
     context = build_plan_context(service_id, rite)
     return render_template("service.html", **context)
@@ -798,9 +841,6 @@ def services():
 @login_required
 def services_new():
     db = get_db()
-    next_id = db.execute(
-        "select coalesce(max(id), 0) + 1 as next_id from services"
-    ).fetchone()
     if request.method == "POST":
         mode = request.form.get("mode", "defaults")
         if mode == "copy":
@@ -822,6 +862,9 @@ def services_new():
             if source_data.get("rite") != rite:
                 return render_error("Service rite does not match.", 400)
 
+            payload = _blank_service_payload(g.user["id"], source_data.get("rite") or DEFAULT_RITE)
+            new_service_id = _create_service(db, payload)
+
             custom_rows = db.execute(
                 "select id, title, text, created_at from service_custom_elements where service_id=? and user_id=? order by created_at, id",
                 (source_id, g.user["id"]),
@@ -830,7 +873,7 @@ def services_new():
             for row in custom_rows:
                 cursor = db.execute(
                     "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
-                    (next_id["next_id"], g.user["id"], row["title"], row["text"]),
+                    (new_service_id, g.user["id"], row["title"], row["text"]),
                 )
                 custom_id_map[row["id"]] = cursor.lastrowid
 
@@ -855,25 +898,21 @@ def services_new():
             disabled_tokens = remap_tokens(
                 parse_plan_tokens(source_data.get("text_disabled"))
             )
-            payload = {
-                "user_id": g.user["id"],
-                "title": None,
-                "rite": source_data.get("rite", DEFAULT_RITE),
-                "season": None,
-                "service_date": None,
-                "observance_handle": None,
-                "text_order": json.dumps(order_tokens),
-                "text_disabled": json.dumps(disabled_tokens),
-            }
+            payload["rite"] = source_data.get("rite", DEFAULT_RITE)
+            payload["text_order"] = json.dumps(order_tokens)
+            payload["text_disabled"] = json.dumps(disabled_tokens)
             db.execute(
-                "insert into services (id, data) values (?, ?)",
-                (next_id["next_id"], json.dumps(payload)),
+                "update services set data=? where id=?",
+                (json.dumps(payload), new_service_id),
             )
             db.commit()
             return redirect(
-                url_for("main.service", service_id=next_id["next_id"])
+                url_for("main.service", service_id=new_service_id)
             )
-    return redirect(url_for("main.service", service_id=next_id["next_id"]))
+    payload = _blank_service_payload(g.user["id"], DEFAULT_RITE)
+    new_service_id = _create_service(db, payload)
+    db.commit()
+    return redirect(url_for("main.service", service_id=new_service_id))
 
 
 @bp.route("/service/<int:service_id>/delete", methods=["POST"])
@@ -1063,7 +1102,9 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             else "*Error: No proper preface found.*"
         ),
     }
-    service_title = observance.name or observance.alternative_name if observance else ""
+    service_title = (
+        (observance.name or observance.alternative_name) if observance else ""
+    )
     service_date_display = ""
     if saved_service and saved_service["service_date"]:
         try:
@@ -1184,7 +1225,7 @@ def service_add_custom_element(service_id):
     existing = db.execute(
         "select user_id, data from services where id=? limit 1", (service_id,)
     ).fetchone()
-    if existing and existing["user_id"] != g.user["id"]:
+    if not existing or existing["user_id"] != g.user["id"]:
         if is_autosave:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
@@ -1211,19 +1252,7 @@ def service_add_custom_element(service_id):
             )
         return redirect(url_for("main.service", service_id=service_id))
 
-    if existing:
-        service_data = json.loads(existing["data"]) if existing["data"] else {}
-    else:
-        service_data = {
-            "user_id": g.user["id"],
-            "title": None,
-            "rite": rite,
-            "season": None,
-            "service_date": None,
-            "text_order": None,
-            "text_disabled": None,
-            "observance_handle": None,
-        }
+    service_data = json.loads(existing["data"]) if existing["data"] else {}
 
     if not service_data.get("rite"):
         service_data["rite"] = rite
@@ -1259,16 +1288,10 @@ def service_add_custom_element(service_id):
             order_tokens.insert(insert_index + 1, custom_token)
     service_data["text_order"] = json.dumps(order_tokens)
 
-    if existing:
-        db.execute(
-            "update services set data=? where id=?",
-            (json.dumps(service_data), service_id),
-        )
-    else:
-        db.execute(
-            "insert into services (id, data) values (?, ?)",
-            (service_id, json.dumps(service_data)),
-        )
+    db.execute(
+        "update services set data=? where id=?",
+        (json.dumps(service_data), service_id),
+    )
     db.commit()
     return redirect(url_for("main.service", service_id=service_id))
 
@@ -1327,11 +1350,13 @@ def persist_service():
         or "application/json" in request.headers.get("Accept", "")
     )
 
-    service_id = request.form.get("service_id", 1)
+    service_id = request.form.get("service_id")
     try:
         service_id = int(service_id)
     except (TypeError, ValueError):
-        service_id = 1
+        if is_autosave:
+            return jsonify({"ok": False, "error": "Service ID is required."}), 400
+        return render_error("Service ID is required.", 400)
 
     raw_order = request.form.get("ids", "")
     order_tokens = []
@@ -1356,12 +1381,7 @@ def persist_service():
         "select data from services where id=? and user_id=? limit 1",
         (service_id, g.user["id"]),
     ).fetchone()
-    other_owner = None
     if not existing:
-        other_owner = db.execute(
-            "select id from services where id=? limit 1", (service_id,)
-        ).fetchone()
-    if other_owner:
         if is_autosave:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
@@ -1424,16 +1444,10 @@ def persist_service():
     else:
         payload["season"] = None
 
-    if existing:
-        db.execute(
-            "update services set data=? where id=?",
-            (json.dumps(payload), service_id),
-        )
-    else:
-        db.execute(
-            "insert into services (id, data) values (?, ?)",
-            (service_id, json.dumps(payload)),
-        )
+    db.execute(
+        "update services set data=? where id=?",
+        (json.dumps(payload), service_id),
+    )
     db.commit()
     # flash('Service saved.')
     if is_autosave:

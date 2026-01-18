@@ -8,6 +8,7 @@
 	</div>
 
 	<form class="auth-form" method="post">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
 		<p><label class="plan-field">
 			<span>Email address:</span>

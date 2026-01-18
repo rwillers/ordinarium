@@ -1,22 +1,34 @@
 import html
 import os
 import re
+import secrets
 from html.parser import HTMLParser
 
 import markdown2
 from jinja2 import pass_context
 from markupsafe import Markup
-from flask import Flask
+from flask import Flask, session
 
 from .db import close_db, init_db_command
 from .routes import bp as main_bp
 
 
+def _is_dev_env():
+    return (
+        os.getenv("ORDINARIUM_DEBUG") == "1"
+        or os.getenv("FLASK_DEBUG") == "1"
+        or os.getenv("FLASK_ENV") == "development"
+    )
+
+
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
+    secret_key = os.environ.get("SECRET_KEY")
+    if not secret_key and _is_dev_env():
+        secret_key = "dev"
     app.config.from_mapping(
         DATABASE=os.path.join(app.instance_path, "ordinarium.db"),
-        SECRET_KEY=os.environ.get("SECRET_KEY", "dev"),
+        SECRET_KEY=secret_key,
         PASSWORD_RESET_EXPIRY_MINUTES=int(
             os.environ.get("PASSWORD_RESET_EXPIRY_MINUTES", "60")
         ),
@@ -95,9 +107,20 @@ def create_app():
     app.jinja_env.filters["clean"] = lambda value: re.sub(
         r"\s+", " ", value or ""
     ).strip()
+    app.jinja_env.globals["csrf_token"] = lambda: session.setdefault(
+        "_csrf_token", secrets.token_urlsafe(32)
+    )
 
     app.register_blueprint(main_bp)
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+    @app.before_request
+    def _require_secret_key():
+        if app.testing or app.debug or _is_dev_env():
+            return None
+        secret = app.config.get("SECRET_KEY")
+        if not secret or secret == "dev":
+            raise RuntimeError("SECRET_KEY must be set in production.")
+        return None
 
     return app
