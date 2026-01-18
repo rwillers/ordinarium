@@ -57,11 +57,11 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### MVP
-- Implement initial export formats: PDF and DOCX.
 - Add email-based password reset support.
 - Code clean up.
 
 ### Post-MVP
+- Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
 - Add second BCP 2019 rite (Anglican Standard Text).
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
 - Add rich propers search with calendar/season awareness.
