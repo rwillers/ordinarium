@@ -40,6 +40,18 @@ DEFAULT_RITE = "Renewed Ancient Text"
 # Utility functions
 
 
+def load_rite_options():
+    db = get_db()
+    rows = db.execute(
+        "select distinct filter_content from texts where type=? and filter_type=? order by filter_content",
+        ("ordinarium", "rite"),
+    ).fetchall()
+    options = [row["filter_content"] for row in rows if row["filter_content"]]
+    if DEFAULT_RITE not in options:
+        options.insert(0, DEFAULT_RITE)
+    return options
+
+
 def _safe_redirect_target(target, fallback_endpoint="main.services"):
     if not target:
         return url_for(fallback_endpoint)
@@ -478,12 +490,16 @@ def format_services(services):
                 title = observance.name or observance.alternative_name
         if not title:
             title = service["title"]
+        rite = service["rite"] if "rite" in service.keys() else None
+        if not rite:
+            rite = saved_data.get("rite")
         formatted.append(
             {
                 "id": service["id"],
                 "title": title or "Untitled Service",
                 "service_date": service["service_date"],
                 "display_date": display_date,
+                "rite": rite,
             }
         )
     return formatted
@@ -712,12 +728,15 @@ def index():
 
 
 def build_plan_context(service_id, rite):
-    rite_slug = rite.replace(" ", "_").lower()
     db = get_db()
     saved_plan = db.execute(
         "select text_order, text_disabled, title, season, service_date, rite, data from services where id=? and user_id=? limit 1",
         (service_id, g.user["id"]),
     ).fetchone()
+    effective_rite = (
+        saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite
+    )
+    rite_slug = effective_rite.replace(" ", "_").lower()
     saved_data = (
         json.loads(saved_plan["data"]) if saved_plan and saved_plan["data"] else {}
     )
@@ -727,7 +746,7 @@ def build_plan_context(service_id, rite):
     )
     ordinaries = build_plan_items(
         service_id,
-        rite,
+        effective_rite,
         order_tokens,
         disabled_tokens,
         user_id=g.user["id"],
@@ -773,10 +792,10 @@ def build_plan_context(service_id, rite):
     service_data = {
         "season": saved_plan["season"] if saved_plan else "",
         "service_date": saved_plan["service_date"] if saved_plan else "",
-        "rite": saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite,
+        "rite": effective_rite,
     }
     return {
-        "rite": rite,
+        "rite": effective_rite,
         "rite_slug": rite_slug,
         "ordinaries": ordinaries,
         "service_id": service_id,
@@ -816,16 +835,16 @@ def services():
     db = get_db()
     today = date.today().isoformat()
     current_services = db.execute(
-        "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+        "select id, title, service_date, rite, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
         (g.user["id"], today),
     ).fetchall()
     past_services = db.execute(
-        "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
+        "select id, title, service_date, rite, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (g.user["id"], today),
     ).fetchall()
     copy_services = db.execute(
-        "select id, title, service_date, data from services where user_id=? and rite=? order by service_date desc",
-        (g.user["id"], DEFAULT_RITE),
+        "select id, title, service_date, rite, data from services where user_id=? order by service_date desc",
+        (g.user["id"],),
     ).fetchall()
 
     return render_template(
@@ -834,6 +853,7 @@ def services():
         past_services=format_services(past_services),
         copy_services=format_services(copy_services),
         default_rite=DEFAULT_RITE,
+        rite_options=load_rite_options(),
     )
 
 
@@ -841,8 +861,10 @@ def services():
 @login_required
 def services_new():
     db = get_db()
+    rite = DEFAULT_RITE
     if request.method == "POST":
         mode = request.form.get("mode", "defaults")
+        rite = request.form.get("rite") or DEFAULT_RITE
         if mode == "copy":
             raw_source_id = request.form.get("from_service_id")
             try:
@@ -851,7 +873,6 @@ def services_new():
                 source_id = None
             if not source_id:
                 return render_error("Select a service to copy.", 400)
-            rite = request.form.get("rite") or DEFAULT_RITE
             source = db.execute(
                 "select data from services where id=? and user_id=? limit 1",
                 (source_id, g.user["id"]),
@@ -909,7 +930,7 @@ def services_new():
             return redirect(
                 url_for("main.service", service_id=new_service_id)
             )
-    payload = _blank_service_payload(g.user["id"], DEFAULT_RITE)
+    payload = _blank_service_payload(g.user["id"], rite)
     new_service_id = _create_service(db, payload)
     db.commit()
     return redirect(url_for("main.service", service_id=new_service_id))

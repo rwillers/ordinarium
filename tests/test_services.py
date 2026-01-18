@@ -101,6 +101,51 @@ def test_services_new_rejects_mismatched_rite(auth_client, service_factory):
     assert b"Service rite does not match" in response.data
 
 
+def test_services_new_uses_selected_rite(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=30)
+    response = client.post(
+        "/services/new",
+        data={"mode": "defaults", "rite": "Anglican Standard Text"},
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/service/31")
+    with app.app_context():
+        db = get_db()
+        created = db.execute(
+            "select data from services where id=? limit 1", (31,)
+        ).fetchone()
+        payload = json.loads(created["data"])
+        assert payload["rite"] == "Anglican Standard Text"
+
+
+def test_services_new_copies_non_default_rite(app, auth_client, service_factory):
+    client, user_id = auth_client
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=40,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+    )
+    response = client.post(
+        "/services/new",
+        data={
+            "mode": "copy",
+            "from_service_id": str(source_id),
+            "rite": "Anglican Standard Text",
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/service/41")
+    with app.app_context():
+        db = get_db()
+        copied = db.execute(
+            "select data from services where id=? limit 1", (41,)
+        ).fetchone()
+        payload = json.loads(copied["data"])
+        assert payload["rite"] == "Anglican Standard Text"
+
+
 def test_service_missing_id_returns_error(auth_client):
     client, _ = auth_client
     response = client.get("/service")
@@ -115,6 +160,15 @@ def test_service_denies_other_user(auth_client, service_factory, user_factory):
     response = client.get("/service/22")
     assert response.status_code == 404
     assert b"Service not found" in response.data
+
+
+def test_service_plan_uses_saved_rite_ordinaries(auth_client, service_factory):
+    client, user_id = auth_client
+    service_factory(user_id=user_id, service_id=60, rite="Anglican Standard Text")
+    response = client.get("/service/60")
+    assert response.status_code == 200
+    assert b"Anglican Standard Text" in response.data
+    assert b"text:1276" in response.data
 
 
 def test_persist_service_requires_date(auth_client, service_factory):

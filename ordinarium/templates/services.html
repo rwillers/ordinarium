@@ -47,7 +47,14 @@
 			<h3 id="service-add-title">Add a service</h3>
 			<form class="plan-custom-form" action="{{ url_for('main.services_new') }}" method="post">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-				<input type="hidden" name="rite" value="{{ default_rite }}">
+				<p class="plan-field">
+					<span>Rite</span>
+					<select name="rite" id="service-rite-select">
+						{% for rite in rite_options %}
+							<option value="{{ rite }}"{% if rite == default_rite %} selected{% endif %}>{{ rite }}</option>
+						{% endfor %}
+					</select>
+				</p>
 				<p class="plan-field">
 					<span>Start with</span>
 					<label class="auth-toggle">
@@ -65,15 +72,13 @@
 							<span>Service to copy</span>
 							<select name="from_service_id" id="service-copy-select"{% if not copy_services %} disabled{% endif %}>
 								{% for service in copy_services %}
-									<option value="{{ service.id }}">{{ service.title }}{% if service.display_date %} — {{ service.display_date }}{% endif %}</option>
+									<option value="{{ service.id }}" data-rite="{{ service.rite }}">{{ service.title }}{% if service.display_date %} — {{ service.display_date }}{% endif %}</option>
 								{% endfor %}
 							</select>
 						</label>
 					</p>
 				</div>
-				{% if not copy_services %}
-				<p>No services from this rite yet.</p>
-				{% endif %}
+				<p id="service-copy-empty"{% if copy_services %} style="display: none;"{% endif %}>No services from this rite yet.</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-service-add-close>Cancel</button>
 					<button class="plan-submit" type="submit">Continue</button>
@@ -91,16 +96,58 @@
 	const serviceAddModes = document.querySelectorAll('input[name="mode"]')
 	const serviceCopyFields = document.querySelector('#service-copy-fields')
 	const serviceCopySelect = document.querySelector('#service-copy-select')
+	const serviceRiteSelect = document.querySelector('#service-rite-select')
+	const serviceCopyEmpty = document.querySelector('#service-copy-empty')
+	const serviceCopyToggle = document.querySelector('input[name="mode"][value="copy"]')
+
+	const filterCopyOptions = () => {
+		if (!serviceCopySelect) {
+			return 0
+		}
+		const selectedRite = serviceRiteSelect ? serviceRiteSelect.value : ''
+		const options = Array.from(serviceCopySelect.options)
+		let available = 0
+		options.forEach((option) => {
+			const matches = !selectedRite || option.dataset.rite === selectedRite
+			option.hidden = !matches
+			option.disabled = !matches
+			if (matches) {
+				available += 1
+			}
+		})
+		const selectedOption = serviceCopySelect.selectedOptions[0]
+		if (!selectedOption || selectedOption.disabled) {
+			const firstMatch = options.find((option) => !option.disabled)
+			if (firstMatch) {
+				serviceCopySelect.value = firstMatch.value
+			}
+		}
+		return available
+	}
 
 	const updateServiceAddMode = () => {
 		const selected = document.querySelector('input[name="mode"]:checked')
-		const isCopy = selected && selected.value === 'copy'
+		let isCopy = selected && selected.value === 'copy'
+		const available = filterCopyOptions()
+		if (serviceCopyToggle) {
+			serviceCopyToggle.disabled = available === 0
+			if (available === 0 && isCopy) {
+				const defaultsToggle = document.querySelector('input[name="mode"][value="defaults"]')
+				if (defaultsToggle) {
+					defaultsToggle.checked = true
+				}
+				isCopy = false
+			}
+		}
 		if (serviceCopyFields) {
 			serviceCopyFields.style.display = isCopy ? '' : 'none'
 		}
 		if (serviceCopySelect) {
-			serviceCopySelect.disabled = !isCopy
-			serviceCopySelect.required = isCopy
+			serviceCopySelect.disabled = !isCopy || available === 0
+			serviceCopySelect.required = isCopy && available > 0
+		}
+		if (serviceCopyEmpty) {
+			serviceCopyEmpty.style.display = available === 0 ? '' : 'none'
 		}
 	}
 
@@ -129,6 +176,10 @@
 	serviceAddModes.forEach((mode) => {
 		mode.addEventListener('change', updateServiceAddMode)
 	})
+
+	if (serviceRiteSelect) {
+		serviceRiteSelect.addEventListener('change', updateServiceAddMode)
+	}
 </script>
 
 {% endblock %}

@@ -55,8 +55,7 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### MVP
-- Code clean up.
-- Add second BCP 2019 rite (Anglican Standard Text).
+- Expand Psalm (Lessons) rubrics.
 
 ### Post-MVP
 - Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
