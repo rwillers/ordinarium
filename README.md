@@ -57,7 +57,6 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 ## Roadmap
 
 ### MVP
-- Add email-based password reset support.
 - Code clean up.
 
 ### Post-MVP

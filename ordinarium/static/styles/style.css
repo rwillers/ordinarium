@@ -390,6 +390,11 @@ div#page {
 		gap: 1em;
 		flex-wrap: wrap;
 	}
+	.plan-header-inline .plan-header-actions {
+		width: auto;
+		justify-content: flex-end;
+		margin-left: auto;
+	}
 	.plan-header-actions {
 		display: flex;
 		gap: 0;
@@ -402,7 +407,7 @@ div#page {
 		align-items: center;
 		justify-content: flex-end;
 		min-width: 0;
-		margin-left: auto;
+		margin-left: 0;
 	}
 	.plan-header-buttons {
 		display: flex;
@@ -443,9 +448,9 @@ div#page {
 		max-width: 820px;
 		margin: 0 auto;
 		padding: 0 20px;
-		justify-content: space-between;
+		justify-content: flex-start;
 		min-height: var(--action-bar-height);
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 	}
 	.plan-header-actions-fixed .plan-header-actions > * + * {
 		margin-left: 0;
