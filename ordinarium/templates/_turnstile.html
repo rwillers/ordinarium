@@ -1,0 +1,68 @@
+{% if turnstile_site_key %}
+<div class="turnstile-widget" aria-hidden="true"></div>
+<script>
+	window.__turnstileQueue = window.__turnstileQueue || []
+	window.ordinariumTurnstileOnload = window.ordinariumTurnstileOnload || function () {
+		window.__turnstileQueue.forEach((callback) => callback())
+	}
+
+	;(function () {
+		let widgetId = null
+		let token = null
+		let ready = false
+		let submitting = false
+
+		const form = document.querySelector('{{ form_selector | default(".auth-form") }}')
+		if (!form) {
+			return
+		}
+		const submit = form.querySelector('button[type="submit"], input[type="submit"]')
+
+		function onLoad() {
+			const widget = form.querySelector('.turnstile-widget')
+			if (!widget || !window.turnstile) {
+				return
+			}
+			widgetId = window.turnstile.render(widget, {
+				sitekey: "{{ turnstile_site_key }}",
+				size: "invisible",
+				callback: (value) => {
+					token = value
+					if (submitting) {
+						form.submit()
+					}
+				},
+				"error-callback": () => {
+					submitting = false
+					if (submit) {
+						submit.removeAttribute('disabled')
+					}
+				},
+			})
+			ready = true
+		}
+
+		window.__turnstileQueue.push(onLoad)
+		if (window.turnstile) {
+			onLoad()
+		}
+
+		form.addEventListener('submit', (event) => {
+			if (token) {
+				return
+			}
+			if (!ready || !window.turnstile) {
+				event.preventDefault()
+				return
+			}
+			event.preventDefault()
+			submitting = true
+			if (submit) {
+				submit.setAttribute('disabled', 'disabled')
+			}
+			window.turnstile.execute(widgetId)
+		})
+	})()
+</script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=ordinariumTurnstileOnload" async defer></script>
+{% endif %}

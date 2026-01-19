@@ -6,6 +6,8 @@ from email.message import EmailMessage
 import hmac
 import secrets
 from urllib.parse import urlparse
+from urllib import parse as urlparse_lib
+from urllib import request as urlrequest
 from functools import wraps
 from datetime import date, datetime, timedelta, timezone
 
@@ -71,6 +73,44 @@ def _config_bool(value, default=False):
     if isinstance(value, bool):
         return value
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _turnstile_enabled():
+    return bool(current_app.config.get("TURNSTILE_SECRET_KEY")) and bool(
+        current_app.config.get("TURNSTILE_SITE_KEY")
+    )
+
+
+def _verify_turnstile_response(token, remoteip=None):
+    if not _turnstile_enabled():
+        return True, None
+    if not token:
+        return False, "missing-input-response"
+    data = {
+        "secret": current_app.config.get("TURNSTILE_SECRET_KEY"),
+        "response": token,
+    }
+    if remoteip:
+        data["remoteip"] = remoteip
+    encoded = urlparse_lib.urlencode(data).encode("utf-8")
+    request_obj = urlrequest.Request(
+        "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        data=encoded,
+        method="POST",
+    )
+    request_obj.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urlrequest.urlopen(request_obj, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        current_app.logger.warning("Turnstile verification error: %s", exc)
+        return False, "verification-error"
+    if payload.get("success"):
+        return True, None
+    current_app.logger.info(
+        "Turnstile rejected response: %s", payload.get("error-codes")
+    )
+    return False, payload.get("error-codes")
 
 
 def _csrf_token_matches(request_token):
@@ -207,6 +247,11 @@ def login():
                     password_hash, password
                 ):
                     error = "Invalid email or password."
+        if not error and _turnstile_enabled():
+            token = request.form.get("cf-turnstile-response")
+            verified, _ = _verify_turnstile_response(token, request.remote_addr)
+            if not verified:
+                error = "Please verify you're human."
         if not error and user:
             session.clear()
             session["user_id"] = user["id"]
@@ -218,7 +263,10 @@ def login():
             return redirect(_safe_redirect_target(next_url))
     if error:
         flash(error, "error")
-    return render_template("login.html")
+    return render_template(
+        "login.html",
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @bp.route("/reset-password", methods=["GET", "POST"])
@@ -230,7 +278,12 @@ def request_password_reset():
         email = (request.form.get("email") or "").strip().lower()
         if not email:
             error = "Email address is required."
-        else:
+        if not error and _turnstile_enabled():
+            token = request.form.get("cf-turnstile-response")
+            verified, _ = _verify_turnstile_response(token, request.remote_addr)
+            if not verified:
+                error = "Please verify you're human."
+        if not error:
             user = get_user_by_email(email)
             if user:
                 token = create_password_reset_token(user["id"])
@@ -248,7 +301,10 @@ def request_password_reset():
             return redirect(url_for("main.login"))
     if error:
         flash(error, "error")
-    return render_template("reset_request.html")
+    return render_template(
+        "reset_request.html",
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @bp.route("/reset-password/<token>", methods=["GET", "POST"])
@@ -262,6 +318,11 @@ def reset_password(token):
         password = request.form.get("password") or ""
         if len(password) < 8:
             error = "Password must be at least 8 characters."
+        if not error and _turnstile_enabled():
+            token_value = request.form.get("cf-turnstile-response")
+            verified, _ = _verify_turnstile_response(token_value, request.remote_addr)
+            if not verified:
+                error = "Please verify you're human."
         if not error:
             user = get_user_by_id(record["user_id"])
             if not user:
@@ -283,7 +344,11 @@ def reset_password(token):
             return redirect(url_for("main.login"))
     if error:
         flash(error, "error")
-    return render_template("reset_password.html", token=token)
+    return render_template(
+        "reset_password.html",
+        token=token,
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 @bp.route("/signup", methods=["GET", "POST"])
@@ -302,6 +367,11 @@ def signup():
             error = "Password must be at least 8 characters."
         elif get_user_by_email(email):
             error = "An account with this email already exists."
+        if not error and _turnstile_enabled():
+            token = request.form.get("cf-turnstile-response")
+            verified, _ = _verify_turnstile_response(token, request.remote_addr)
+            if not verified:
+                error = "Please verify you're human."
         if not error:
             db = get_db()
             payload = {
@@ -318,7 +388,10 @@ def signup():
             return redirect(url_for("main.services"))
     if error:
         flash(error, "error")
-    return render_template("signup.html")
+    return render_template(
+        "signup.html",
+        turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+    )
 
 
 def get_user_by_id(user_id):
