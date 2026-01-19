@@ -53,7 +53,6 @@ Note that the SQLite database uses JSON data storage fields with virtual columns
 6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
 ## Roadmap
-- Add custom Lessons support (without requiring creation of completely custom elements).
 - Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
 - Add rich propers search with calendar/season awareness.
