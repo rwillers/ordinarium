@@ -248,6 +248,15 @@ def test_persist_service_autosave_saves_data(
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["ok"] is True
+    assert payload["can_delete"] is True
+    lesson_defaults = payload["lesson_defaults"]
+    assert isinstance(lesson_defaults, dict)
+    assert set(lesson_defaults.keys()) == {
+        "lesson_1",
+        "psalm",
+        "lesson_2",
+        "gospel",
+    }
     with app.app_context():
         db = get_db()
         service = db.execute(
@@ -352,6 +361,77 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
     response = client.get("/text/14")
     assert response.status_code == 200
     assert b"Holy Eucharist" in response.data
+
+
+def test_lesson_override_updates_service(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=25,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    response = client.post(
+        f"/service/{service_id}/lesson-passage",
+        data={
+            "lesson_key": "gospel",
+            "lesson_mode": "custom",
+            "custom_passage": "Mark 1:1-8",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["custom_passage"] == "Mark 1:1-8"
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select data from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        saved = json.loads(service["data"])
+        assert saved["lesson_overrides"]["gospel"] == "Mark 1:1-8"
+
+    response = client.post(
+        f"/service/{service_id}/lesson-passage",
+        data={"lesson_key": "gospel", "lesson_mode": "default"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select data from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        saved = json.loads(service["data"])
+        assert "gospel" not in saved.get("lesson_overrides", {})
+
+
+def test_text_uses_lesson_override(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=26,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select data from services where id=? limit 1", (service_id,)
+        ).fetchone()
+        saved = json.loads(service["data"])
+        saved["lesson_overrides"] = {"gospel": "Mark 1:1-8"}
+        db.execute(
+            "update services set data=? where id=?",
+            (json.dumps(saved), service_id),
+        )
+        db.commit()
+    response = client.get(f"/text/{service_id}")
+    assert response.status_code == 200
+    assert b"Mark 1:1-8" in response.data
 
 
 def test_custom_element_added_to_service_plan_and_text(

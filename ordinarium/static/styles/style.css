@@ -602,6 +602,17 @@ div#page {
 		position: relative;
 		overflow: visible;
 	}
+	.plan-list.is-disabled {
+		opacity: 0.5;
+		pointer-events: none;
+		filter: grayscale(0.1);
+	}
+	.plan-locked-message {
+		margin: 0 0 0.8em 0;
+		font-size: 0.9em;
+		color: var(--rubric-color);
+		font-weight: 600;
+	}
 	.plan-row-main {
 		padding: 0 5.6em 0 2.4em;
 	}
@@ -708,6 +719,19 @@ div#page {
 		resize: vertical;
 		min-height: 4.5em;
 	}
+	.plan-radio-group {
+		display: grid;
+		gap: 0.5em;
+	}
+	.plan-radio-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+		font-size: 0.95em;
+	}
+	.plan-radio-option input {
+		margin: 0;
+	}
 	.plan-field-value {
 		font-size: 0.95em;
 		font-weight: 600;
@@ -797,7 +821,7 @@ div#page {
 		border: 1px solid rgba(27, 27, 27, 0.15);
 		border-radius: 5px;
 		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-		min-width: 8.5em;
+		min-width: 11.5em;
 		padding: 0.4em;
 		display: flex;
 		flex-direction: column;
@@ -847,6 +871,13 @@ div#page {
 		align-items: center;
 		justify-content: center;
 		width: 1.1em;
+	}
+	.plan-lesson-override {
+		margin-left: 0.45em;
+		font-size: 0.7em;
+		font-weight: 700;
+		color: var(--rubric-color);
+		vertical-align: middle;
 	}
 	.plan-row small {
 		display: block;

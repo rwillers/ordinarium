@@ -130,6 +130,7 @@ def _blank_service_payload(user_id, rite=DEFAULT_RITE):
         "text_order": None,
         "text_disabled": None,
         "observance_handle": None,
+        "lesson_overrides": {},
     }
 
 
@@ -827,12 +828,16 @@ def build_plan_context(service_id, rite):
     observance_options = []
     observance_title = ""
     observance_handle = saved_data.get("observance_handle")
+    lesson_defaults = {}
     if saved_plan and saved_plan["service_date"]:
         try:
             service_date = date.fromisoformat(saved_plan["service_date"])
         except ValueError:
             service_date = None
         if service_date:
+            lesson_defaults = _resolve_lesson_references(
+                saved_plan["service_date"], observance_handle
+            )
             options = resolve_observance_options(service_date)
             if options:
                 observance_options = []
@@ -867,6 +872,9 @@ def build_plan_context(service_id, rite):
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": effective_rite,
     }
+    lesson_overrides = saved_data.get("lesson_overrides")
+    if not isinstance(lesson_overrides, dict):
+        lesson_overrides = {}
     return {
         "rite": effective_rite,
         "rite_slug": rite_slug,
@@ -876,8 +884,10 @@ def build_plan_context(service_id, rite):
         "observance_options": observance_options,
         "observance_title": observance_title,
         "can_delete": bool(saved_plan and saved_plan["service_date"]),
-        "can_share": bool(saved_plan),
+        "can_share": bool(saved_plan and saved_plan["service_date"]),
         "custom_templates": load_custom_templates(g.user["id"]),
+        "lesson_overrides": lesson_overrides,
+        "lesson_defaults": lesson_defaults,
     }
 
 
@@ -995,6 +1005,8 @@ def services_new():
             payload["rite"] = source_data.get("rite", DEFAULT_RITE)
             payload["text_order"] = json.dumps(order_tokens)
             payload["text_disabled"] = json.dumps(disabled_tokens)
+            if isinstance(source_data.get("lesson_overrides"), dict):
+                payload["lesson_overrides"] = source_data.get("lesson_overrides")
             db.execute(
                 "update services set data=? where id=?",
                 (json.dumps(payload), new_service_id),
@@ -1040,6 +1052,67 @@ def load_service_for_text(service_id, user_id=None):
         else {}
     )
     return saved_service, saved_data
+
+
+def _format_lesson_reference(lesson):
+    if not lesson:
+        return None
+    reference_short = lesson.get("reference_short")
+    if reference_short and reference_short.strip() == "_":
+        reference_short = None
+    reference = reference_short or lesson.get("reference_long")
+    if not reference:
+        return None
+    book_name = lesson.get("book_name") or lesson.get("book")
+    if not book_name:
+        return reference
+    return f"{book_name} ({reference})"
+
+
+def _build_lesson_readings(propers_list, subcycle):
+    if not propers_list:
+        return {}
+    db = get_db()
+    propers_json = json.dumps(propers_list)
+    lessons = db.execute(
+        "select texts.data from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order",
+        (propers_json, "lesson", "proper"),
+    ).fetchall()
+    readings = {}
+    if not lessons:
+        return readings
+    for row in lessons:
+        lesson = json.loads(row["data"])
+        if lesson.get("optional"):
+            continue
+        lesson_subcycles = lesson.get("subcycles") or []
+        if lesson_subcycles and subcycle and subcycle not in lesson_subcycles:
+            continue
+        reading_number = lesson.get("reading")
+        if reading_number in readings:
+            continue
+        readings[reading_number] = lesson
+    return readings
+
+
+def _resolve_lesson_references(service_date, observance_handle):
+    if not service_date:
+        return {}
+    try:
+        parsed_date = date.fromisoformat(service_date)
+    except ValueError:
+        return {}
+    observance = resolve_observance(parsed_date, observance_handle)
+    if not observance:
+        return {}
+    propers_list = list(observance.propers)
+    readings = _build_lesson_readings(propers_list, observance.subcycle)
+    return {
+        "lesson_1": _format_lesson_reference(readings.get(1)),
+        "psalm": _format_lesson_reference(readings.get(2)),
+        "lesson_2": _format_lesson_reference(readings.get(3)),
+        "gospel": _format_lesson_reference(readings.get(5)),
+    }
 
 
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
@@ -1131,42 +1204,14 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             (propers_json, "collect", "proper"),
         ).fetchone()
 
-    lessons = []
-    if propers_list:
-        propers_json = json.dumps(propers_list)
-        lessons = db.execute(
-            "select texts.data from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order",
-            (propers_json, "lesson", "proper"),
-        ).fetchall()
-
     subcycle = observance.subcycle if observance else None
-    readings = {}
-    if lessons:
-        for row in lessons:
-            lesson = json.loads(row["data"])
-            if lesson.get("optional"):
-                continue
-            lesson_subcycles = lesson.get("subcycles") or []
-            if lesson_subcycles and subcycle and subcycle not in lesson_subcycles:
-                continue
-            reading_number = lesson.get("reading")
-            if reading_number in readings:
-                continue
-            readings[reading_number] = lesson
-
-    def format_reference(lesson):
-        if not lesson:
-            return None
-        reference_short = lesson.get("reference_short")
-        if reference_short and reference_short.strip() == "_":
-            reference_short = None
-        reference = reference_short or lesson.get("reference_long")
-        if not reference:
-            return None
-        book_name = lesson.get("book_name") or lesson.get("book")
-        if not book_name:
-            return reference
-        return f"{book_name} ({reference})"
+    readings = _build_lesson_readings(propers_list, subcycle)
+    lesson_defaults = {
+        "lesson_1_reference": _format_lesson_reference(readings.get(1)),
+        "psalm_reference": _format_lesson_reference(readings.get(2)),
+        "lesson_2_reference": _format_lesson_reference(readings.get(3)),
+        "gospel_reference": _format_lesson_reference(readings.get(5)),
+    }
 
     propers = {
         "acclamation": (
@@ -1177,13 +1222,13 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             if collect_text
             else "*Error: No collect found for this date.*"
         ),
-        "lesson_1_reference": format_reference(readings.get(1))
+        "lesson_1_reference": lesson_defaults.get("lesson_1_reference")
         or "*Error: No first lesson found.*",
-        "psalm_reference": format_reference(readings.get(2))
+        "psalm_reference": lesson_defaults.get("psalm_reference")
         or "*Error: No psalm found.*",
-        "lesson_2_reference": format_reference(readings.get(3))
+        "lesson_2_reference": lesson_defaults.get("lesson_2_reference")
         or "*Error: No second lesson found.*",
-        "gospel_reference": format_reference(readings.get(5))
+        "gospel_reference": lesson_defaults.get("gospel_reference")
         or "*Error: No gospel found.*",
         "offertory_sentence": (
             offertory_sentence["text"]
@@ -1196,6 +1241,19 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             else "*Error: No proper preface found.*"
         ),
     }
+    lesson_overrides = saved_data.get("lesson_overrides")
+    if not isinstance(lesson_overrides, dict):
+        lesson_overrides = {}
+    override_map = {
+        "lesson_1": "lesson_1_reference",
+        "psalm": "psalm_reference",
+        "lesson_2": "lesson_2_reference",
+        "gospel": "gospel_reference",
+    }
+    for override_key, prop_key in override_map.items():
+        custom_value = lesson_overrides.get(override_key)
+        if custom_value:
+            propers[prop_key] = custom_value
     service_title = (
         (observance.name or observance.alternative_name) if observance else ""
     )
@@ -1275,6 +1333,70 @@ def service_share(service_id):
     return jsonify(
         {"share_uuid": share_uuid, "share_url": share_url, "created": created}
     )
+
+
+@bp.route("/service/<int:service_id>/lesson-passage", methods=["POST"])
+@login_required
+def service_lesson_passage(service_id):
+    def normalize_value(value):
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    wants_json = "application/json" in request.headers.get("Accept", "")
+    lesson_key = normalize_value(request.form.get("lesson_key"))
+    mode = normalize_value(request.form.get("lesson_mode")) or "default"
+    custom_passage = normalize_value(request.form.get("custom_passage"))
+
+    allowed_keys = {"lesson_1", "psalm", "lesson_2", "gospel"}
+    if lesson_key not in allowed_keys:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Invalid lesson key."}), 400
+        return render_error("Invalid lesson key.", 400)
+    if mode not in {"default", "custom"}:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Invalid lesson mode."}), 400
+        return render_error("Invalid lesson mode.", 400)
+    if mode == "custom" and not custom_passage:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Custom passage is required."}), 400
+        flash("Custom passage is required.", "error")
+        return redirect(url_for("main.service", service_id=service_id))
+
+    db = get_db()
+    existing = db.execute(
+        "select data from services where id=? and user_id=? limit 1",
+        (service_id, g.user["id"]),
+    ).fetchone()
+    if not existing:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
+        return render_error("Service not found.", 404)
+    service_data = json.loads(existing["data"]) if existing["data"] else {}
+    lesson_overrides = service_data.get("lesson_overrides")
+    if not isinstance(lesson_overrides, dict):
+        lesson_overrides = {}
+    if mode == "custom":
+        lesson_overrides[lesson_key] = custom_passage
+    else:
+        lesson_overrides.pop(lesson_key, None)
+    service_data["lesson_overrides"] = lesson_overrides
+    db.execute(
+        "update services set data=? where id=?",
+        (json.dumps(service_data), service_id),
+    )
+    db.commit()
+    if wants_json:
+        return jsonify(
+            {
+                "ok": True,
+                "lesson_key": lesson_key,
+                "mode": mode,
+                "custom_passage": lesson_overrides.get(lesson_key),
+            }
+        )
+    return redirect(url_for("main.service", service_id=service_id))
 
 
 @bp.route("/service/<int:service_id>/custom-element", methods=["POST"])
@@ -1482,6 +1604,9 @@ def persist_service():
     existing_data = (
         json.loads(existing["data"]) if existing and existing["data"] else {}
     )
+    lesson_overrides = existing_data.get("lesson_overrides")
+    if not isinstance(lesson_overrides, dict):
+        lesson_overrides = {}
     payload = {
         "user_id": g.user["id"],
         "title": existing_data.get("title"),
@@ -1489,6 +1614,7 @@ def persist_service():
         "season": None,
         "service_date": existing_data.get("service_date"),
         "observance_handle": existing_data.get("observance_handle"),
+        "lesson_overrides": lesson_overrides,
     }
     payload.update(
         {
@@ -1545,7 +1671,17 @@ def persist_service():
     db.commit()
     # flash('Service saved.')
     if is_autosave:
-        return jsonify({"ok": True})
+        return jsonify(
+            {
+                "ok": True,
+                "can_delete": bool(payload.get("service_date")),
+                "can_share": bool(payload.get("service_date")),
+                "observance_handle": payload.get("observance_handle"),
+                "lesson_defaults": _resolve_lesson_references(
+                    payload.get("service_date"), payload.get("observance_handle")
+                ),
+            }
+        )
     action = request.form.get("action", "")
     if action == "generate":
         return redirect(url_for("main.text", service_id=service_id))
@@ -1581,6 +1717,7 @@ def season_from_date():
 @bp.route("/observance")
 def observance_from_date():
     raw_date = request.args.get("date", "")
+    handle = request.args.get("handle", "")
     if not raw_date:
         return jsonify(
             {
@@ -1590,6 +1727,7 @@ def observance_from_date():
                 "season": None,
                 "options": [],
                 "default_handle": None,
+                "lesson_defaults": {},
             }
         )
     try:
@@ -1603,10 +1741,11 @@ def observance_from_date():
                 "season": None,
                 "options": [],
                 "default_handle": None,
+                "lesson_defaults": {},
             }
         )
     options = resolve_observance_options(service_date)
-    observance = options[0] if options else None
+    observance = resolve_observance(service_date, handle) if options else None
     season = resolve_season(service_date)
     if not observance:
         return jsonify(
@@ -1617,6 +1756,7 @@ def observance_from_date():
                 "season": season,
                 "options": [],
                 "default_handle": None,
+                "lesson_defaults": {},
             }
         )
     title = observance.name or observance.alternative_name
@@ -1637,5 +1777,8 @@ def observance_from_date():
             "subcycle": observance.subcycle,
             "options": options_payload,
             "default_handle": options_payload[0]["handle"] if options_payload else None,
+            "lesson_defaults": _resolve_lesson_references(
+                raw_date, observance.handle
+            ),
         }
     )

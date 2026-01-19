@@ -9,15 +9,11 @@
 				<div class="plan-header-actions">
 					<div class="plan-header-buttons">
 						<a class="button" id="plan-view-link" href="{{ url_for('main.text', service_id=service_id) }}">View</a>
-						{% if can_share %}
-						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}">Share</button>
-						{% endif %}
-						{% if can_delete %}
-						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
+						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')" data-plan-delete{% if not can_delete %} style="display: none;"{% endif %}>
 							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 							<button class="plan-submit" type="submit">Delete</button>
 						</form>
-						{% endif %}
 					</div>
 					<div class="plan-header-status">
 						<span class="plan-save-status" id="plan-save-status" aria-live="polite"></span>
@@ -79,13 +75,32 @@
 		<input type="hidden" name="rite" value="{{ service.rite or rite }}">
 	</form>
 
-	<ul class="plan-list">
+	<div class="plan-list-wrapper"{% if not service.service_date %} data-plan-locked="true"{% endif %}>
+		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Start by entering a service date to enable the full plan.</p>
+		<ul class="plan-list{% if not service.service_date %} is-disabled{% endif %}">
 	{% for ordinary in ordinaries %}
-		<li class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %} draggable="true">
+		{% set lesson_kind = '' %}
+		{% if ordinary.title == 'The Lessons' %}
+			{% if ordinary.detailed_title == 'The Lessons (1)' %}
+				{% set lesson_kind = 'lesson_1' %}
+			{% elif ordinary.detailed_title == 'The Lessons (Psalter)' %}
+				{% set lesson_kind = 'psalm' %}
+			{% elif ordinary.detailed_title == 'The Lessons (2)' %}
+				{% set lesson_kind = 'lesson_2' %}
+			{% elif ordinary.detailed_title == 'The Lessons (Gospel)' %}
+				{% set lesson_kind = 'gospel' %}
+			{% endif %}
+		{% endif %}
+		<li class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %} draggable="true">
 			<div class="plan-row-main">
 				<label class="plan-item">
 					<input type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
-					<span class="plan-title">{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}</span>
+					<span class="plan-title">
+						{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}
+						{% if lesson_kind %}
+						<span class="plan-lesson-override"{% if not lesson_overrides.get(lesson_kind) %} hidden{% endif %} data-lesson-indicator>Passage overridden</span>
+						{% endif %}
+					</span>
 					{% if ordinary.text %}
 						{% if ordinary.type == 'custom' %}
 							<small>{{ ordinary.text | markdown_user | striptags | clean | truncate(200) }}</small>
@@ -106,12 +121,16 @@
 						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
 					</form>
 					{% endif %}
+					{% if lesson_kind %}
+					<button class="plan-row-menu-item" type="button" data-lesson-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">⇄</span>Override passage</button>
+					{% endif %}
 					<button class="plan-row-menu-item" type="button" data-custom-add role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new</button>
 				</div>
 			</div>
 		</li>
 	{% endfor %}
-	</ul>
+		</ul>
+	</div>
 	<div class="share-modal" id="custom-element-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-custom-element-close></div>
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="custom-element-title">
@@ -153,6 +172,43 @@
 				</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-custom-element-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="share-modal" id="lesson-passage-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-lesson-passage-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="lesson-passage-title">
+			<h3 id="lesson-passage-title">Override passage</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.service_lesson_passage', service_id=service_id) }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<input type="hidden" name="service_id" value="{{ service_id }}">
+				<input type="hidden" name="lesson_key" value="">
+				<p class="plan-save-error" id="lesson-passage-error" aria-live="polite"></p>
+				<p>
+					<label class="plan-field">
+						<span>Passage</span>
+						<div class="plan-radio-group">
+							<label class="plan-radio-option">
+								<input type="radio" name="lesson_mode" value="default">
+								<span>Use default: <strong id="lesson-default-display"></strong></span>
+							</label>
+							<label class="plan-radio-option">
+								<input type="radio" name="lesson_mode" value="custom">
+								<span>Use custom passage</span>
+							</label>
+						</div>
+					</label>
+				</p>
+				<p data-lesson-custom-field>
+					<label class="plan-field">
+						<span>Custom passage</span>
+						<input type="text" name="custom_passage" id="lesson-custom-input" placeholder="e.g., John 3:16-18">
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-lesson-passage-close>Cancel</button>
 					<button class="plan-submit" type="submit">Save</button>
 				</div>
 			</form>
@@ -241,7 +297,6 @@
 			}
 		})
 
-		const planList = document.querySelector('.plan-list')
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
 		const planSeasonDisplay = document.querySelector('#plan-season-display')
@@ -251,6 +306,10 @@
 		const planObservanceSelect = document.querySelector('#plan-observance-select')
 		const planSaveStatus = document.querySelector('#plan-save-status')
 		const planSaveError = document.querySelector('#plan-save-error')
+		const planDeleteForm = document.querySelector('[data-plan-delete]')
+		const planListWrapper = document.querySelector('.plan-list-wrapper')
+		const planList = document.querySelector('.plan-list')
+		const planLockedMessage = document.querySelector('.plan-locked-message')
 		let draggedRow = null
 
 		const updatePlanInputs = () => {
@@ -294,6 +353,30 @@
 		let autosaveInFlight = false
 		let autosaveQueued = false
 
+		const updateLessonDefaults = (lessonDefaults) => {
+			if (!lessonDefaults || typeof lessonDefaults !== 'object') {
+				return
+			}
+			const shouldClear = Object.keys(lessonDefaults).length === 0
+			const rows = document.querySelectorAll('.plan-row[data-lesson-kind]')
+			rows.forEach((row) => {
+				const kind = row.getAttribute('data-lesson-kind')
+				if (!kind) {
+					return
+				}
+				const defaultValue = shouldClear ? '' : lessonDefaults[kind]
+				if (defaultValue !== undefined) {
+					row.setAttribute('data-lesson-default', defaultValue || '')
+				}
+			})
+			if (lessonModal && lessonModal.getAttribute('aria-hidden') === 'false' && activeLessonRow) {
+				const defaultValue = activeLessonRow.getAttribute('data-lesson-default') || ''
+				if (lessonDefaultDisplay) {
+					lessonDefaultDisplay.textContent = defaultValue || 'No default available. Set a service date to auto-detect.'
+				}
+			}
+		}
+
 		const runAutosave = async () => {
 			if (!planMetaForm) {
 				return true
@@ -323,6 +406,16 @@
 					setSaveError(message)
 					setSaveStatus('Not saved', 'error')
 					return false
+				}
+				const data = await response.json().catch(() => null)
+				if (data?.lesson_defaults) {
+					updateLessonDefaults(data.lesson_defaults)
+				}
+				if (planDeleteForm) {
+					planDeleteForm.style.display = data?.can_delete ? '' : 'none'
+				}
+				if (shareButton) {
+					shareButton.style.display = data?.can_share ? '' : 'none'
 				}
 				setSaveStatus('Saved', 'saved')
 				return true
@@ -360,6 +453,18 @@
 
 		if (planServiceDate && planServiceDate.value) {
 			setSaveStatus('Saved', 'saved')
+		}
+
+		const setPlanLocked = (locked) => {
+			if (planList) {
+				planList.classList.toggle('is-disabled', locked)
+			}
+			if (planListWrapper) {
+				planListWrapper.dataset.planLocked = locked ? 'true' : 'false'
+			}
+			if (planLockedMessage) {
+				planLockedMessage.style.display = locked ? '' : 'none'
+			}
 		}
 
 		if (planList) {
@@ -411,6 +516,7 @@
 		if (planServiceDate && planSeasonDisplay) {
 			const updateObservanceFromDate = async () => {
 				if (!planServiceDate.value) {
+					setPlanLocked(true)
 					planSeasonDisplay.textContent = 'Auto-detect'
 					if (planSeasonRow) {
 						planSeasonRow.style.display = 'none'
@@ -418,10 +524,19 @@
 					if (planObservanceRow) {
 						planObservanceRow.style.display = 'none'
 					}
+					updateLessonDefaults({})
+					if (planDeleteForm) {
+						planDeleteForm.style.display = 'none'
+					}
+					if (shareButton) {
+						shareButton.style.display = 'none'
+					}
 					return
 				}
+				setPlanLocked(false)
 				try {
-					const response = await fetch(`/observance?date=${planServiceDate.value}`)
+					const currentHandle = planObservanceSelect ? planObservanceSelect.value : ''
+					const response = await fetch(`/observance?date=${planServiceDate.value}&handle=${encodeURIComponent(currentHandle)}`)
 					if (!response.ok) {
 						return
 					}
@@ -459,6 +574,9 @@
 							planObservanceDisplay.style.display = options.length > 1 ? 'none' : ''
 						}
 					}
+					if (data?.lesson_defaults) {
+						updateLessonDefaults(data.lesson_defaults)
+					}
 				} catch (error) {
 					// Ignore lookup failures.
 				}
@@ -475,16 +593,39 @@
 
 		if (planObservanceSelect) {
 			planObservanceSelect.addEventListener('change', () => {
+				if (planServiceDate && planServiceDate.value) {
+					const selectedHandle = planObservanceSelect.value
+					fetch(`/observance?date=${planServiceDate.value}&handle=${encodeURIComponent(selectedHandle)}`)
+						.then((response) => (response.ok ? response.json() : null))
+						.then((data) => {
+							if (data?.lesson_defaults) {
+								updateLessonDefaults(data.lesson_defaults)
+							}
+						})
+						.catch(() => {
+							// Ignore lookup failures.
+						})
+				}
 				scheduleAutosave()
 			})
 		}
 
 		const customModal = document.querySelector('#custom-element-modal')
+		const lessonModal = document.querySelector('#lesson-passage-modal')
 		const customEditButtons = document.querySelectorAll('[data-custom-edit]')
 		const customAddButtons = document.querySelectorAll('[data-custom-add]')
+		const lessonEditButtons = document.querySelectorAll('[data-lesson-edit]')
 		const templateSelect = document.querySelector('#custom-template-select')
 		const rowMenus = document.querySelectorAll('[data-row-menu]')
 		const rowMenuToggles = document.querySelectorAll('[data-row-menu-toggle]')
+		const lessonForm = lessonModal?.querySelector('form')
+		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
+		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
+		const lessonCustomInput = lessonModal?.querySelector('input[name="custom_passage"]')
+		const lessonModeInputs = lessonModal?.querySelectorAll('input[name="lesson_mode"]')
+		const lessonError = lessonModal?.querySelector('#lesson-passage-error')
+		const lessonCustomField = lessonModal?.querySelector('[data-lesson-custom-field]')
+		let activeLessonRow = null
 
 		const closeRowMenus = (exceptMenu = null) => {
 			rowMenus.forEach((menu) => {
@@ -641,6 +782,136 @@
 			})
 		}
 
+		const setLessonMode = (mode) => {
+			if (!lessonModeInputs || !lessonModeInputs.length) {
+				return
+			}
+			lessonModeInputs.forEach((input) => {
+				input.checked = input.value === mode
+			})
+			if (lessonCustomInput) {
+				lessonCustomInput.disabled = mode !== 'custom'
+			}
+			if (lessonCustomField) {
+				lessonCustomField.hidden = mode !== 'custom'
+			}
+		}
+
+		const openLessonModal = (row) => {
+			if (!lessonModal || !row) {
+				return
+			}
+			activeLessonRow = row
+			const lessonKey = row.getAttribute('data-lesson-kind')
+			const defaultValue = row.getAttribute('data-lesson-default') || ''
+			const customValue = row.getAttribute('data-lesson-custom') || ''
+			if (lessonKeyInput) {
+				lessonKeyInput.value = lessonKey || ''
+			}
+			if (lessonDefaultDisplay) {
+				lessonDefaultDisplay.textContent = defaultValue || 'No default available. Set a service date to auto-detect.'
+			}
+			if (lessonCustomInput) {
+				lessonCustomInput.value = customValue
+			}
+			if (lessonError) {
+				lessonError.textContent = ''
+				lessonError.style.display = 'none'
+			}
+			setLessonMode(customValue ? 'custom' : 'default')
+			lessonModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (lessonCustomInput && customValue) {
+				lessonCustomInput.focus()
+			}
+		}
+
+		const closeLessonModal = () => {
+			if (!lessonModal) {
+				return
+			}
+			lessonModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			activeLessonRow = null
+		}
+
+		if (lessonEditButtons.length) {
+			lessonEditButtons.forEach((button) => {
+				button.addEventListener('click', () => {
+					const row = button.closest('.plan-row')
+					if (!row) {
+						return
+					}
+					closeRowMenus()
+					openLessonModal(row)
+				})
+			})
+		}
+
+		if (lessonModeInputs && lessonModeInputs.length) {
+			lessonModeInputs.forEach((input) => {
+				input.addEventListener('change', () => {
+					setLessonMode(input.value)
+				})
+			})
+		}
+
+		if (lessonForm) {
+			lessonForm.addEventListener('submit', async (event) => {
+				event.preventDefault()
+				if (!lessonForm.action) {
+					return
+				}
+				if (lessonError) {
+					lessonError.textContent = ''
+					lessonError.style.display = 'none'
+				}
+				const formData = new FormData(lessonForm)
+				try {
+					const response = await fetch(lessonForm.action, {
+						method: 'POST',
+						body: formData,
+						headers: {
+							Accept: 'application/json',
+							...csrfHeaders
+						}
+					})
+					if (!response.ok) {
+						const data = await response.json().catch(() => null)
+						const message = data?.error || 'Unable to save lesson passage.'
+						if (lessonError) {
+							lessonError.textContent = message
+							lessonError.style.display = 'block'
+						}
+						return
+					}
+					const data = await response.json().catch(() => null)
+					const mode = data?.mode || 'default'
+					const customPassage = data?.custom_passage || ''
+					if (activeLessonRow) {
+						const indicator = activeLessonRow.querySelector('[data-lesson-indicator]')
+						if (mode === 'custom') {
+							activeLessonRow.setAttribute('data-lesson-custom', customPassage)
+							if (indicator) {
+								indicator.hidden = false
+							}
+						} else {
+							activeLessonRow.setAttribute('data-lesson-custom', '')
+							if (indicator) {
+								indicator.hidden = true
+							}
+						}
+					}
+					closeLessonModal()
+				} catch (error) {
+					if (lessonError) {
+						lessonError.textContent = 'Unable to save lesson passage.'
+						lessonError.style.display = 'block'
+					}
+				}
+			})
+		}
+
 		if (customModal) {
 			customModal.addEventListener('click', (event) => {
 				if (event.target && event.target.matches('[data-custom-element-close]')) {
@@ -680,6 +951,14 @@
 						initialTextInput.value = ''
 					}
 					closeCustomModal()
+				}
+			})
+		}
+
+		if (lessonModal) {
+			lessonModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-lesson-passage-close]')) {
+					closeLessonModal()
 				}
 			})
 		}
@@ -827,6 +1106,12 @@
 		document.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape' && customModal && customModal.getAttribute('aria-hidden') === 'false') {
 				closeCustomModal()
+			}
+		})
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && lessonModal && lessonModal.getAttribute('aria-hidden') === 'false') {
+				closeLessonModal()
 			}
 		})
 

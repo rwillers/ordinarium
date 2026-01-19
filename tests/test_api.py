@@ -29,6 +29,7 @@ def test_observance_endpoint_handles_invalid_date(client):
     assert payload["title"] is None
     assert payload["handle"] is None
     assert payload["options"] == []
+    assert payload["lesson_defaults"] == {}
 
 
 def test_observance_endpoint_returns_options_for_date(client):
@@ -39,3 +40,11 @@ def test_observance_endpoint_returns_options_for_date(client):
     assert payload["title"] == "The First Sunday in Advent"
     assert payload["season"] == "Advent"
     assert payload["options"]
+    lesson_defaults = payload["lesson_defaults"]
+    assert isinstance(lesson_defaults, dict)
+    assert set(lesson_defaults.keys()) == {
+        "lesson_1",
+        "psalm",
+        "lesson_2",
+        "gospel",
+    }
