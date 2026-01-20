@@ -91,7 +91,8 @@
 				{% set lesson_kind = 'gospel' %}
 			{% endif %}
 		{% endif %}
-		<li class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %} draggable="true">
+		{% set is_offertory = ordinary.title == 'The Offertory' %}
+		<li class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
 			<div class="plan-row-main">
 				<label class="plan-item">
 					<input type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
@@ -123,6 +124,9 @@
 					{% endif %}
 					{% if lesson_kind %}
 					<button class="plan-row-menu-item" type="button" data-lesson-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">⇄</span>Override passage</button>
+					{% endif %}
+					{% if is_offertory %}
+					<button class="plan-row-menu-item" type="button" data-offertory-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✓</span>Select sentence</button>
 					{% endif %}
 					<button class="plan-row-menu-item" type="button" data-custom-add role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new</button>
 				</div>
@@ -209,6 +213,31 @@
 				</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-lesson-passage-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="share-modal" id="offertory-sentence-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-offertory-sentence-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="offertory-sentence-title">
+			<h3 id="offertory-sentence-title">Select sentence</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.service_offertory_sentence', service_id=service_id) }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<p class="plan-save-error" id="offertory-sentence-error" aria-live="polite"></p>
+				<p>
+					<label class="plan-field">
+						<span>Offertory sentence</span>
+						<select name="offertory_sentence_id" id="offertory-sentence-select">
+							<option value=""{% if not offertory_sentence_id %} selected{% endif %}>Use default{% if offertory_default_label %}: {{ offertory_default_label | e }}{% endif %}</option>
+							{% for option in offertory_sentences %}
+							<option value="{{ option.id }}"{% if option.id == offertory_sentence_id %} selected{% endif %}>{{ option.label | e }}</option>
+							{% endfor %}
+						</select>
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-offertory-sentence-close>Cancel</button>
 					<button class="plan-submit" type="submit">Save</button>
 				</div>
 			</form>
@@ -612,16 +641,21 @@
 
 		const customModal = document.querySelector('#custom-element-modal')
 		const lessonModal = document.querySelector('#lesson-passage-modal')
+		const offertoryModal = document.querySelector('#offertory-sentence-modal')
 		const templateSelect = document.querySelector('#custom-template-select')
 		const customForm = customModal?.querySelector('form')
 		const lessonForm = lessonModal?.querySelector('form')
+		const offertoryForm = offertoryModal?.querySelector('form')
 		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
 		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
 		const lessonCustomInput = lessonModal?.querySelector('input[name="custom_passage"]')
 		const lessonModeInputs = lessonModal?.querySelectorAll('input[name="lesson_mode"]')
 		const lessonError = lessonModal?.querySelector('#lesson-passage-error')
 		const lessonCustomField = lessonModal?.querySelector('[data-lesson-custom-field]')
+		const offertorySelect = offertoryModal?.querySelector('#offertory-sentence-select')
+		const offertoryError = offertoryModal?.querySelector('#offertory-sentence-error')
 		let activeLessonRow = null
+		let activeOffertoryRow = null
 		const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
 
 		const closeRowMenus = (exceptMenu = null) => {
@@ -776,6 +810,16 @@
 				openLessonModal(row)
 				return
 			}
+			const offertoryEditButton = event.target.closest('[data-offertory-edit]')
+			if (offertoryEditButton) {
+				const row = offertoryEditButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				closeRowMenus()
+				openOffertoryModal(row)
+				return
+			}
 			if (!event.target.closest('[data-row-menu]')) {
 				closeRowMenus()
 			}
@@ -832,6 +876,35 @@
 			lessonModal.setAttribute('aria-hidden', 'true')
 			document.body.classList.remove('is-modal-open')
 			activeLessonRow = null
+		}
+
+		const openOffertoryModal = (row) => {
+			if (!offertoryModal || !row) {
+				return
+			}
+			activeOffertoryRow = row
+			const selectedValue = row.getAttribute('data-offertory-sentence-id') || ''
+			if (offertorySelect) {
+				offertorySelect.value = selectedValue
+			}
+			if (offertoryError) {
+				offertoryError.textContent = ''
+				offertoryError.style.display = 'none'
+			}
+			offertoryModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (offertorySelect) {
+				offertorySelect.focus()
+			}
+		}
+
+		const closeOffertoryModal = () => {
+			if (!offertoryModal) {
+				return
+			}
+			offertoryModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			activeOffertoryRow = null
 		}
 
 		if (lessonModeInputs && lessonModeInputs.length) {
@@ -898,6 +971,54 @@
 			})
 		}
 
+		if (offertoryForm) {
+			offertoryForm.addEventListener('submit', async (event) => {
+				event.preventDefault()
+				if (!offertoryForm.action) {
+					return
+				}
+				if (offertoryError) {
+					offertoryError.textContent = ''
+					offertoryError.style.display = 'none'
+				}
+				const formData = new FormData(offertoryForm)
+				try {
+					const response = await fetch(offertoryForm.action, {
+						method: 'POST',
+						body: formData,
+						headers: {
+							Accept: 'application/json',
+							...csrfHeaders
+						}
+					})
+					if (!response.ok) {
+						const data = await response.json().catch(() => null)
+						const message = data?.error || 'Unable to save offertory sentence.'
+						if (offertoryError) {
+							offertoryError.textContent = message
+							offertoryError.style.display = 'block'
+						}
+						return
+					}
+					const data = await response.json().catch(() => null)
+					const selectedId = data?.offertory_sentence_id
+					if (activeOffertoryRow) {
+						activeOffertoryRow.setAttribute(
+							'data-offertory-sentence-id',
+							selectedId ? String(selectedId) : ''
+						)
+					}
+					closeOffertoryModal()
+				} catch (error) {
+					if (offertoryError) {
+						offertoryError.textContent = 'Unable to save offertory sentence.'
+						offertoryError.style.display = 'block'
+					}
+				}
+			})
+		}
+
+
 		if (customModal) {
 			customModal.addEventListener('click', (event) => {
 				if (event.target && event.target.matches('[data-custom-element-close]')) {
@@ -945,6 +1066,14 @@
 			lessonModal.addEventListener('click', (event) => {
 				if (event.target && event.target.matches('[data-lesson-passage-close]')) {
 					closeLessonModal()
+				}
+			})
+		}
+
+		if (offertoryModal) {
+			offertoryModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-offertory-sentence-close]')) {
+					closeOffertoryModal()
 				}
 			})
 		}
@@ -1340,6 +1469,12 @@
 		document.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape' && lessonModal && lessonModal.getAttribute('aria-hidden') === 'false') {
 				closeLessonModal()
+			}
+		})
+
+		document.addEventListener('keydown', (event) => {
+			if (event.key === 'Escape' && offertoryModal && offertoryModal.getAttribute('aria-hidden') === 'false') {
+				closeOffertoryModal()
 			}
 		})
 

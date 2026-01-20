@@ -348,6 +348,7 @@ input[type="text"], input[type="date"], select {
 	font-size: 0.9em;
 	padding: 0.3em;
 }
+
 .button {
   display: inline-block;
   text-decoration: none;

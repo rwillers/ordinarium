@@ -37,6 +37,7 @@ from .liturgical_calendar import (
 
 bp = Blueprint("main", __name__)
 DEFAULT_RITE = "Renewed Ancient Text"
+OFFERTORY_DEFAULT_PREFIX = "Walk in love, as Christ loved us"
 
 
 # Utility functions
@@ -131,6 +132,7 @@ def _blank_service_payload(user_id, rite=DEFAULT_RITE):
         "text_disabled": None,
         "observance_handle": None,
         "lesson_overrides": {},
+        "offertory_sentence_id": None,
     }
 
 
@@ -146,9 +148,11 @@ def _create_service(db, payload):
 def _enforce_csrf():
     if request.method != "POST":
         return None
-    token = request.form.get("csrf_token") or request.headers.get(
-        "X-CSRF-Token"
-    ) or request.headers.get("X-CSRFToken")
+    token = (
+        request.form.get("csrf_token")
+        or request.headers.get("X-CSRF-Token")
+        or request.headers.get("X-CSRFToken")
+    )
     if not _csrf_token_matches(token):
         return ("Invalid CSRF token.", 400)
     return None
@@ -171,7 +175,9 @@ def _password_reset_expires_at():
 def _send_email(recipient, subject, body):
     host = current_app.config.get("SMTP_HOST")
     if not host:
-        current_app.logger.info("Email to %s\nSubject: %s\n\n%s", recipient, subject, body)
+        current_app.logger.info(
+            "Email to %s\nSubject: %s\n\n%s", recipient, subject, body
+        )
         return True
     port = int(current_app.config.get("SMTP_PORT", 587))
     username = current_app.config.get("SMTP_USERNAME")
@@ -807,9 +813,7 @@ def build_plan_context(service_id, rite):
         "select text_order, text_disabled, title, season, service_date, rite, data from services where id=? and user_id=? limit 1",
         (service_id, g.user["id"]),
     ).fetchone()
-    effective_rite = (
-        saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite
-    )
+    effective_rite = saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite
     rite_slug = effective_rite.replace(" ", "_").lower()
     saved_data = (
         json.loads(saved_plan["data"]) if saved_plan and saved_plan["data"] else {}
@@ -875,6 +879,23 @@ def build_plan_context(service_id, rite):
     lesson_overrides = saved_data.get("lesson_overrides")
     if not isinstance(lesson_overrides, dict):
         lesson_overrides = {}
+    offertory_sentences = _load_offertory_sentences(db)
+    offertory_default = _offertory_default_row(db)
+    offertory_default_label = ""
+    if offertory_default:
+        offertory_default_label = _format_offertory_label(offertory_default["text"])
+    elif offertory_sentences:
+        offertory_default_label = offertory_sentences[0]["label"]
+    offertory_ids = {sentence["id"] for sentence in offertory_sentences}
+    raw_offertory_id = saved_data.get("offertory_sentence_id")
+    selected_offertory_id = None
+    if raw_offertory_id is not None:
+        try:
+            parsed_id = int(raw_offertory_id)
+        except (TypeError, ValueError):
+            parsed_id = None
+        if parsed_id in offertory_ids:
+            selected_offertory_id = parsed_id
     return {
         "rite": effective_rite,
         "rite_slug": rite_slug,
@@ -888,6 +909,9 @@ def build_plan_context(service_id, rite):
         "custom_templates": load_custom_templates(g.user["id"]),
         "lesson_overrides": lesson_overrides,
         "lesson_defaults": lesson_defaults,
+        "offertory_sentences": offertory_sentences,
+        "offertory_sentence_id": selected_offertory_id,
+        "offertory_default_label": offertory_default_label,
     }
 
 
@@ -966,7 +990,9 @@ def services_new():
             if source_data.get("rite") != rite:
                 return render_error("Service rite does not match.", 400)
 
-            payload = _blank_service_payload(g.user["id"], source_data.get("rite") or DEFAULT_RITE)
+            payload = _blank_service_payload(
+                g.user["id"], source_data.get("rite") or DEFAULT_RITE
+            )
             new_service_id = _create_service(db, payload)
 
             custom_rows = db.execute(
@@ -1007,14 +1033,16 @@ def services_new():
             payload["text_disabled"] = json.dumps(disabled_tokens)
             if isinstance(source_data.get("lesson_overrides"), dict):
                 payload["lesson_overrides"] = source_data.get("lesson_overrides")
+            if source_data.get("offertory_sentence_id") is not None:
+                payload["offertory_sentence_id"] = source_data.get(
+                    "offertory_sentence_id"
+                )
             db.execute(
                 "update services set data=? where id=?",
                 (json.dumps(payload), new_service_id),
             )
             db.commit()
-            return redirect(
-                url_for("main.service", service_id=new_service_id)
-            )
+            return redirect(url_for("main.service", service_id=new_service_id))
     payload = _blank_service_payload(g.user["id"], rite)
     new_service_id = _create_service(db, payload)
     db.commit()
@@ -1115,6 +1143,65 @@ def _resolve_lesson_references(service_date, observance_handle):
     }
 
 
+def _offertory_default_row(db):
+    return db.execute(
+        "select id, text from texts where type=? and text like ? order by id limit 1",
+        ("offertory_sentence", f"{OFFERTORY_DEFAULT_PREFIX}%"),
+    ).fetchone()
+
+
+def _format_offertory_label(text, limit=110):
+    if not text:
+        return ""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in lines:
+        if line.startswith("######"):
+            continue
+        label = line
+        if len(label) > limit:
+            label = label[: max(limit - 3, 0)].rstrip() + "..."
+        return label
+    return ""
+
+
+def _load_offertory_sentences(db):
+    rows = db.execute(
+        "select id, text from texts where type=? order by id",
+        ("offertory_sentence",),
+    ).fetchall()
+    return [
+        {
+            "id": row["id"],
+            "text": row["text"],
+            "label": _format_offertory_label(row["text"]),
+        }
+        for row in rows
+    ]
+
+
+def _resolve_offertory_sentence(db, offertory_sentence_id=None):
+    sentence_id = None
+    if offertory_sentence_id:
+        try:
+            sentence_id = int(offertory_sentence_id)
+        except (TypeError, ValueError):
+            sentence_id = None
+    if sentence_id:
+        row = db.execute(
+            "select text from texts where id=? and type=? limit 1",
+            (sentence_id, "offertory_sentence"),
+        ).fetchone()
+        if row:
+            return row
+    default_row = _offertory_default_row(db)
+    if default_row:
+        return default_row
+    return db.execute(
+        "select text from texts where type=? order by id limit 1",
+        ("offertory_sentence",),
+    ).fetchone()
+
+
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not saved_service:
         return render_error("Service ID required to generate text.", 400)
@@ -1168,10 +1255,9 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("acclamation", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
-    offertory_sentence = db.execute(
-        "select text from texts where type=? order by random() limit 1",
-        ("offertory_sentence",),
-    ).fetchone()
+    offertory_sentence = _resolve_offertory_sentence(
+        db, saved_data.get("offertory_sentence_id")
+    )
     proper_preface = None
     if season:
         proper_preface = db.execute(
@@ -1399,6 +1485,67 @@ def service_lesson_passage(service_id):
     return redirect(url_for("main.service", service_id=service_id))
 
 
+@bp.route("/service/<int:service_id>/offertory-sentence", methods=["POST"])
+@login_required
+def service_offertory_sentence(service_id):
+    def normalize_value(value):
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    wants_json = "application/json" in request.headers.get("Accept", "")
+    raw_sentence_id = normalize_value(request.form.get("offertory_sentence_id"))
+    sentence_id = None
+    if raw_sentence_id:
+        try:
+            sentence_id = int(raw_sentence_id)
+        except (TypeError, ValueError):
+            sentence_id = None
+    if raw_sentence_id and sentence_id is None:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Invalid offertory selection."}), 400
+        flash("Invalid offertory selection.", "error")
+        return redirect(url_for("main.service", service_id=service_id))
+
+    db = get_db()
+    existing = db.execute(
+        "select data from services where id=? and user_id=? limit 1",
+        (service_id, g.user["id"]),
+    ).fetchone()
+    if not existing:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
+        return render_error("Service not found.", 404)
+    if sentence_id is not None:
+        valid = db.execute(
+            "select id from texts where id=? and type=? limit 1",
+            (sentence_id, "offertory_sentence"),
+        ).fetchone()
+        if not valid:
+            if wants_json:
+                return (
+                    jsonify({"ok": False, "error": "Offertory sentence not found."}),
+                    404,
+                )
+            flash("Offertory sentence not found.", "error")
+            return redirect(url_for("main.service", service_id=service_id))
+
+    service_data = json.loads(existing["data"]) if existing["data"] else {}
+    if sentence_id is None:
+        service_data.pop("offertory_sentence_id", None)
+    else:
+        service_data["offertory_sentence_id"] = sentence_id
+    db.execute(
+        "update services set data=? where id=?",
+        (json.dumps(service_data), service_id),
+    )
+    db.commit()
+    if wants_json:
+        return jsonify({"ok": True, "offertory_sentence_id": sentence_id})
+    return redirect(url_for("main.service", service_id=service_id))
+
+
 @bp.route("/service/<int:service_id>/custom-element", methods=["POST"])
 @login_required
 def service_add_custom_element(service_id):
@@ -1414,10 +1561,9 @@ def service_add_custom_element(service_id):
     rite = normalize_value(request.form.get("rite")) or DEFAULT_RITE
     custom_id = normalize_value(request.form.get("custom_id"))
     insert_after = normalize_value(request.form.get("insert_after"))
-    is_autosave = (
-        request.form.get("autosave") == "1"
-        or "application/json" in request.headers.get("Accept", "")
-    )
+    is_autosave = request.form.get(
+        "autosave"
+    ) == "1" or "application/json" in request.headers.get("Accept", "")
     if custom_id:
         try:
             custom_id = int(custom_id)
@@ -1579,10 +1725,9 @@ def persist_service():
         value = value.strip()
         return value or None
 
-    is_autosave = (
-        request.form.get("autosave") == "1"
-        or "application/json" in request.headers.get("Accept", "")
-    )
+    is_autosave = request.form.get(
+        "autosave"
+    ) == "1" or "application/json" in request.headers.get("Accept", "")
 
     service_id = request.form.get("service_id")
     try:
@@ -1633,6 +1778,7 @@ def persist_service():
         "service_date": existing_data.get("service_date"),
         "observance_handle": existing_data.get("observance_handle"),
         "lesson_overrides": lesson_overrides,
+        "offertory_sentence_id": existing_data.get("offertory_sentence_id"),
     }
     payload.update(
         {
@@ -1795,8 +1941,6 @@ def observance_from_date():
             "subcycle": observance.subcycle,
             "options": options_payload,
             "default_handle": options_payload[0]["handle"] if options_payload else None,
-            "lesson_defaults": _resolve_lesson_references(
-                raw_date, observance.handle
-            ),
+            "lesson_defaults": _resolve_lesson_references(raw_date, observance.handle),
         }
     )
