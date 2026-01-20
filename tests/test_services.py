@@ -162,6 +162,38 @@ def test_service_denies_other_user(auth_client, service_factory, user_factory):
     assert b"Service not found" in response.data
 
 
+def test_service_delete_removes_related_rows(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(user_id=user_id, service_id=31)
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (service_id, user_id, "Custom Blessing", "Custom text"),
+        )
+        db.execute(
+            "insert into service_shares (service_id, share_uuid) values (?, ?)",
+            (service_id, "share-uuid-1"),
+        )
+        db.commit()
+
+    response = client.post(f"/service/{service_id}/delete")
+    assert response.status_code == 302
+
+    with app.app_context():
+        db = get_db()
+        element_count = db.execute(
+            "select count(*) from service_custom_elements where service_id=?",
+            (service_id,),
+        ).fetchone()[0]
+        share_count = db.execute(
+            "select count(*) from service_shares where service_id=?",
+            (service_id,),
+        ).fetchone()[0]
+        assert element_count == 0
+        assert share_count == 0
+
+
 def test_service_plan_uses_saved_rite_ordinaries(auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=60, rite="Anglican Standard Text")

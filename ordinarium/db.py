@@ -11,6 +11,8 @@ def get_db():
             detect_types=sqlite3.PARSE_DECLTYPES,
         )
         g.db.row_factory = sqlite3.Row
+        # Enforce FK constraints (disabled by default in SQLite).
+        g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
 
 

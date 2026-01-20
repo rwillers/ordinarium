@@ -1054,6 +1054,14 @@ def services_new():
 def service_delete(service_id):
     db = get_db()
     db.execute(
+        "delete from service_custom_elements where service_id=? and user_id=?",
+        (service_id, g.user["id"]),
+    )
+    db.execute(
+        "delete from service_shares where service_id=?",
+        (service_id,),
+    )
+    db.execute(
         "delete from services where id=? and user_id=?", (service_id, g.user["id"])
     )
     db.commit()

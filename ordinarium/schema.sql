@@ -218,17 +218,39 @@ CREATE TABLE service_shares (
   id INTEGER PRIMARY KEY,
   service_id INTEGER NOT NULL,
   share_uuid TEXT NOT NULL,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_service_shares_service_id ON service_shares(service_id);
 CREATE UNIQUE INDEX idx_service_shares_uuid ON service_shares(share_uuid);
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  data JSON,
+  first_name TEXT GENERATED ALWAYS AS (json_extract(data, '$.first_name')) VIRTUAL,
+  last_name TEXT GENERATED ALWAYS AS (json_extract(data, '$.last_name')) VIRTUAL,
+  email TEXT GENERATED ALWAYS AS (json_extract(data, '$.email')) VIRTUAL
+);
+CREATE INDEX idx_users_email ON users(email);
+CREATE TABLE password_reset_tokens (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  token_hash TEXT UNIQUE NOT NULL,
+  expires_at TEXT NOT NULL,
+  used_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
+CREATE INDEX idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 CREATE TABLE service_custom_elements (
   id INTEGER PRIMARY KEY,
   service_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   title TEXT NOT NULL,
   text TEXT NOT NULL,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_service_custom_elements_service_id ON service_custom_elements(service_id);
 CREATE INDEX idx_service_custom_elements_user_id ON service_custom_elements(user_id);
@@ -238,7 +260,8 @@ CREATE TABLE service_custom_templates (
   title TEXT NOT NULL,
   text TEXT NOT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 CREATE INDEX idx_service_custom_templates_user_id ON service_custom_templates(user_id);
 CREATE INDEX idx_service_custom_templates_updated_at ON service_custom_templates(updated_at);
@@ -358,25 +381,6 @@ INSERT INTO "texts" VALUES(96, '{"type":"ordinarium","filter":{"type":"rite","co
 CREATE INDEX idx_texts_type on texts(type);
 CREATE INDEX idx_texts_filter_type on texts(filter_type);
 CREATE INDEX idx_texts_filter_content on texts(filter_content);
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY,
-  data JSON,
-  first_name TEXT GENERATED ALWAYS AS (json_extract(data, '$.first_name')) VIRTUAL,
-  last_name TEXT GENERATED ALWAYS AS (json_extract(data, '$.last_name')) VIRTUAL,
-  email TEXT GENERATED ALWAYS AS (json_extract(data, '$.email')) VIRTUAL
-);
-CREATE INDEX idx_users_email ON users(email);
-CREATE TABLE password_reset_tokens (
-  id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  token_hash TEXT UNIQUE NOT NULL,
-  expires_at TEXT NOT NULL,
-  used_at TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
-CREATE INDEX idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 INSERT INTO "texts" VALUES(97, '{"type": "collect", "filter": {"type": "proper", "content": "AdventI"}, "text": "Almighty God, give us grace to cast away the works of darkness, and put on the armor of light, now in the time of this mortal life in which your Son Jesus Christ came to visit us in great humility; that in the last day, when he shall come again in his glorious majesty to judge both the living and the dead, we may rise to the life immortal; through him who lives and reigns with you and the Holy Spirit, one God, now and for ever. **Amen.**", "default_order": 0}');
 INSERT INTO "texts" VALUES(98, '{"type": "collect", "filter": {"type": "proper", "content": "AdventII"}, "text": "Blessed Lord, who caused all holy Scriptures to be written for our learning: Grant us so to hear them, read, mark, learn, and inwardly digest them, that by patience and the comfort of your holy Word we may embrace and ever hold fast the blessed hope of everlasting life, which you have given us in our Savior Jesus Christ; who lives and reigns with you and the Holy Spirit, one God, for ever and ever. **Amen.**", "default_order": 0}');
 INSERT INTO "texts" VALUES(99, '{"type": "collect", "filter": {"type": "proper", "content": "AdventIII"}, "text": "O Lord Jesus Christ, you sent your messengers the prophets to preach repentance and prepare the way for our salvation: Grant that the ministers and stewards of your mysteries may likewise make ready your way, by turning the hearts of the disobedient toward the wisdom of the just, that at your second coming to judge the world, we may be found a people acceptable in your sight; for with the Father and the Holy Spirit you live and reign, one God, now and for ever. **Amen.**", "default_order": 0}');
