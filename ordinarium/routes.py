@@ -1509,6 +1509,17 @@ def service_add_custom_element(service_id):
         (json.dumps(service_data), service_id),
     )
     db.commit()
+    if is_autosave:
+        return jsonify(
+            {
+                "ok": True,
+                "custom_id": cursor.lastrowid,
+                "title": title,
+                "text": text_value,
+                "token": custom_token,
+                "insert_after": insert_after,
+            }
+        )
     return redirect(url_for("main.service", service_id=service_id))
 
 
@@ -1517,17 +1528,22 @@ def service_add_custom_element(service_id):
 )
 @login_required
 def service_delete_custom_element(service_id, custom_id):
+    wants_json = "application/json" in request.headers.get("Accept", "")
     db = get_db()
     existing = db.execute(
         "select user_id, data from services where id=? limit 1", (service_id,)
     ).fetchone()
     if not existing or existing["user_id"] != g.user["id"]:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
     element = db.execute(
         "select id from service_custom_elements where id=? and service_id=? and user_id=? limit 1",
         (custom_id, service_id, g.user["id"]),
     ).fetchone()
     if not element:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Custom element not found."}), 404
         return render_error("Custom element not found.", 404)
     db.execute(
         "delete from service_custom_elements where id=? and service_id=? and user_id=?",
@@ -1549,6 +1565,8 @@ def service_delete_custom_element(service_id, custom_id):
         (json.dumps(service_data), service_id),
     )
     db.commit()
+    if wants_json:
+        return jsonify({"ok": True, "custom_id": custom_id, "token": token})
     return redirect(url_for("main.service", service_id=service_id))
 
 

@@ -116,7 +116,7 @@
 				<div class="plan-row-menu-panel" role="menu">
 					{% if ordinary.type == 'custom' %}
 					<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
-					<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" onsubmit="return confirm('Remove this custom element from the service plan?')">
+					<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
 					</form>
@@ -612,12 +612,8 @@
 
 		const customModal = document.querySelector('#custom-element-modal')
 		const lessonModal = document.querySelector('#lesson-passage-modal')
-		const customEditButtons = document.querySelectorAll('[data-custom-edit]')
-		const customAddButtons = document.querySelectorAll('[data-custom-add]')
-		const lessonEditButtons = document.querySelectorAll('[data-lesson-edit]')
 		const templateSelect = document.querySelector('#custom-template-select')
-		const rowMenus = document.querySelectorAll('[data-row-menu]')
-		const rowMenuToggles = document.querySelectorAll('[data-row-menu-toggle]')
+		const customForm = customModal?.querySelector('form')
 		const lessonForm = lessonModal?.querySelector('form')
 		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
 		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
@@ -626,9 +622,11 @@
 		const lessonError = lessonModal?.querySelector('#lesson-passage-error')
 		const lessonCustomField = lessonModal?.querySelector('[data-lesson-custom-field]')
 		let activeLessonRow = null
+		const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
 
 		const closeRowMenus = (exceptMenu = null) => {
-			rowMenus.forEach((menu) => {
+			const menus = document.querySelectorAll('[data-row-menu]')
+			menus.forEach((menu) => {
 				if (menu === exceptMenu) {
 					return
 				}
@@ -643,32 +641,6 @@
 				}
 			})
 		}
-
-		if (rowMenuToggles.length) {
-			rowMenuToggles.forEach((toggle) => {
-				toggle.addEventListener('click', (event) => {
-					event.stopPropagation()
-					const menu = toggle.closest('[data-row-menu]')
-					if (!menu) {
-						return
-					}
-					const isOpen = !menu.classList.contains('is-open')
-					closeRowMenus(menu)
-					menu.classList.toggle('is-open', isOpen)
-					toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
-					const row = menu.closest('.plan-row')
-					if (row) {
-						row.classList.toggle('is-menu-open', isOpen)
-					}
-				})
-			})
-		}
-
-		document.addEventListener('click', (event) => {
-			if (!event.target.closest('[data-row-menu]')) {
-				closeRowMenus()
-			}
-		})
 
 		const openCustomModal = (mode) => {
 			if (!customModal) {
@@ -748,39 +720,66 @@
 			customModal.dataset.mode = ''
 		}
 
-		if (customEditButtons.length) {
-			customEditButtons.forEach((button) => {
-				button.addEventListener('click', () => {
-					const row = button.closest('.plan-row')
-					if (!row) {
-						return
-					}
-					closeRowMenus()
-					openCustomModal({
-						type: 'edit',
-						id: row.getAttribute('data-custom-id'),
-						title: row.getAttribute('data-custom-title'),
-						text: row.getAttribute('data-custom-text')
-					})
+		document.addEventListener('click', (event) => {
+			const rowMenuToggle = event.target.closest('[data-row-menu-toggle]')
+			if (rowMenuToggle) {
+				event.stopPropagation()
+				const menu = rowMenuToggle.closest('[data-row-menu]')
+				if (!menu) {
+					return
+				}
+				const isOpen = !menu.classList.contains('is-open')
+				closeRowMenus(menu)
+				menu.classList.toggle('is-open', isOpen)
+				rowMenuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
+				const row = menu.closest('.plan-row')
+				if (row) {
+					row.classList.toggle('is-menu-open', isOpen)
+				}
+				return
+			}
+			const customEditButton = event.target.closest('[data-custom-edit]')
+			if (customEditButton) {
+				const row = customEditButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				closeRowMenus()
+				openCustomModal({
+					type: 'edit',
+					id: row.getAttribute('data-custom-id'),
+					title: row.getAttribute('data-custom-title'),
+					text: row.getAttribute('data-custom-text')
 				})
-			})
-		}
-
-		if (customAddButtons.length) {
-			customAddButtons.forEach((button) => {
-				button.addEventListener('click', () => {
-					const row = button.closest('.plan-row')
-					if (!row) {
-						return
-					}
-					closeRowMenus()
-					openCustomModal({
-						type: 'add',
-						insertAfter: row.getAttribute('data-plan-token')
-					})
+				return
+			}
+			const customAddButton = event.target.closest('[data-custom-add]')
+			if (customAddButton) {
+				const row = customAddButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				closeRowMenus()
+				openCustomModal({
+					type: 'add',
+					insertAfter: row.getAttribute('data-plan-token')
 				})
-			})
-		}
+				return
+			}
+			const lessonEditButton = event.target.closest('[data-lesson-edit]')
+			if (lessonEditButton) {
+				const row = lessonEditButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				closeRowMenus()
+				openLessonModal(row)
+				return
+			}
+			if (!event.target.closest('[data-row-menu]')) {
+				closeRowMenus()
+			}
+		})
 
 		const setLessonMode = (mode) => {
 			if (!lessonModeInputs || !lessonModeInputs.length) {
@@ -833,19 +832,6 @@
 			lessonModal.setAttribute('aria-hidden', 'true')
 			document.body.classList.remove('is-modal-open')
 			activeLessonRow = null
-		}
-
-		if (lessonEditButtons.length) {
-			lessonEditButtons.forEach((button) => {
-				button.addEventListener('click', () => {
-					const row = button.closest('.plan-row')
-					if (!row) {
-						return
-					}
-					closeRowMenus()
-					openLessonModal(row)
-				})
-			})
 		}
 
 		if (lessonModeInputs && lessonModeInputs.length) {
@@ -993,6 +979,136 @@
 			return text.slice(0, limit - 1) + '…'
 		}
 
+		const createCustomRowElement = ({ customId, title, text, token }) => {
+			const row = document.createElement('li')
+			row.className = 'plan-row'
+			row.setAttribute('data-plan-token', token)
+			row.setAttribute('data-custom-title', title || '')
+			row.setAttribute('data-custom-text', text || '')
+			row.setAttribute('data-custom-id', customId)
+			row.setAttribute('draggable', 'true')
+
+			const main = document.createElement('div')
+			main.className = 'plan-row-main'
+
+			const label = document.createElement('label')
+			label.className = 'plan-item'
+
+			const checkbox = document.createElement('input')
+			checkbox.type = 'checkbox'
+			checkbox.name = 'ordinaries'
+			checkbox.value = token
+			checkbox.checked = true
+
+			const titleSpan = document.createElement('span')
+			titleSpan.className = 'plan-title'
+			titleSpan.textContent = title || ''
+
+			label.appendChild(checkbox)
+			label.appendChild(titleSpan)
+
+			if (text) {
+				const small = document.createElement('small')
+				small.textContent = truncateText(text)
+				label.appendChild(small)
+			}
+
+			const handle = document.createElement('span')
+			handle.className = 'plan-handle'
+			handle.setAttribute('aria-hidden', 'true')
+			handle.textContent = '⠿'
+
+			main.appendChild(label)
+			main.appendChild(handle)
+			row.appendChild(main)
+
+			const menu = document.createElement('div')
+			menu.className = 'plan-row-menu'
+			menu.setAttribute('data-row-menu', '')
+
+			const toggle = document.createElement('button')
+			toggle.className = 'plan-icon-button plan-menu-toggle'
+			toggle.type = 'button'
+			toggle.setAttribute('data-row-menu-toggle', '')
+			toggle.setAttribute('aria-expanded', 'false')
+			toggle.setAttribute('aria-haspopup', 'true')
+			toggle.setAttribute('aria-label', 'Row actions')
+			toggle.textContent = '▾'
+
+			const panel = document.createElement('div')
+			panel.className = 'plan-row-menu-panel'
+			panel.setAttribute('role', 'menu')
+
+			const editButton = document.createElement('button')
+			editButton.className = 'plan-row-menu-item'
+			editButton.type = 'button'
+			editButton.setAttribute('data-custom-edit', '')
+			editButton.setAttribute('role', 'menuitem')
+			editButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit'
+
+			const deleteForm = document.createElement('form')
+			deleteForm.action = serviceId
+				? `/service/${serviceId}/custom-element/${customId}/delete`
+				: ''
+			deleteForm.method = 'post'
+			deleteForm.setAttribute('data-custom-delete', '')
+			deleteForm.onsubmit = () =>
+				window.confirm('Remove this custom element from the service plan?')
+
+			if (csrfToken) {
+				const csrfInput = document.createElement('input')
+				csrfInput.type = 'hidden'
+				csrfInput.name = 'csrf_token'
+				csrfInput.value = csrfToken
+				deleteForm.appendChild(csrfInput)
+			}
+
+			const deleteButton = document.createElement('button')
+			deleteButton.className = 'plan-row-menu-item plan-row-menu-delete'
+			deleteButton.type = 'submit'
+			deleteButton.setAttribute('role', 'menuitem')
+			deleteButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete'
+
+			deleteForm.appendChild(deleteButton)
+
+			const addButton = document.createElement('button')
+			addButton.className = 'plan-row-menu-item'
+			addButton.type = 'button'
+			addButton.setAttribute('data-custom-add', '')
+			addButton.setAttribute('role', 'menuitem')
+			addButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new'
+
+			panel.appendChild(editButton)
+			panel.appendChild(deleteForm)
+			panel.appendChild(addButton)
+
+			menu.appendChild(toggle)
+			menu.appendChild(panel)
+			row.appendChild(menu)
+
+			return row
+		}
+
+		const insertCustomRow = (row, insertAfterToken) => {
+			if (!planList || !row) {
+				return
+			}
+			if (insertAfterToken) {
+				const anchor = planList.querySelector(
+					`.plan-row[data-plan-token="${insertAfterToken}"]`
+				)
+				if (anchor && anchor.nextSibling) {
+					planList.insertBefore(row, anchor.nextSibling)
+					return
+				}
+				if (anchor) {
+					planList.appendChild(row)
+					return
+				}
+			}
+			planList.appendChild(row)
+		}
+
 		const updateCustomRow = (customId, title, text) => {
 			if (!customId) {
 				return
@@ -1010,9 +1126,18 @@
 			}
 			if (text !== undefined) {
 				row.setAttribute('data-custom-text', text)
-				const textEl = row.querySelector('small')
-				if (textEl) {
-					textEl.textContent = truncateText(text)
+				const planItem = row.querySelector('.plan-item')
+				let textEl = row.querySelector('small')
+				if (text) {
+					if (!textEl && planItem) {
+						textEl = document.createElement('small')
+						planItem.appendChild(textEl)
+					}
+					if (textEl) {
+						textEl.textContent = truncateText(text)
+					}
+				} else if (textEl) {
+					textEl.remove()
 				}
 			}
 		}
@@ -1093,6 +1218,109 @@
 				// Ignore autosave errors for custom elements.
 			}
 		}
+
+		if (customForm) {
+			customForm.addEventListener('submit', async (event) => {
+				event.preventDefault()
+				if (!customForm.action) {
+					return
+				}
+				setSaveError('')
+				setSaveStatus('Saving...', 'saving')
+				const formData = new FormData(customForm)
+				try {
+					const response = await fetch(customForm.action, {
+						method: 'POST',
+						body: formData,
+						headers: {
+							Accept: 'application/json',
+							...csrfHeaders
+						}
+					})
+					const data = await response.json().catch(() => null)
+					if (!response.ok || !data?.custom_id) {
+						const message = data?.error || 'Unable to save custom element.'
+						setSaveError(message)
+						setSaveStatus('Not saved', 'error')
+						return
+					}
+					const mode = customModal?.dataset.mode || 'add'
+					const titleValue = data.title ?? formData.get('title') ?? ''
+					const textValue = data.text ?? formData.get('text') ?? ''
+					if (mode === 'edit') {
+						updateCustomRow(data.custom_id, titleValue, textValue)
+						const initialTitleInput = customForm.querySelector(
+							'input[name="initial_title"]'
+						)
+						const initialTextInput = customForm.querySelector(
+							'input[name="initial_text"]'
+						)
+						if (initialTitleInput) {
+							initialTitleInput.value = titleValue
+						}
+						if (initialTextInput) {
+							initialTextInput.value = textValue
+						}
+					} else {
+						const token = data.token || `custom:${data.custom_id}`
+						const row = createCustomRowElement({
+							customId: data.custom_id,
+							title: titleValue,
+							text: textValue,
+							token
+						})
+						insertCustomRow(row, data.insert_after)
+						updatePlanInputs()
+					}
+					setSaveStatus('Saved', 'saved')
+					closeCustomModal()
+				} catch (error) {
+					setSaveError('Unable to save custom element.')
+					setSaveStatus('Not saved', 'error')
+				}
+			})
+		}
+
+		document.addEventListener('submit', async (event) => {
+			const form = event.target
+			if (!form || !form.matches('[data-custom-delete]')) {
+				return
+			}
+			if (event.defaultPrevented) {
+				return
+			}
+			event.preventDefault()
+			if (!form.action) {
+				return
+			}
+			try {
+				const response = await fetch(form.action, {
+					method: 'POST',
+					headers: {
+						Accept: 'application/json',
+						...csrfHeaders
+					}
+				})
+				const data = await response.json().catch(() => null)
+				if (!response.ok) {
+					const message = data?.error || 'Unable to delete custom element.'
+					setSaveError(message)
+					setSaveStatus('Not saved', 'error')
+					return
+				}
+				const row = form.closest('.plan-row')
+				if (row) {
+					row.remove()
+				}
+				closeRowMenus()
+				updatePlanInputs()
+				setSaveError('')
+				setSaveStatus('Saved', 'saved')
+			} catch (error) {
+				setSaveError('Unable to delete custom element.')
+				setSaveStatus('Not saved', 'error')
+			}
+		})
 
 		if (customModal) {
 			customModal.addEventListener('input', (event) => {
