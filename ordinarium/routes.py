@@ -1860,6 +1860,11 @@ def persist_service():
     return redirect(url_for("main.service", service_id=service_id))
 
 
+@bp.route("/about")
+def about():
+    return render_template("about.html")
+
+
 @bp.route("/<slug>")
 def page(slug):
     db = get_db()
