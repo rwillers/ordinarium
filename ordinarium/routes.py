@@ -1151,6 +1151,32 @@ def _resolve_lesson_references(service_date, observance_handle):
     }
 
 
+def _resolve_seasonal_text(db, text_type, season):
+    row = None
+    if season:
+        row = db.execute(
+            "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
+            (text_type, "season", season),
+        ).fetchone()
+    if not row:
+        row = db.execute(
+            "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
+            (text_type, "other", "At Any Time", "day", "The Lord’s Day"),
+        ).fetchone()
+    return row["text"] if row else None
+
+
+def _resolve_collect_text(db, propers_list):
+    if not propers_list:
+        return None
+    propers_json = json.dumps(propers_list)
+    collect_text = db.execute(
+        "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
+        (propers_json, "collect", "proper"),
+    ).fetchone()
+    return collect_text["text"] if collect_text else None
+
+
 def _offertory_default_row(db):
     return db.execute(
         "select id, text from texts where type=? and text like ? order by id limit 1",
@@ -1863,6 +1889,54 @@ def persist_service():
 @bp.route("/about")
 def about():
     return render_template("about.html")
+
+
+@bp.route("/propers-search")
+def propers_search():
+    today = date.today().isoformat()
+    return render_template("propers_search.html", today=today)
+
+
+@bp.route("/propers-search/results")
+def propers_search_results():
+    raw_date = request.args.get("date", "")
+    if not raw_date:
+        return jsonify({"date": None, "season": None, "observances": []})
+    try:
+        service_date = date.fromisoformat(raw_date)
+    except ValueError:
+        return jsonify({"date": raw_date, "season": None, "observances": []})
+    season = resolve_season(service_date)
+    options = resolve_observance_options(service_date)
+    if not options:
+        return jsonify({"date": raw_date, "season": season, "observances": []})
+    db = get_db()
+    acclamation_text = _resolve_seasonal_text(db, "acclamation", season)
+    proper_preface_text = _resolve_seasonal_text(db, "proper_preface", season)
+    observances = []
+    for observance in options:
+        propers_list = list(observance.propers)
+        readings = _build_lesson_readings(propers_list, observance.subcycle)
+        observances.append(
+            {
+                "handle": observance.handle,
+                "title": observance.name or observance.alternative_name,
+                "priority": observance.priority,
+                "style": observance.style,
+                "subcycle": observance.subcycle,
+                "propers": propers_list,
+                "collect": _resolve_collect_text(db, propers_list),
+                "acclamation": acclamation_text,
+                "proper_preface": proper_preface_text,
+                "lessons": {
+                    "lesson_1": _format_lesson_reference(readings.get(1)),
+                    "psalm": _format_lesson_reference(readings.get(2)),
+                    "lesson_2": _format_lesson_reference(readings.get(3)),
+                    "gospel": _format_lesson_reference(readings.get(5)),
+                },
+            }
+        )
+    return jsonify({"date": raw_date, "season": season, "observances": observances})
 
 
 @bp.route("/<slug>")
