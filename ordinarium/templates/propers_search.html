@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Propers Search &mdash; Ordinarium{% endblock %}
+
+{% block content %}
+<div id="page">
+	<h2>Propers Search</h2>
+	<p>Select a date to review the season and matching observances with their propers.</p>
+	<div class="propers-search-controls">
+		<label class="propers-search-label" for="propers-search-date">Service date</label>
+		<input id="propers-search-date" type="date" value="{{ today }}" />
+		<button type="button" id="propers-search-button">Search</button>
+	</div>
+	<div class="propers-search-summary" id="propers-search-summary" aria-live="polite"></div>
+	<div class="propers-search-results" id="propers-search-results"></div>
+</div>
+<script>
+	const dateInput = document.querySelector('#propers-search-date')
+	const searchButton = document.querySelector('#propers-search-button')
+	const summary = document.querySelector('#propers-search-summary')
+	const results = document.querySelector('#propers-search-results')
+
+	const buildLessonList = (lessons) => {
+		const entries = [
+			{ label: 'First Lesson', value: lessons?.lesson_1 },
+			{ label: 'Psalm', value: lessons?.psalm },
+			{ label: 'Second Lesson', value: lessons?.lesson_2 },
+			{ label: 'Gospel', value: lessons?.gospel },
+		]
+		const list = document.createElement('ul')
+		list.classList.add('propers-search-lessons')
+		entries.forEach((entry) => {
+			if (!entry.value) {
+				return
+			}
+			const item = document.createElement('li')
+			item.textContent = `${entry.label}: ${entry.value}`
+			list.appendChild(item)
+		})
+		return list
+	}
+
+	const renderResults = (payload) => {
+		results.innerHTML = ''
+		summary.textContent = ''
+		if (!payload?.date || !payload?.season) {
+			summary.textContent = 'Select a valid date to view results.'
+			return
+		}
+		summary.textContent = `Season: ${payload.season}`
+		if (!payload.observances?.length) {
+			results.innerHTML = '<p class="propers-search-empty">No observances found.</p>'
+			return
+		}
+		payload.observances.forEach((observance) => {
+			const card = document.createElement('section')
+			card.classList.add('propers-search-card')
+			const heading = document.createElement('h3')
+			heading.textContent = observance.title || observance.handle
+			card.appendChild(heading)
+
+			const meta = document.createElement('p')
+			meta.classList.add('propers-search-meta')
+			const subcycle = observance.subcycle ? ` • Year ${observance.subcycle}` : ''
+			meta.textContent = `${observance.style} • Priority ${observance.priority}${subcycle}`
+			card.appendChild(meta)
+
+			const list = document.createElement('dl')
+			list.classList.add('propers-search-details')
+
+			const appendDetail = (term, value) => {
+				const dt = document.createElement('dt')
+				dt.textContent = term
+				const dd = document.createElement('dd')
+				dd.textContent = value || 'Unavailable.'
+				list.appendChild(dt)
+				list.appendChild(dd)
+			}
+
+			appendDetail('Collect', observance.collect)
+			appendDetail('Acclamation', observance.acclamation)
+			appendDetail('Proper Preface', observance.proper_preface)
+			appendDetail('Propers', observance.propers?.length ? observance.propers.join(', ') : 'Unavailable.')
+			card.appendChild(list)
+
+			const lessons = buildLessonList(observance.lessons)
+			if (lessons.children.length) {
+				const lessonHeading = document.createElement('h4')
+				lessonHeading.textContent = 'Lessons'
+				card.appendChild(lessonHeading)
+				card.appendChild(lessons)
+			}
+
+			results.appendChild(card)
+		})
+	}
+
+	const fetchResults = async () => {
+		const selectedDate = dateInput.value
+		if (!selectedDate) {
+			renderResults({ date: null, season: null, observances: [] })
+			return
+		}
+		summary.textContent = 'Loading results…'
+		results.innerHTML = ''
+		const response = await fetch(`/propers-search/results?date=${encodeURIComponent(selectedDate)}`)
+		if (!response.ok) {
+			summary.textContent = 'Unable to load results.'
+			return
+		}
+		const payload = await response.json()
+		renderResults(payload)
+	}
+
+	searchButton.addEventListener('click', fetchResults)
+	dateInput.addEventListener('change', fetchResults)
+
+	if (dateInput.value) {
+		fetchResults()
+	}
+</script>
+{% endblock %}

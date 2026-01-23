@@ -1086,3 +1086,86 @@ div#text {
 		color: var(--rubric-color);
 	}
 }
+
+.propers-search-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.6em;
+	margin: 1.2em 0;
+}
+
+.propers-search-label {
+	font-family: var(--header-font-family);
+	font-size: 0.9em;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--rubric-color);
+}
+
+.propers-search-summary {
+	font-family: var(--header-font-family);
+	font-size: 0.95em;
+	margin: 0.5em 0 1.2em;
+}
+
+.propers-search-results {
+	display: grid;
+	gap: 1.2em;
+}
+
+.propers-search-card {
+	background: #fff;
+	border: 1px solid var(--line-color);
+	border-radius: 10px;
+	padding: 1.2em;
+	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.04);
+}
+
+.propers-search-card h3 {
+	margin-top: 0;
+}
+
+.propers-search-card h4 {
+	font-size: 0.9em;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	margin: 1.2em 0 0.6em;
+	color: var(--rubric-color);
+}
+
+.propers-search-meta {
+	margin: 0.3em 0 1em;
+	font-size: 0.85em;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--rubric-color);
+}
+
+.propers-search-details {
+	display: grid;
+	grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+	gap: 0.4em 0.8em;
+	margin: 0;
+}
+
+.propers-search-details dt {
+	font-family: var(--header-font-family);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	font-size: 0.75em;
+	color: var(--rubric-color);
+}
+
+.propers-search-details dd {
+	margin: 0;
+}
+
+.propers-search-lessons {
+	margin: 0;
+	padding-left: 1.2em;
+}
+
+.propers-search-empty {
+	font-style: italic;
+}
