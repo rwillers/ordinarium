@@ -918,7 +918,9 @@ div#page {
 
 div#text {
 	padding-top: 20px;
+}
 
+:is(div#text, .propers-search-markdown) {
 	h1 {
 		font-size: 1.36em;
 		font-weight: 200;
@@ -1087,6 +1089,10 @@ div#text {
 	}
 }
 
+.propers-search-markdown p {
+	margin-top: 0;
+}
+
 .propers-search-controls {
 	display: flex;
 	flex-wrap: wrap;
@@ -1155,10 +1161,16 @@ div#text {
 	letter-spacing: 0.06em;
 	font-size: 0.75em;
 	color: var(--rubric-color);
+	align-self: start;
 }
 
 .propers-search-details dd {
 	margin: 0;
+	align-self: start;
+}
+
+.propers-search-details dd > :first-child {
+	margin-top: 0;
 }
 
 .propers-search-lessons {

@@ -33,6 +33,10 @@ All service texts are represented in Markdown.
 - Preformatted paragraphs (e.g., the Creeds) use code formatting (four spaces, resulting in \<pre\>\<code\> blocks).
 - Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
 
+## Interface copy conventions
+
+- Page titles and headers in the app use sentence case (e.g., "Propers search").
+
 ## Database structure
 
 Note that the SQLite database uses JSON data storage fields with virtual columns for several tables. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
