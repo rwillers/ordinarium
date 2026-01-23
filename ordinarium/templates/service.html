@@ -58,11 +58,17 @@
 					<strong class="plan-field-value" id="plan-season-display">{{ service.season or 'Auto-detect' }}</strong>
 				</label>
 			</p>
-			<p id="plan-observance-row"{% if not observance_options %} style="display: none;"{% endif %}>
+			<p id="plan-observance-row"{% if not service.service_date %} style="display: none;"{% endif %}>
 				<label class="plan-field">
 					<span>Observance:</span>
 					<strong class="plan-field-value" id="plan-observance-display"{% if observance_options and observance_options|length > 1 %} style="display: none;"{% endif %}>
-						{{ observance_title or 'Auto-detect' }}
+						{% if observance_options %}
+							{{ observance_title or 'Auto-detect' }}
+						{% elif service.service_date %}
+							<abbr title="No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.">No observance found</abbr>
+						{% else %}
+							Auto-detect
+						{% endif %}
 					</strong>
 					<select id="plan-observance-select" name="observance_handle"{% if not observance_options or observance_options|length == 1 %} style="display: none;"{% endif %}>
 						{% for option in observance_options %}
@@ -333,6 +339,8 @@
 		const planObservanceRow = document.querySelector('#plan-observance-row')
 		const planObservanceDisplay = document.querySelector('#plan-observance-display')
 		const planObservanceSelect = document.querySelector('#plan-observance-select')
+		const emptyObservanceLabel = 'No observance found'
+		const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 		const planSaveStatus = document.querySelector('#plan-save-status')
 		const planSaveError = document.querySelector('#plan-save-error')
 		const planDeleteForm = document.querySelector('[data-plan-delete]')
@@ -381,6 +389,17 @@
 		let autosaveTimer = null
 		let autosaveInFlight = false
 		let autosaveQueued = false
+
+		const setEmptyObservanceDisplay = () => {
+			if (!planObservanceDisplay) {
+				return
+			}
+			planObservanceDisplay.textContent = ''
+			const abbr = document.createElement('abbr')
+			abbr.title = emptyObservanceTooltip
+			abbr.textContent = emptyObservanceLabel
+			planObservanceDisplay.appendChild(abbr)
+		}
 
 		const updateLessonDefaults = (lessonDefaults) => {
 			if (!lessonDefaults || typeof lessonDefaults !== 'object') {
@@ -579,7 +598,7 @@
 					if (planObservanceRow) {
 						const options = Array.isArray(data?.options) ? data.options : []
 						const hasOptions = options.length > 0
-						planObservanceRow.style.display = hasOptions ? '' : 'none'
+						planObservanceRow.style.display = ''
 						if (hasOptions && planObservanceSelect) {
 							const currentValue = planObservanceSelect.value
 							planObservanceSelect.innerHTML = ''
@@ -597,9 +616,16 @@
 								planObservanceSelect.value = selectedHandle
 							}
 							planObservanceSelect.style.display = options.length > 1 ? '' : 'none'
+						} else if (planObservanceSelect) {
+							planObservanceSelect.innerHTML = ''
+							planObservanceSelect.style.display = 'none'
 						}
 						if (planObservanceDisplay) {
-							planObservanceDisplay.textContent = data.title || 'Auto-detect'
+							if (hasOptions) {
+								planObservanceDisplay.textContent = data.title || 'Auto-detect'
+							} else {
+								setEmptyObservanceDisplay()
+							}
 							planObservanceDisplay.style.display = options.length > 1 ? 'none' : ''
 						}
 					}
