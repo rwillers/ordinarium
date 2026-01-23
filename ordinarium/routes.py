@@ -1920,6 +1920,7 @@ def propers_search_results():
     for observance in options:
         propers_list = list(observance.propers)
         readings = _build_lesson_readings(propers_list, observance.subcycle)
+        collect_text = _resolve_collect_text(db, propers_list)
         observances.append(
             {
                 "handle": observance.handle,
@@ -1928,9 +1929,13 @@ def propers_search_results():
                 "style": observance.style,
                 "subcycle": observance.subcycle,
                 "propers": propers_list,
-                "collect": str(markdown(_resolve_collect_text(db, propers_list))),
-                "acclamation": str(markdown(acclamation_text)),
-                "proper_preface": str(markdown(proper_preface_text)),
+                "collect": str(markdown(collect_text)) if collect_text else None,
+                "acclamation": str(markdown(acclamation_text))
+                if acclamation_text
+                else None,
+                "proper_preface": str(markdown(proper_preface_text))
+                if proper_preface_text
+                else None,
                 "lessons": {
                     "lesson_1": _format_lesson_reference(readings.get(1)),
                     "psalm": _format_lesson_reference(readings.get(2)),
