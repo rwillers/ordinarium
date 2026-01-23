@@ -1893,8 +1893,10 @@ def about():
 
 @bp.route("/propers-search")
 def propers_search():
-    today = date.today().isoformat()
-    return render_template("propers_search.html", today=today)
+    today = date.today()
+    days_until_sunday = (6 - today.weekday()) % 7
+    default_date = (today + timedelta(days=days_until_sunday)).isoformat()
+    return render_template("propers_search.html", today=default_date)
 
 
 @bp.route("/propers-search/results")
@@ -1911,6 +1913,7 @@ def propers_search_results():
     if not options:
         return jsonify({"date": raw_date, "season": season, "observances": []})
     db = get_db()
+    markdown = current_app.jinja_env.filters["markdown"]
     acclamation_text = _resolve_seasonal_text(db, "acclamation", season)
     proper_preface_text = _resolve_seasonal_text(db, "proper_preface", season)
     observances = []
@@ -1925,9 +1928,9 @@ def propers_search_results():
                 "style": observance.style,
                 "subcycle": observance.subcycle,
                 "propers": propers_list,
-                "collect": _resolve_collect_text(db, propers_list),
-                "acclamation": acclamation_text,
-                "proper_preface": proper_preface_text,
+                "collect": str(markdown(_resolve_collect_text(db, propers_list))),
+                "acclamation": str(markdown(acclamation_text)),
+                "proper_preface": str(markdown(proper_preface_text)),
                 "lessons": {
                     "lesson_1": _format_lesson_reference(readings.get(1)),
                     "psalm": _format_lesson_reference(readings.get(2)),
