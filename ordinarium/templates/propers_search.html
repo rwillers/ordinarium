@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Propers Search &mdash; Ordinarium{% endblock %}
+{% block title %}Propers search &mdash; Ordinarium{% endblock %}
 
 {% block content %}
 <div id="page">
-	<h2>Propers Search</h2>
-	<p>Select a date to review the season and matching observances with their propers.</p>
+	<h2>Propers search</h2>
+	<p>Select a date to view the season and matching observances with associated propers.</p>
 	<div class="propers-search-controls">
 		<label class="propers-search-label" for="propers-search-date">Service date</label>
 		<input id="propers-search-date" type="date" value="{{ today }}" />
@@ -47,7 +47,10 @@
 			summary.textContent = 'Select a valid date to view results.'
 			return
 		}
-		summary.textContent = `Season: ${payload.season}`
+		summary.textContent = ''
+		const seasonLabel = document.createElement('strong')
+		seasonLabel.textContent = `Season: ${payload.season}`
+		summary.appendChild(seasonLabel)
 		if (!payload.observances?.length) {
 			results.innerHTML = '<p class="propers-search-empty">No observances found.</p>'
 			return
@@ -75,7 +78,10 @@
 				if (options.node) {
 					dd.appendChild(options.node)
 				} else if (options.html) {
-					dd.innerHTML = value || '<p>Unavailable.</p>'
+					const wrapper = document.createElement('div')
+					wrapper.classList.add('propers-search-markdown')
+					wrapper.innerHTML = value || '<p>Unavailable.</p>'
+					dd.appendChild(wrapper)
 				} else {
 					dd.textContent = value || 'Unavailable.'
 				}
@@ -86,7 +92,6 @@
 			appendDetail('Acclamation', observance.acclamation, { html: true })
 			appendDetail('Collect', observance.collect, { html: true })
 			appendDetail('Proper Preface', observance.proper_preface, { html: true })
-			appendDetail('Propers', observance.propers?.length ? observance.propers.join(', ') : 'Unavailable.')
 			const lessons = buildLessonList(observance.lessons)
 			if (lessons.children.length) {
 				appendDetail('Lessons', null, { node: lessons })

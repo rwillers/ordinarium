@@ -32,6 +32,7 @@ All service texts are represented in Markdown.
 - Preformatted text uses double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
 - Preformatted paragraphs (e.g., the Creeds) use code formatting (four spaces, resulting in \<pre\>\<code\> blocks).
 - Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
+- App UI titles and headers use sentence case (e.g., "Propers search").
 
 ## Database structure
 
@@ -56,7 +57,6 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 ## Roadmap
 - Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
-- Add rich propers search with calendar/season awareness.
 - Implement additional export formats and integrations: Planning Center, ProPresenter, etc.
 - Add team accounts (shared services and element libraries).
 - Add collaboration features for team accounts: comments, approvals, version history.

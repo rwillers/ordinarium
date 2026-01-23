@@ -312,7 +312,8 @@ main {
 	.share-modal-actions {
 		text-align: left;
 	}
-	div#text {
+	div#text,
+	.propers-search-markdown {
 		:not(.text-element-custom) ul {
 			white-space: normal;
 		}
@@ -918,7 +919,9 @@ div#page {
 
 div#text {
 	padding-top: 20px;
+}
 
+div#text, .propers-search-markdown {
 	h1 {
 		font-size: 1.36em;
 		font-weight: 200;

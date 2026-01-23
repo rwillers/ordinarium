@@ -20,6 +20,7 @@
 - Format Python with Black (4-space indentation). Run `black .` after Python changes.
 - Prefer `snake_case` for functions, variables, and route helpers; keep route slugs lowercase with underscores.
 - Template filenames are lowercase and descriptive (`plan.html`, `text.html`).
+- App UI titles and headers use sentence case (e.g., "Propers search").
 - Liturgical text conventions are documented in `README.md`; preserve Markdown formatting rules when editing content.
 
 ## Testing Guidelines
