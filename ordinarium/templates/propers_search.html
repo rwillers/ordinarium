@@ -62,34 +62,38 @@
 			const meta = document.createElement('p')
 			meta.classList.add('propers-search-meta')
 			const subcycle = observance.subcycle ? ` • Year ${observance.subcycle}` : ''
-			meta.textContent = `${observance.style} • Priority ${observance.priority}${subcycle}`
+			meta.textContent = `${observance.style}${subcycle}`
 			card.appendChild(meta)
 
 			const list = document.createElement('dl')
 			list.classList.add('propers-search-details')
 
-			const appendDetail = (term, value) => {
+			const appendDetail = (term, value, options = {}) => {
 				const dt = document.createElement('dt')
 				dt.textContent = term
 				const dd = document.createElement('dd')
-				dd.textContent = value || 'Unavailable.'
+				if (options.node) {
+					dd.appendChild(options.node)
+				} else if (options.html) {
+					dd.innerHTML = value || '<p>Unavailable.</p>'
+				} else {
+					dd.textContent = value || 'Unavailable.'
+				}
 				list.appendChild(dt)
 				list.appendChild(dd)
 			}
 
-			appendDetail('Collect', observance.collect)
-			appendDetail('Acclamation', observance.acclamation)
-			appendDetail('Proper Preface', observance.proper_preface)
+			appendDetail('Acclamation', observance.acclamation, { html: true })
+			appendDetail('Collect', observance.collect, { html: true })
+			appendDetail('Proper Preface', observance.proper_preface, { html: true })
 			appendDetail('Propers', observance.propers?.length ? observance.propers.join(', ') : 'Unavailable.')
-			card.appendChild(list)
-
 			const lessons = buildLessonList(observance.lessons)
 			if (lessons.children.length) {
-				const lessonHeading = document.createElement('h4')
-				lessonHeading.textContent = 'Lessons'
-				card.appendChild(lessonHeading)
-				card.appendChild(lessons)
+				appendDetail('Lessons', null, { node: lessons })
+			} else {
+				appendDetail('Lessons', null)
 			}
+			card.appendChild(list)
 
 			results.appendChild(card)
 		})
