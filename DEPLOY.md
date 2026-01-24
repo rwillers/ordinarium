@@ -55,6 +55,17 @@ PASSWORD_RESET_EXPIRY_MINUTES=60
 
 # SMTP (optional: required for real password reset emails)
 # If SMTP_HOST is not set, reset emails are logged in the app logs.
+#
+# MailerSend SMTP relay example:
+# SMTP_HOST=smtp.mailersend.net
+# SMTP_PORT=587
+# SMTP_USERNAME=REPLACE_WITH_SMTP_USERNAME
+# SMTP_PASSWORD=REPLACE_WITH_SMTP_PASSWORD
+# SMTP_USE_TLS=true
+# SMTP_USE_SSL=false
+# SMTP_SENDER="Ordinarium <no-reply@your-verified-domain.com>"
+#
+# MailerSend requires TLS via port 587 and a sender address on a verified domain.
 SMTP_HOST=mail.example.com
 SMTP_PORT=587
 SMTP_USERNAME=ordinarium@example.com
