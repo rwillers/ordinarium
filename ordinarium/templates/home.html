@@ -35,6 +35,13 @@ Ordinarium is a liturgy planning workspace supporting the assembly, ordering, an
 	</p>
 	{% endif %}
 
+	{% set addl_text %}
+### Additional resources
+
+You can also find collects and other prayers from the *Book of Common Prayer*, the Anglican tradition, and the broader Church at <a href="https://occasionalprayers.com" target="_blank">Occasional Prayers</a>.
+	{% endset %}
+	{{ addl_text | markdown_template }}
+
 </div>
 
 {% endblock %}
