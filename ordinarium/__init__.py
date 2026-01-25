@@ -1,15 +1,19 @@
 import html
 import os
 import re
-import secrets
 from html.parser import HTMLParser
+from functools import lru_cache
 
 import markdown2
+from flask import Flask
+from flask_wtf import CSRFProtect
 from jinja2 import pass_context
 from markupsafe import Markup
-from flask import Flask, session
 
 from .db import close_db, init_db_command
+from .auth_rate_limit import init_rate_limiter
+from .mail_delivery import init_mail
+from .auth_session import init_login
 from .routes import bp as main_bp
 
 
@@ -19,6 +23,14 @@ def _is_dev_env():
         or os.getenv("FLASK_DEBUG") == "1"
         or os.getenv("FLASK_ENV") == "development"
     )
+
+
+def _config_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def create_app():
@@ -41,6 +53,25 @@ def create_app():
         SMTP_USE_TLS=os.environ.get("SMTP_USE_TLS", "true"),
         SMTP_USE_SSL=os.environ.get("SMTP_USE_SSL", "false"),
         SMTP_SENDER=os.environ.get("SMTP_SENDER"),
+        MAIL_SERVER=os.environ.get("SMTP_HOST"),
+        MAIL_PORT=int(os.environ.get("SMTP_PORT", "587")),
+        MAIL_USERNAME=os.environ.get("SMTP_USERNAME"),
+        MAIL_PASSWORD=os.environ.get("SMTP_PASSWORD"),
+        MAIL_USE_TLS=_config_bool(os.environ.get("SMTP_USE_TLS", "true"), True),
+        MAIL_USE_SSL=_config_bool(os.environ.get("SMTP_USE_SSL", "false"), False),
+        MAIL_DEFAULT_SENDER=os.environ.get("SMTP_SENDER"),
+        RATELIMIT_ENABLED=_config_bool(
+            os.environ.get("RATELIMIT_ENABLED", "true"), True
+        ),
+        RATELIMIT_STORAGE_URI=os.environ.get("RATELIMIT_STORAGE_URI"),
+        RATELIMIT_LOGIN=os.environ.get("RATELIMIT_LOGIN", "10/minute"),
+        RATELIMIT_SIGNUP=os.environ.get("RATELIMIT_SIGNUP", "10/minute"),
+        RATELIMIT_PASSWORD_RESET=os.environ.get("RATELIMIT_PASSWORD_RESET", "5/minute"),
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
+        SESSION_COOKIE_SECURE=_config_bool(
+            os.environ.get("SESSION_COOKIE_SECURE", "false"), False
+        ),
     )
 
     os.makedirs(app.instance_path, exist_ok=True)
@@ -54,12 +85,16 @@ def create_app():
         "footnotes",
     ]
 
-    def render_markdown(value, safe_mode=None):
+    @lru_cache(maxsize=512)
+    def _render_markdown_cached(value, safe_mode):
         return markdown2.markdown(
             value or "",
             extras=extras,
             safe_mode=safe_mode,
         )
+
+    def render_markdown(value, safe_mode=None):
+        return _render_markdown_cached(value or "", safe_mode)
 
     @pass_context
     def markdown_template(context, value):
@@ -91,7 +126,7 @@ def create_app():
                 return segment
             if trailing_span_re.search(remainder):
                 return segment
-            return f"{leading}{em_html}<span class=\"trailing-indent\">{remainder}</span>"
+            return f'{leading}{em_html}<span class="trailing-indent">{remainder}</span>'
 
         def wrap_paragraph(match):
             open_tag, inner, close_tag = match.groups()
@@ -109,13 +144,15 @@ def create_app():
     app.jinja_env.filters["clean"] = lambda value: re.sub(
         r"\s+", " ", value or ""
     ).strip()
-    app.jinja_env.globals["csrf_token"] = lambda: session.setdefault(
-        "_csrf_token", secrets.token_urlsafe(32)
-    )
+    CSRFProtect(app)
+    init_login(app)
+    init_mail(app)
+    init_rate_limiter(app)
 
     app.register_blueprint(main_bp)
     app.teardown_appcontext(close_db)
     app.cli.add_command(init_db_command)
+
     @app.before_request
     def _require_secret_key():
         if app.testing or app.debug or _is_dev_env():

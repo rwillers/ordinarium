@@ -191,23 +191,33 @@ CREATE TABLE pages (
   id INTEGER PRIMARY KEY,
   title TEXT,
   content TEXT,
-  slug TEXT
+  slug TEXT NOT NULL
 );
 INSERT INTO pages (id, title, content, slug) VALUES (1, 'About', 'Ordinarium is a liturgy planning workspace that incorporates the structure and rubrics of the ACNA 2019 Book of Common Prayer, enabling clergy and liturgists to assemble, order, and manage liturgical orders of service. It supports the selection of propers, readings, prayers, and ceremonial elements; their arrangement into a coherent liturgy; and export or sharing for use in planning, presentation, or printed materials.\n\nThanks to <a href="https://liturgical-calendar.com" target="_blank">liturgical-calendar.com</a> for church calendar data and logic.\n\n*The Rev. Ryan Willers*\n\nP.S. You can also find collects and other prayers from the *Book of Common Prayer*, the Anglican tradition, and the broader Church at <a href="https://occasionalprayers.com" target="_blank">Occasional Prayers</a>.', 'about');
 INSERT INTO pages (id, title, content, slug) VALUES (2, 'Welcome to Ordinarium', 'Ordinarium is a liturgy planning workspace supporting the assembly, ordering, and management of liturgical orders of service. We currently support the eucharistic services from the <a href="https://anglicanchurch.net/" target="_blank">Anglican Church in North America</a> *Book of Common Prayer* (2019).\n\n<a href="/services" class="button">Manage services</a>', 'home');
-CREATE INDEX idx_pages_slug ON pages(slug);
+CREATE UNIQUE INDEX idx_pages_slug ON pages(slug);
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT NOT NULL,
+  password_hash TEXT
+);
+CREATE UNIQUE INDEX idx_users_email ON users(email);
+INSERT INTO users (id, first_name, last_name, email, password_hash) VALUES (1, 'Demo', 'User', 'demo@example.com', NULL);
 CREATE TABLE services (
   id INTEGER PRIMARY KEY,
-  user_id INTEGER,
+  user_id INTEGER NOT NULL,
   title TEXT,
   rite TEXT,
-  text_order TEXT,
-  text_disabled TEXT,
+  text_order TEXT CHECK (text_order IS NULL OR json_valid(text_order)),
+  text_disabled TEXT CHECK (text_disabled IS NULL OR json_valid(text_disabled)),
   season TEXT,
   service_date TEXT,
   observance_handle TEXT,
-  lesson_overrides JSON,
-  offertory_sentence_id INTEGER
+  lesson_overrides JSON CHECK (lesson_overrides IS NULL OR json_valid(lesson_overrides)),
+  offertory_sentence_id INTEGER,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id) VALUES (1, 1, 'Last Sunday of Christmas', 'Renewed Ancient Text', 'Christmastide', '2026-01-04', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL);
 INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id) VALUES (2, 1, 'First Sunday of Epiphanytide', 'Renewed Ancient Text', 'Epiphanytide', '2026-01-11', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL);
@@ -215,6 +225,7 @@ CREATE INDEX idx_services_user_id ON services(user_id);
 CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
 CREATE INDEX idx_services_service_date ON services(service_date);
+CREATE INDEX idx_services_user_id_service_date ON services(user_id, service_date);
 CREATE TABLE service_shares (
   id INTEGER PRIMARY KEY,
   service_id INTEGER NOT NULL,
@@ -222,27 +233,8 @@ CREATE TABLE service_shares (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE CASCADE
 );
-CREATE INDEX idx_service_shares_service_id ON service_shares(service_id);
+CREATE UNIQUE INDEX idx_service_shares_service_id ON service_shares(service_id);
 CREATE UNIQUE INDEX idx_service_shares_uuid ON service_shares(share_uuid);
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY,
-  first_name TEXT,
-  last_name TEXT,
-  email TEXT,
-  password_hash TEXT
-);
-CREATE INDEX idx_users_email ON users(email);
-CREATE TABLE password_reset_tokens (
-  id INTEGER PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  token_hash TEXT UNIQUE NOT NULL,
-  expires_at TEXT NOT NULL,
-  used_at TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_password_reset_tokens_user_id ON password_reset_tokens(user_id);
-CREATE INDEX idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
 CREATE TABLE service_custom_elements (
   id INTEGER PRIMARY KEY,
   service_id INTEGER NOT NULL,
@@ -1594,7 +1586,7 @@ CREATE TABLE texts (
   reference_long TEXT,
   reference_short TEXT,
   note TEXT,
-  subcycles JSON
+  subcycles JSON CHECK (subcycles IS NULL OR json_valid(subcycles))
 );
 INSERT INTO texts (
   id,
@@ -1638,3 +1630,5 @@ DROP TABLE texts_import;
 CREATE INDEX idx_texts_type on texts(type);
 CREATE INDEX idx_texts_filter_type on texts(filter_type);
 CREATE INDEX idx_texts_filter_content on texts(filter_content);
+CREATE INDEX idx_texts_lookup
+  ON texts(type, filter_type, filter_content, default_order);

@@ -193,8 +193,8 @@ def _sunday_dates(start, end):
 
 
 def test_sunday_sample_matches_ics_observance_and_season():
-    if os.getenv("SKIP_ICS_TESTS"):
-        pytest.skip("Skipping ICS alignment test via SKIP_ICS_TESTS.")
+    if os.getenv("RUN_ICS_TESTS") != "1":
+        pytest.skip("Skipping ICS alignment test; set RUN_ICS_TESTS=1 to enable.")
     ics_text = _fetch_ics(ICS_URL)
     events = _parse_events(ics_text)
     events_by_date = {}

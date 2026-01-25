@@ -52,6 +52,7 @@ Create `/srv/ordinarium/.env`:
 FLASK_ENV=production
 SECRET_KEY=REPLACE_WITH_LONG_RANDOM
 PASSWORD_RESET_EXPIRY_MINUTES=60
+RATELIMIT_STORAGE_URI=redis://localhost:6379/0
 
 # SMTP (optional: required for real password reset emails)
 # If SMTP_HOST is not set, reset emails are logged in the app logs.

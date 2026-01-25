@@ -231,9 +231,7 @@ def test_persist_service_autosave_requires_date(auth_client, service_factory):
     assert "Service date is required" in payload["error"]
 
 
-def test_persist_service_saves_and_generates_text(
-    app, auth_client, service_factory
-):
+def test_persist_service_saves_and_generates_text(app, auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=7, rite="Renewed Ancient Text")
     response = client.post(
@@ -258,9 +256,7 @@ def test_persist_service_saves_and_generates_text(
         assert service["service_date"] == "2026-01-04"
 
 
-def test_persist_service_autosave_saves_data(
-    app, auth_client, service_factory
-):
+def test_persist_service_autosave_saves_data(app, auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=8, rite="Renewed Ancient Text")
     response = client.post(
@@ -315,9 +311,7 @@ def test_persist_service_invalid_id_returns_error(app, auth_client):
     assert b"Service ID is required" in response.data
     with app.app_context():
         db = get_db()
-        after = db.execute("select count(*) as count from services").fetchone()[
-            "count"
-        ]
+        after = db.execute("select count(*) as count from services").fetchone()["count"]
         assert after == before
 
 
@@ -546,9 +540,7 @@ def test_custom_element_edit_updates_content(app, auth_client, service_factory):
         assert updated["text"] == "Updated"
 
 
-def test_custom_element_autosave_edit_returns_json(
-    app, auth_client, service_factory
-):
+def test_custom_element_autosave_edit_returns_json(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(
         user_id=user_id,
@@ -595,6 +587,44 @@ def test_custom_element_autosave_edit_returns_json(
             (element["id"],),
         ).fetchone()
         assert updated["text"] == "Updated by autosave"
+
+
+def test_custom_element_edit_denies_other_user(
+    app, auth_client, user_factory, service_factory
+):
+    client, _ = auth_client
+    other_user_id = user_factory(email="other-edit@example.com")
+    service_id = service_factory(
+        user_id=other_user_id,
+        service_id=67,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        cursor = db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (service_id, other_user_id, "Other", "Other text"),
+        )
+        db.commit()
+        element_id = cursor.lastrowid
+    response = client.post(
+        f"/service/{service_id}/custom-element",
+        data={
+            "custom_id": str(element_id),
+            "title": "Updated",
+            "text": "Updated text",
+            "rite": "Renewed Ancient Text",
+        },
+    )
+    assert response.status_code == 404
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            "select title, text from service_custom_elements where id=? limit 1",
+            (element_id,),
+        ).fetchone()
+        assert row["text"] == "Other text"
 
 
 def test_custom_element_autosave_missing_title_returns_error(
@@ -665,6 +695,36 @@ def test_custom_element_delete_removes_from_plan(app, auth_client, service_facto
         ).fetchone()
         order_tokens = json.loads(service["text_order"])
         assert f"custom:{element['id']}" not in order_tokens
+
+
+def test_custom_element_delete_denies_other_user(
+    app, auth_client, user_factory, service_factory
+):
+    client, _ = auth_client
+    other_user_id = user_factory(email="other@example.com")
+    service_id = service_factory(
+        user_id=other_user_id,
+        service_id=66,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        cursor = db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (service_id, other_user_id, "Other", "Other text"),
+        )
+        db.commit()
+        element_id = cursor.lastrowid
+    response = client.post(f"/service/{service_id}/custom-element/{element_id}/delete")
+    assert response.status_code == 404
+    with app.app_context():
+        db = get_db()
+        element = db.execute(
+            "select id from service_custom_elements where id=? limit 1",
+            (element_id,),
+        ).fetchone()
+        assert element is not None
 
 
 def test_custom_elements_escape_html_in_text(app, auth_client, service_factory):

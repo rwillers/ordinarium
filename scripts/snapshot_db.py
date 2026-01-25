@@ -176,7 +176,9 @@ def snapshot_table(conn, table: str, output_dir: Path, limit: int = 10):
     payload = {"table": table, "ids": ids, "rows": rows}
 
     json_path = output_dir / f"{table}.json"
-    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8"
+    )
 
     csv_path = output_dir / f"{table}.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as handle:

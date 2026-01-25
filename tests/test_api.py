@@ -1,5 +1,6 @@
 from datetime import date
 
+from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_season
 
 
@@ -48,3 +49,39 @@ def test_observance_endpoint_returns_options_for_date(client):
         "lesson_2",
         "gospel",
     }
+
+
+def test_propers_search_results_handles_blank_date(client):
+    response = client.get("/propers-search/results")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["date"] is None
+    assert payload["observances"] == []
+
+
+def test_propers_search_results_handles_invalid_date(client):
+    response = client.get("/propers-search/results?date=invalid")
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["date"] == "invalid"
+    assert payload["observances"] == []
+
+
+def test_page_slug_renders_content(app, client):
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pages (slug, title, content) values (?, ?, ?)",
+            ("custom-page", "Custom Page", "Hello **world**"),
+        )
+        db.commit()
+    response = client.get("/custom-page")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "Custom Page" in body
+    assert "Hello" in body
+
+
+def test_page_slug_missing_returns_404(client):
+    response = client.get("/missing-page")
+    assert response.status_code == 404
