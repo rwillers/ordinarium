@@ -1,0 +1,11 @@
+id,type,filter_type,filter_content,text,title,default_order,detailed_title,reading,option_group,optional,book,book_name,reference_long,reference_short,note,subcycles
+244,lesson,proper,AdventII,,,1,,3,,0,Rom,Romans,15:1-13,_,_,"[""A""]"
+291,lesson,proper,HolyName,,,1,,1,,0,Exod,Exodus,34:1-9,_,_,"[""A"", ""B"", ""C""]"
+578,lesson,proper,Easter,,,2,,1,,0,Isa,Isaiah,51:9-11,_,_,"[""C""]"
+582,lesson,proper,Easter,,,1,,5,,0,John,John,20:1-18,20:1-10,_,"[""A""]"
+601,lesson,proper,EasterThursday,,,1,,5,,0,Luke,Luke,24:36-49,_,_,"[""A"", ""B"", ""C""]"
+735,lesson,proper,Proper2,,,1,,3,,0,1 Cor,I Corinthians,15:35-49,_,_,"[""C""]"
+770,lesson,proper,Proper5,,,1,,3,,0,2 Cor,II Corinthians,4:13-18,_,_,"[""B""]"
+804,lesson,proper,Proper8,,,1,,2,,0,Ps,Psalm,16,_,_,"[""C""]"
+1074,lesson,proper,Thomas,,,1,,2,,0,Ps,Psalm,126,_,_,"[""A"", ""B"", ""C""]"
+1213,lesson,proper,IndependenceDay,,,1,,3,,0,Heb,Hebrews,11:8-16,_,_,"[""A"", ""B"", ""C""]"

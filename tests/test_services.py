@@ -31,17 +31,13 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
             "select id from service_custom_elements where service_id=? and user_id=? limit 1",
             (source_id, user_id),
         ).fetchone()
-        service = db.execute(
-            "select data from services where id=? limit 1", (source_id,)
-        ).fetchone()
-        payload = json.loads(service["data"])
-        payload["text_order"] = json.dumps(
-            ["text:68", f"custom:{element['id']}", "text:69"]
-        )
-        payload["text_disabled"] = json.dumps([f"custom:{element['id']}"])
         db.execute(
-            "update services set data=? where id=?",
-            (json.dumps(payload), source_id),
+            "update services set text_order=?, text_disabled=? where id=?",
+            (
+                json.dumps(["text:68", f"custom:{element['id']}", "text:69"]),
+                json.dumps([f"custom:{element['id']}"]),
+                source_id,
+            ),
         )
         db.commit()
 
@@ -58,17 +54,21 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
     with app.app_context():
         db = get_db()
         copied = db.execute(
-            "select data from services where id=? limit 1", (21,)
+            """
+            select user_id, service_date, season, observance_handle, title, rite,
+                   text_order, text_disabled
+            from services where id=? limit 1
+            """,
+            (21,),
         ).fetchone()
-        payload = json.loads(copied["data"])
-        assert payload["user_id"] == user_id
-        assert payload["service_date"] is None
-        assert payload["season"] is None
-        assert payload["observance_handle"] is None
-        assert payload["title"] is None
-        assert payload["rite"] == "Renewed Ancient Text"
-        order_tokens = json.loads(payload["text_order"])
-        disabled_tokens = json.loads(payload["text_disabled"])
+        assert copied["user_id"] == user_id
+        assert copied["service_date"] is None
+        assert copied["season"] is None
+        assert copied["observance_handle"] is None
+        assert copied["title"] is None
+        assert copied["rite"] == "Renewed Ancient Text"
+        order_tokens = json.loads(copied["text_order"])
+        disabled_tokens = json.loads(copied["text_disabled"])
         custom_elements = db.execute(
             "select id, title, text from service_custom_elements where service_id=?",
             (21,),
@@ -113,10 +113,9 @@ def test_services_new_uses_selected_rite(app, auth_client, service_factory):
     with app.app_context():
         db = get_db()
         created = db.execute(
-            "select data from services where id=? limit 1", (31,)
+            "select rite from services where id=? limit 1", (31,)
         ).fetchone()
-        payload = json.loads(created["data"])
-        assert payload["rite"] == "Anglican Standard Text"
+        assert created["rite"] == "Anglican Standard Text"
 
 
 def test_services_new_copies_non_default_rite(app, auth_client, service_factory):
@@ -140,10 +139,9 @@ def test_services_new_copies_non_default_rite(app, auth_client, service_factory)
     with app.app_context():
         db = get_db()
         copied = db.execute(
-            "select data from services where id=? limit 1", (41,)
+            "select rite from services where id=? limit 1", (41,)
         ).fetchone()
-        payload = json.loads(copied["data"])
-        assert payload["rite"] == "Anglican Standard Text"
+        assert copied["rite"] == "Anglican Standard Text"
 
 
 def test_service_missing_id_returns_error(auth_client):
@@ -254,11 +252,10 @@ def test_persist_service_saves_and_generates_text(
     with app.app_context():
         db = get_db()
         service = db.execute(
-            "select data from services where id=? limit 1", (7,)
+            "select user_id, service_date from services where id=? limit 1", (7,)
         ).fetchone()
-        payload = json.loads(service["data"])
-        assert payload["user_id"] == user_id
-        assert payload["service_date"] == "2026-01-04"
+        assert service["user_id"] == user_id
+        assert service["service_date"] == "2026-01-04"
 
 
 def test_persist_service_autosave_saves_data(
@@ -292,11 +289,10 @@ def test_persist_service_autosave_saves_data(
     with app.app_context():
         db = get_db()
         service = db.execute(
-            "select data from services where id=? limit 1", (8,)
+            "select user_id, service_date from services where id=? limit 1", (8,)
         ).fetchone()
-        saved = json.loads(service["data"])
-        assert saved["user_id"] == user_id
-        assert saved["service_date"] == "2026-01-04"
+        assert service["user_id"] == user_id
+        assert service["service_date"] == "2026-01-04"
 
 
 def test_persist_service_invalid_id_returns_error(app, auth_client):
@@ -344,12 +340,12 @@ def test_persist_service_normalizes_observance_handle(
     with app.app_context():
         db = get_db()
         service = db.execute(
-            "select data from services where id=? limit 1", (12,)
+            "select user_id, observance_handle, title from services where id=? limit 1",
+            (12,),
         ).fetchone()
-        payload = json.loads(service["data"])
-        assert payload["user_id"] == user_id
-        assert payload["observance_handle"] == "AdventI"
-        assert payload["title"] == "The First Sunday in Advent"
+        assert service["user_id"] == user_id
+        assert service["observance_handle"] == "AdventI"
+        assert service["title"] == "The First Sunday in Advent"
 
 
 def test_persist_service_autosave_denies_other_user(
@@ -419,10 +415,11 @@ def test_lesson_override_updates_service(app, auth_client, service_factory):
     with app.app_context():
         db = get_db()
         service = db.execute(
-            "select data from services where id=? limit 1", (service_id,)
+            "select lesson_overrides from services where id=? limit 1",
+            (service_id,),
         ).fetchone()
-        saved = json.loads(service["data"])
-        assert saved["lesson_overrides"]["gospel"] == "Mark 1:1-8"
+        saved = json.loads(service["lesson_overrides"])
+        assert saved["gospel"] == "Mark 1:1-8"
 
     response = client.post(
         f"/service/{service_id}/lesson-passage",
@@ -435,10 +432,11 @@ def test_lesson_override_updates_service(app, auth_client, service_factory):
     with app.app_context():
         db = get_db()
         service = db.execute(
-            "select data from services where id=? limit 1", (service_id,)
+            "select lesson_overrides from services where id=? limit 1",
+            (service_id,),
         ).fetchone()
-        saved = json.loads(service["data"])
-        assert "gospel" not in saved.get("lesson_overrides", {})
+        saved = json.loads(service["lesson_overrides"] or "{}")
+        assert "gospel" not in saved
 
 
 def test_text_uses_lesson_override(app, auth_client, service_factory):
@@ -451,14 +449,9 @@ def test_text_uses_lesson_override(app, auth_client, service_factory):
     )
     with app.app_context():
         db = get_db()
-        service = db.execute(
-            "select data from services where id=? limit 1", (service_id,)
-        ).fetchone()
-        saved = json.loads(service["data"])
-        saved["lesson_overrides"] = {"gospel": "Mark 1:1-8"}
         db.execute(
-            "update services set data=? where id=?",
-            (json.dumps(saved), service_id),
+            "update services set lesson_overrides=? where id=?",
+            (json.dumps({"gospel": "Mark 1:1-8"}), service_id),
         )
         db.commit()
     response = client.get(f"/text/{service_id}")
@@ -497,10 +490,9 @@ def test_custom_element_added_to_service_plan_and_text(
         assert element["title"] == "Custom Blessing"
         assert element["text"] == "Custom text"
         service = db.execute(
-            "select data from services where id=? limit 1", (service_id,)
+            "select text_order from services where id=? limit 1", (service_id,)
         ).fetchone()
-        payload = json.loads(service["data"])
-        order_tokens = json.loads(payload["text_order"])
+        order_tokens = json.loads(service["text_order"])
         assert order_tokens[:2] == ["text:68", "text:69"]
         assert order_tokens[-1] == f"custom:{element['id']}"
 
@@ -669,10 +661,9 @@ def test_custom_element_delete_removes_from_plan(app, auth_client, service_facto
         ).fetchone()
         assert deleted is None
         service = db.execute(
-            "select data from services where id=? limit 1", (service_id,)
+            "select text_order from services where id=? limit 1", (service_id,)
         ).fetchone()
-        payload = json.loads(service["data"])
-        order_tokens = json.loads(payload["text_order"])
+        order_tokens = json.loads(service["text_order"])
         assert f"custom:{element['id']}" not in order_tokens
 
 

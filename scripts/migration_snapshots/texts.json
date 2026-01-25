@@ -1,0 +1,235 @@
+{
+  "ids": [
+    244,
+    291,
+    578,
+    582,
+    601,
+    735,
+    770,
+    804,
+    1074,
+    1213
+  ],
+  "rows": [
+    {
+      "book": "Rom",
+      "book_name": "Romans",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "AdventII",
+      "filter_type": "proper",
+      "id": 244,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 3,
+      "reference_long": "15:1-13",
+      "reference_short": "_",
+      "subcycles": [
+        "A"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Exod",
+      "book_name": "Exodus",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "HolyName",
+      "filter_type": "proper",
+      "id": 291,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 1,
+      "reference_long": "34:1-9",
+      "reference_short": "_",
+      "subcycles": [
+        "A",
+        "B",
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Isa",
+      "book_name": "Isaiah",
+      "default_order": 2,
+      "detailed_title": null,
+      "filter_content": "Easter",
+      "filter_type": "proper",
+      "id": 578,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 1,
+      "reference_long": "51:9-11",
+      "reference_short": "_",
+      "subcycles": [
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "John",
+      "book_name": "John",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "Easter",
+      "filter_type": "proper",
+      "id": 582,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 5,
+      "reference_long": "20:1-18",
+      "reference_short": "20:1-10",
+      "subcycles": [
+        "A"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Luke",
+      "book_name": "Luke",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "EasterThursday",
+      "filter_type": "proper",
+      "id": 601,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 5,
+      "reference_long": "24:36-49",
+      "reference_short": "_",
+      "subcycles": [
+        "A",
+        "B",
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "1 Cor",
+      "book_name": "I Corinthians",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "Proper2",
+      "filter_type": "proper",
+      "id": 735,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 3,
+      "reference_long": "15:35-49",
+      "reference_short": "_",
+      "subcycles": [
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "2 Cor",
+      "book_name": "II Corinthians",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "Proper5",
+      "filter_type": "proper",
+      "id": 770,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 3,
+      "reference_long": "4:13-18",
+      "reference_short": "_",
+      "subcycles": [
+        "B"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Ps",
+      "book_name": "Psalm",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "Proper8",
+      "filter_type": "proper",
+      "id": 804,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 2,
+      "reference_long": "16",
+      "reference_short": "_",
+      "subcycles": [
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Ps",
+      "book_name": "Psalm",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "Thomas",
+      "filter_type": "proper",
+      "id": 1074,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 2,
+      "reference_long": "126",
+      "reference_short": "_",
+      "subcycles": [
+        "A",
+        "B",
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    },
+    {
+      "book": "Heb",
+      "book_name": "Hebrews",
+      "default_order": 1,
+      "detailed_title": null,
+      "filter_content": "IndependenceDay",
+      "filter_type": "proper",
+      "id": 1213,
+      "note": "_",
+      "option_group": null,
+      "optional": 0,
+      "reading": 3,
+      "reference_long": "11:8-16",
+      "reference_short": "_",
+      "subcycles": [
+        "A",
+        "B",
+        "C"
+      ],
+      "text": null,
+      "title": null,
+      "type": "lesson"
+    }
+  ],
+  "table": "texts"
+}

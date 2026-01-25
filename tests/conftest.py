@@ -62,15 +62,12 @@ def user_factory(app):
         first_name="Test",
         last_name="User",
     ):
-        payload = {
-            "first_name": first_name,
-            "last_name": last_name,
-            "email": email,
-            "password_hash": generate_password_hash(password),
-        }
         with app.app_context():
             db = get_db()
-            db.execute("insert into users (data) values (?)", (json.dumps(payload),))
+            db.execute(
+                "insert into users (first_name, last_name, email, password_hash) values (?, ?, ?, ?)",
+                (first_name, last_name, email, generate_password_hash(password)),
+            )
             db.commit()
             user = db.execute(
                 "select id from users where email=? limit 1", (email,)
@@ -93,21 +90,37 @@ def service_factory(app):
         text_disabled=None,
         observance_handle=None,
     ):
-        payload = {
-            "user_id": user_id,
-            "title": title,
-            "rite": rite,
-            "season": season,
-            "service_date": service_date,
-            "text_order": text_order,
-            "text_disabled": text_disabled,
-            "observance_handle": observance_handle,
-        }
         with app.app_context():
             db = get_db()
             db.execute(
-                "insert into services (id, data) values (?, ?)",
-                (service_id, json.dumps(payload)),
+                """
+                insert into services (
+                  id,
+                  user_id,
+                  title,
+                  rite,
+                  season,
+                  service_date,
+                  text_order,
+                  text_disabled,
+                  observance_handle,
+                  lesson_overrides,
+                  offertory_sentence_id
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    service_id,
+                    user_id,
+                    title,
+                    rite,
+                    season,
+                    service_date,
+                    text_order,
+                    text_disabled,
+                    observance_handle,
+                    json.dumps({}),
+                    None,
+                ),
             )
             db.commit()
         return service_id

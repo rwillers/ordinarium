@@ -1,5 +1,7 @@
 import os
 
+from dotenv import load_dotenv
+
 from ordinarium import create_app
 
 
@@ -14,4 +16,5 @@ def _debug_enabled():
 
 
 if __name__ == "__main__":
+    load_dotenv()
     app.run(debug=_debug_enabled())

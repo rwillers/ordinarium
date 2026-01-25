@@ -36,7 +36,7 @@ All service texts are represented in Markdown.
 
 ## Database structure
 
-Note that the SQLite database uses JSON data storage fields with virtual columns for several tables. More information on the approach can be found [here](https://www.dbpro.app/blog/sqlite-json-virtual-columns-indexing). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
+Note that the SQLite database materializes former JSON virtual columns into real columns, while still storing JSON payloads in specific fields (for example `services.text_order`, `services.text_disabled`, `services.lesson_overrides`, and `texts.subcycles`). Properdata (holidays, fragments, subcycles) is embedded in `ordinarium/schema.sql` and applied to existing databases via `scripts/migrate_db.py`.
 When updating JSON text fields via SQL migrations, prefer building multiline strings with `char(10)` concatenation instead of embedding `\n` escapes; SQLite may preserve literal `\n` sequences, which then render as backslashes in output.
 
 ## Tech stack

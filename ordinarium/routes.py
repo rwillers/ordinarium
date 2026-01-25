@@ -137,11 +137,122 @@ def _blank_service_payload(user_id, rite=DEFAULT_RITE):
 
 
 def _create_service(db, payload):
+    serialized = _serialize_service_payload(payload)
     cursor = db.execute(
-        "insert into services (data) values (?)",
-        (json.dumps(payload),),
+        """
+        insert into services (
+          user_id,
+          title,
+          rite,
+          text_order,
+          text_disabled,
+          season,
+          service_date,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            serialized["user_id"],
+            serialized["title"],
+            serialized["rite"],
+            serialized["text_order"],
+            serialized["text_disabled"],
+            serialized["season"],
+            serialized["service_date"],
+            serialized["observance_handle"],
+            serialized["lesson_overrides"],
+            serialized["offertory_sentence_id"],
+        ),
     )
     return cursor.lastrowid
+
+
+def _serialize_service_payload(payload):
+    return {
+        "user_id": payload.get("user_id"),
+        "title": payload.get("title"),
+        "rite": payload.get("rite"),
+        "text_order": _dump_json_value(payload.get("text_order")),
+        "text_disabled": _dump_json_value(payload.get("text_disabled")),
+        "season": payload.get("season"),
+        "service_date": payload.get("service_date"),
+        "observance_handle": payload.get("observance_handle"),
+        "lesson_overrides": _dump_json_value(payload.get("lesson_overrides")),
+        "offertory_sentence_id": payload.get("offertory_sentence_id"),
+    }
+
+
+def _load_service_payload(db, service_id, user_id=None):
+    if not service_id:
+        return None
+    params = [service_id]
+    query = """
+        select
+          id,
+          user_id,
+          title,
+          rite,
+          text_order,
+          text_disabled,
+          season,
+          service_date,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id
+        from services
+        where id=?
+    """
+    if user_id is not None:
+        query += " and user_id=?"
+        params.append(user_id)
+    row = db.execute(query, params).fetchone()
+    if not row:
+        return None
+    return {
+        "user_id": row["user_id"],
+        "title": row["title"],
+        "rite": row["rite"],
+        "text_order": row["text_order"],
+        "text_disabled": row["text_disabled"],
+        "season": row["season"],
+        "service_date": row["service_date"],
+        "observance_handle": row["observance_handle"],
+        "lesson_overrides": _parse_json_object(row["lesson_overrides"]),
+        "offertory_sentence_id": row["offertory_sentence_id"],
+    }
+
+
+def _update_service_columns(db, service_id, payload):
+    serialized = _serialize_service_payload(payload)
+    db.execute(
+        """
+        update services set
+          title=?,
+          rite=?,
+          text_order=?,
+          text_disabled=?,
+          season=?,
+          service_date=?,
+          observance_handle=?,
+          lesson_overrides=?,
+          offertory_sentence_id=?
+        where id=?
+        """,
+        (
+            serialized["title"],
+            serialized["rite"],
+            serialized["text_order"],
+            serialized["text_disabled"],
+            serialized["season"],
+            serialized["service_date"],
+            serialized["observance_handle"],
+            serialized["lesson_overrides"],
+            serialized["offertory_sentence_id"],
+            service_id,
+        ),
+    )
 
 
 @bp.before_request
@@ -248,8 +359,7 @@ def login():
             if not user:
                 error = "Invalid email or password."
             else:
-                data = json.loads(user["data"]) if user["data"] else {}
-                password_hash = data.get("password_hash")
+                password_hash = user["password_hash"]
                 if not password_hash or not check_password_hash(
                     password_hash, password
                 ):
@@ -335,12 +445,10 @@ def reset_password(token):
             if not user:
                 flash("Account not found.", "error")
                 return redirect(url_for("main.request_password_reset"))
-            data = json.loads(user["data"]) if user["data"] else {}
-            data["password_hash"] = generate_password_hash(password)
             db = get_db()
             db.execute(
-                "update users set data=? where id=?",
-                (json.dumps(data), user["id"]),
+                "update users set password_hash=? where id=?",
+                (generate_password_hash(password), user["id"]),
             )
             db.execute(
                 "update password_reset_tokens set used_at=CURRENT_TIMESTAMP where id=?",
@@ -381,13 +489,10 @@ def signup():
                 error = "Please verify you're human."
         if not error:
             db = get_db()
-            payload = {
-                "first_name": first_name,
-                "last_name": last_name,
-                "email": email,
-                "password_hash": generate_password_hash(password),
-            }
-            db.execute("insert into users (data) values (?)", (json.dumps(payload),))
+            db.execute(
+                "insert into users (first_name, last_name, email, password_hash) values (?, ?, ?, ?)",
+                (first_name, last_name, email, generate_password_hash(password)),
+            )
             db.commit()
             user = get_user_by_email(email)
             session.clear()
@@ -406,7 +511,7 @@ def get_user_by_id(user_id):
         return None
     db = get_db()
     user = db.execute(
-        "select id, first_name, last_name, email, data from users where id=? limit 1",
+        "select id, first_name, last_name, email, password_hash from users where id=? limit 1",
         (user_id,),
     ).fetchone()
     return user
@@ -417,7 +522,7 @@ def get_user_by_email(email):
         return None
     db = get_db()
     user = db.execute(
-        "select id, first_name, last_name, email, data from users where email=? limit 1",
+        "select id, first_name, last_name, email, password_hash from users where email=? limit 1",
         (email,),
     ).fetchone()
     return user
@@ -521,6 +626,28 @@ def parse_plan_tokens(raw):
     return tokens
 
 
+def _dump_json_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return value
+
+
+def _parse_json_object(value):
+    if not value:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
 def load_custom_elements(service_id, user_id=None):
     if not service_id:
         return []
@@ -556,8 +683,7 @@ def format_services(services):
         except (TypeError, ValueError):
             pass
         title = None
-        saved_data = json.loads(service["data"]) if service["data"] else {}
-        observance_handle = saved_data.get("observance_handle")
+        observance_handle = service["observance_handle"]
         if service["service_date"]:
             try:
                 observance = resolve_observance(
@@ -570,16 +696,13 @@ def format_services(services):
                 title = observance.name or observance.alternative_name
         if not title:
             title = service["title"]
-        rite = service["rite"] if "rite" in service.keys() else None
-        if not rite:
-            rite = saved_data.get("rite")
         formatted.append(
             {
                 "id": service["id"],
                 "title": title or "Untitled Service",
                 "service_date": service["service_date"],
                 "display_date": display_date,
-                "rite": rite,
+                "rite": service["rite"],
             }
         )
     return formatted
@@ -688,7 +811,6 @@ def logout():
 def account():
     error = None
     user = get_user_by_id(g.user["id"])
-    data = json.loads(user["data"]) if user and user["data"] else {}
     if request.method == "POST":
         first_name = (request.form.get("first_name") or "").strip()
         last_name = (request.form.get("last_name") or "").strip()
@@ -703,19 +825,17 @@ def account():
         if password and len(password) < 8:
             error = "Password must be at least 8 characters."
         if not error:
-            data.update(
-                {
-                    "first_name": first_name,
-                    "last_name": last_name,
-                    "email": email,
-                }
-            )
+            password_hash = user["password_hash"] if user else None
             if password:
-                data["password_hash"] = generate_password_hash(password)
+                password_hash = generate_password_hash(password)
             db = get_db()
             db.execute(
-                "update users set data=? where id=?",
-                (json.dumps(data), g.user["id"]),
+                """
+                update users
+                set first_name=?, last_name=?, email=?, password_hash=?
+                where id=?
+                """,
+                (first_name, last_name, email, password_hash, g.user["id"]),
             )
             db.commit()
             return redirect(url_for("main.account"))
@@ -800,7 +920,7 @@ def index():
         db = get_db()
         today = date.today().isoformat()
         rows = db.execute(
-            "select id, title, service_date, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
+            "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
             (g.user["id"], today),
         ).fetchall()
         upcoming_services = format_services(rows)
@@ -810,14 +930,24 @@ def index():
 def build_plan_context(service_id, rite):
     db = get_db()
     saved_plan = db.execute(
-        "select text_order, text_disabled, title, season, service_date, rite, data from services where id=? and user_id=? limit 1",
+        """
+        select
+          text_order,
+          text_disabled,
+          title,
+          season,
+          service_date,
+          rite,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id
+        from services
+        where id=? and user_id=? limit 1
+        """,
         (service_id, g.user["id"]),
     ).fetchone()
     effective_rite = saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite
     rite_slug = effective_rite.replace(" ", "_").lower()
-    saved_data = (
-        json.loads(saved_plan["data"]) if saved_plan and saved_plan["data"] else {}
-    )
     order_tokens = parse_plan_tokens(saved_plan["text_order"]) if saved_plan else []
     disabled_tokens = (
         parse_plan_tokens(saved_plan["text_disabled"]) if saved_plan else []
@@ -831,7 +961,7 @@ def build_plan_context(service_id, rite):
     )
     observance_options = []
     observance_title = ""
-    observance_handle = saved_data.get("observance_handle")
+    observance_handle = saved_plan["observance_handle"] if saved_plan else None
     lesson_defaults = {}
     if saved_plan and saved_plan["service_date"]:
         try:
@@ -876,9 +1006,9 @@ def build_plan_context(service_id, rite):
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": effective_rite,
     }
-    lesson_overrides = saved_data.get("lesson_overrides")
-    if not isinstance(lesson_overrides, dict):
-        lesson_overrides = {}
+    lesson_overrides = _parse_json_object(
+        saved_plan["lesson_overrides"] if saved_plan else None
+    )
     offertory_sentences = _load_offertory_sentences(db)
     offertory_default = _offertory_default_row(db)
     offertory_default_label = ""
@@ -887,7 +1017,7 @@ def build_plan_context(service_id, rite):
     elif offertory_sentences:
         offertory_default_label = offertory_sentences[0]["label"]
     offertory_ids = {sentence["id"] for sentence in offertory_sentences}
-    raw_offertory_id = saved_data.get("offertory_sentence_id")
+    raw_offertory_id = saved_plan["offertory_sentence_id"] if saved_plan else None
     selected_offertory_id = None
     if raw_offertory_id is not None:
         try:
@@ -942,15 +1072,15 @@ def services():
     db = get_db()
     today = date.today().isoformat()
     current_services = db.execute(
-        "select id, title, service_date, rite, data from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+        "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
         (g.user["id"], today),
     ).fetchall()
     past_services = db.execute(
-        "select id, title, service_date, rite, data from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
+        "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
         (g.user["id"], today),
     ).fetchall()
     copy_services = db.execute(
-        "select id, title, service_date, rite, data from services where user_id=? order by service_date desc",
+        "select id, title, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
         (g.user["id"],),
     ).fetchall()
 
@@ -981,18 +1111,24 @@ def services_new():
             if not source_id:
                 return render_error("Select a service to copy.", 400)
             source = db.execute(
-                "select data from services where id=? and user_id=? limit 1",
+                """
+                select
+                  rite,
+                  text_order,
+                  text_disabled,
+                  lesson_overrides,
+                  offertory_sentence_id
+                from services
+                where id=? and user_id=? limit 1
+                """,
                 (source_id, g.user["id"]),
             ).fetchone()
             if not source:
                 return render_error("Service not found.", 404)
-            source_data = json.loads(source["data"]) if source["data"] else {}
-            if source_data.get("rite") != rite:
+            if source["rite"] != rite:
                 return render_error("Service rite does not match.", 400)
 
-            payload = _blank_service_payload(
-                g.user["id"], source_data.get("rite") or DEFAULT_RITE
-            )
+            payload = _blank_service_payload(g.user["id"], source["rite"] or DEFAULT_RITE)
             new_service_id = _create_service(db, payload)
 
             custom_rows = db.execute(
@@ -1022,25 +1158,19 @@ def services_new():
                     remapped.append(token)
                 return remapped
 
-            order_tokens = remap_tokens(
-                parse_plan_tokens(source_data.get("text_order"))
-            )
+            order_tokens = remap_tokens(parse_plan_tokens(source["text_order"]))
             disabled_tokens = remap_tokens(
-                parse_plan_tokens(source_data.get("text_disabled"))
+                parse_plan_tokens(source["text_disabled"])
             )
-            payload["rite"] = source_data.get("rite", DEFAULT_RITE)
+            payload["rite"] = source["rite"] or DEFAULT_RITE
             payload["text_order"] = json.dumps(order_tokens)
             payload["text_disabled"] = json.dumps(disabled_tokens)
-            if isinstance(source_data.get("lesson_overrides"), dict):
-                payload["lesson_overrides"] = source_data.get("lesson_overrides")
-            if source_data.get("offertory_sentence_id") is not None:
-                payload["offertory_sentence_id"] = source_data.get(
-                    "offertory_sentence_id"
-                )
-            db.execute(
-                "update services set data=? where id=?",
-                (json.dumps(payload), new_service_id),
-            )
+            lesson_overrides = _parse_json_object(source["lesson_overrides"])
+            if lesson_overrides:
+                payload["lesson_overrides"] = lesson_overrides
+            if source["offertory_sentence_id"] is not None:
+                payload["offertory_sentence_id"] = source["offertory_sentence_id"]
+            _update_service_columns(db, new_service_id, payload)
             db.commit()
             return redirect(url_for("main.service", service_id=new_service_id))
     payload = _blank_service_payload(g.user["id"], rite)
@@ -1074,19 +1204,43 @@ def load_service_for_text(service_id, user_id=None):
     db = get_db()
     if user_id:
         saved_service = db.execute(
-            "select text_order, text_disabled, season, rite, service_date, data from services where id=? and user_id=? limit 1",
+            """
+            select
+              text_order,
+              text_disabled,
+              season,
+              rite,
+              service_date,
+              observance_handle,
+              lesson_overrides,
+              offertory_sentence_id
+            from services where id=? and user_id=? limit 1
+            """,
             (service_id, user_id),
         ).fetchone()
     else:
         saved_service = db.execute(
-            "select text_order, text_disabled, season, rite, service_date, data from services where id=? limit 1",
+            """
+            select
+              text_order,
+              text_disabled,
+              season,
+              rite,
+              service_date,
+              observance_handle,
+              lesson_overrides,
+              offertory_sentence_id
+            from services where id=? limit 1
+            """,
             (service_id,),
         ).fetchone()
-    saved_data = (
-        json.loads(saved_service["data"])
-        if saved_service and saved_service["data"]
-        else {}
-    )
+    if not saved_service:
+        return None, {}
+    saved_data = {
+        "observance_handle": saved_service["observance_handle"],
+        "lesson_overrides": _parse_json_object(saved_service["lesson_overrides"]),
+        "offertory_sentence_id": saved_service["offertory_sentence_id"],
+    }
     return saved_service, saved_data
 
 
@@ -1111,23 +1265,47 @@ def _build_lesson_readings(propers_list, subcycle):
     db = get_db()
     propers_json = json.dumps(propers_list)
     lessons = db.execute(
-        "select texts.data from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order",
+        """
+        select
+          reading,
+          optional,
+          subcycles,
+          reference_short,
+          reference_long,
+          book,
+          book_name
+        from texts
+        join json_each(?) propers on texts.filter_content=propers.value
+        where texts.type=? and texts.filter_type=?
+        order by propers.key, texts.default_order
+        """,
         (propers_json, "lesson", "proper"),
     ).fetchall()
     readings = {}
     if not lessons:
         return readings
     for row in lessons:
-        lesson = json.loads(row["data"])
-        if lesson.get("optional"):
+        if row["optional"]:
             continue
-        lesson_subcycles = lesson.get("subcycles") or []
+        lesson_subcycles = []
+        if row["subcycles"]:
+            try:
+                parsed_subcycles = json.loads(row["subcycles"])
+                if isinstance(parsed_subcycles, list):
+                    lesson_subcycles = parsed_subcycles
+            except json.JSONDecodeError:
+                lesson_subcycles = []
         if lesson_subcycles and subcycle and subcycle not in lesson_subcycles:
             continue
-        reading_number = lesson.get("reading")
+        reading_number = row["reading"]
         if reading_number in readings:
             continue
-        readings[reading_number] = lesson
+        readings[reading_number] = {
+            "reference_short": row["reference_short"],
+            "reference_long": row["reference_long"],
+            "book": row["book"],
+            "book_name": row["book_name"],
+        }
     return readings
 
 
@@ -1485,27 +1663,18 @@ def service_lesson_passage(service_id):
         return redirect(url_for("main.service", service_id=service_id))
 
     db = get_db()
-    existing = db.execute(
-        "select data from services where id=? and user_id=? limit 1",
-        (service_id, g.user["id"]),
-    ).fetchone()
-    if not existing:
+    service_data = _load_service_payload(db, service_id, g.user["id"])
+    if not service_data:
         if wants_json:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
-    service_data = json.loads(existing["data"]) if existing["data"] else {}
-    lesson_overrides = service_data.get("lesson_overrides")
-    if not isinstance(lesson_overrides, dict):
-        lesson_overrides = {}
+    lesson_overrides = service_data.get("lesson_overrides") or {}
     if mode == "custom":
         lesson_overrides[lesson_key] = custom_passage
     else:
         lesson_overrides.pop(lesson_key, None)
     service_data["lesson_overrides"] = lesson_overrides
-    db.execute(
-        "update services set data=? where id=?",
-        (json.dumps(service_data), service_id),
-    )
+    _update_service_columns(db, service_id, service_data)
     db.commit()
     if wants_json:
         return jsonify(
@@ -1543,11 +1712,8 @@ def service_offertory_sentence(service_id):
         return redirect(url_for("main.service", service_id=service_id))
 
     db = get_db()
-    existing = db.execute(
-        "select data from services where id=? and user_id=? limit 1",
-        (service_id, g.user["id"]),
-    ).fetchone()
-    if not existing:
+    service_data = _load_service_payload(db, service_id, g.user["id"])
+    if not service_data:
         if wants_json:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
@@ -1565,15 +1731,11 @@ def service_offertory_sentence(service_id):
             flash("Offertory sentence not found.", "error")
             return redirect(url_for("main.service", service_id=service_id))
 
-    service_data = json.loads(existing["data"]) if existing["data"] else {}
     if sentence_id is None:
-        service_data.pop("offertory_sentence_id", None)
+        service_data["offertory_sentence_id"] = None
     else:
         service_data["offertory_sentence_id"] = sentence_id
-    db.execute(
-        "update services set data=? where id=?",
-        (json.dumps(service_data), service_id),
-    )
+    _update_service_columns(db, service_id, service_data)
     db.commit()
     if wants_json:
         return jsonify({"ok": True, "offertory_sentence_id": sentence_id})
@@ -1618,10 +1780,8 @@ def service_add_custom_element(service_id):
         return redirect(url_for("main.service", service_id=service_id))
 
     db = get_db()
-    existing = db.execute(
-        "select user_id, data from services where id=? limit 1", (service_id,)
-    ).fetchone()
-    if not existing or existing["user_id"] != g.user["id"]:
+    service_data = _load_service_payload(db, service_id, g.user["id"])
+    if not service_data:
         if is_autosave:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
@@ -1647,8 +1807,6 @@ def service_add_custom_element(service_id):
                 {"ok": True, "custom_id": custom_id, "title": title, "text": text_value}
             )
         return redirect(url_for("main.service", service_id=service_id))
-
-    service_data = json.loads(existing["data"]) if existing["data"] else {}
 
     if not service_data.get("rite"):
         service_data["rite"] = rite
@@ -1684,10 +1842,7 @@ def service_add_custom_element(service_id):
             order_tokens.insert(insert_index + 1, custom_token)
     service_data["text_order"] = json.dumps(order_tokens)
 
-    db.execute(
-        "update services set data=? where id=?",
-        (json.dumps(service_data), service_id),
-    )
+    _update_service_columns(db, service_id, service_data)
     db.commit()
     if is_autosave:
         return jsonify(
@@ -1710,10 +1865,8 @@ def service_add_custom_element(service_id):
 def service_delete_custom_element(service_id, custom_id):
     wants_json = "application/json" in request.headers.get("Accept", "")
     db = get_db()
-    existing = db.execute(
-        "select user_id, data from services where id=? limit 1", (service_id,)
-    ).fetchone()
-    if not existing or existing["user_id"] != g.user["id"]:
+    service_data = _load_service_payload(db, service_id, g.user["id"])
+    if not service_data:
         if wants_json:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
@@ -1730,7 +1883,6 @@ def service_delete_custom_element(service_id, custom_id):
         (custom_id, service_id, g.user["id"]),
     )
 
-    service_data = json.loads(existing["data"]) if existing["data"] else {}
     token = f"custom:{custom_id}"
     order_tokens = parse_plan_tokens(service_data.get("text_order"))
     disabled_tokens = parse_plan_tokens(service_data.get("text_disabled"))
@@ -1740,10 +1892,7 @@ def service_delete_custom_element(service_id, custom_id):
     if disabled_tokens:
         disabled_tokens = [value for value in disabled_tokens if value != token]
         service_data["text_disabled"] = json.dumps(disabled_tokens)
-    db.execute(
-        "update services set data=? where id=?",
-        (json.dumps(service_data), service_id),
-    )
+    _update_service_columns(db, service_id, service_data)
     db.commit()
     if wants_json:
         return jsonify({"ok": True, "custom_id": custom_id, "token": token})
@@ -1790,20 +1939,12 @@ def persist_service():
     disabled_json = json.dumps(disabled_tokens)
 
     db = get_db()
-    existing = db.execute(
-        "select data from services where id=? and user_id=? limit 1",
-        (service_id, g.user["id"]),
-    ).fetchone()
-    if not existing:
+    existing_data = _load_service_payload(db, service_id, g.user["id"])
+    if not existing_data:
         if is_autosave:
             return jsonify({"ok": False, "error": "Service not found."}), 404
         return render_error("Service not found.", 404)
-    existing_data = (
-        json.loads(existing["data"]) if existing and existing["data"] else {}
-    )
-    lesson_overrides = existing_data.get("lesson_overrides")
-    if not isinstance(lesson_overrides, dict):
-        lesson_overrides = {}
+    lesson_overrides = existing_data.get("lesson_overrides") or {}
     payload = {
         "user_id": g.user["id"],
         "title": existing_data.get("title"),
@@ -1862,10 +2003,7 @@ def persist_service():
     else:
         payload["season"] = None
 
-    db.execute(
-        "update services set data=? where id=?",
-        (json.dumps(payload), service_id),
-    )
+    _update_service_columns(db, service_id, payload)
     db.commit()
     # flash('Service saved.')
     if is_autosave:

@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timedelta, timezone
 
 from werkzeug.security import check_password_hash
@@ -60,10 +59,9 @@ def test_password_reset_updates_password_and_marks_token_used(app, client, user_
     with app.app_context():
         db = get_db()
         user = db.execute(
-            "select data from users where id=? limit 1", (user_id,)
+            "select password_hash from users where id=? limit 1", (user_id,)
         ).fetchone()
-        payload = json.loads(user["data"])
-        assert check_password_hash(payload["password_hash"], "new-strong-pass")
+        assert check_password_hash(user["password_hash"], "new-strong-pass")
 
         token_row = db.execute(
             "select used_at from password_reset_tokens where user_id=? order by id desc limit 1",

@@ -1,0 +1,2 @@
+id,first_name,last_name,email,password_hash
+1,Ryan,Willers,ryanwillers@gmail.com,scrypt:32768:8:1$fdx7ZmE2Q6Su4zbK$dbf93177130f9786ec6dd6afc3c1b88f55e9bcd85929539a3247dc6d5e3f0cb7b4bdf25d3b161542af4e226fffe4acb81fd33da136db8de02ccb79d7b61619c2
