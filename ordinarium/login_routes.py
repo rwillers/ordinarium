@@ -1,4 +1,4 @@
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from flask import (
     current_app,
@@ -106,9 +106,16 @@ def _safe_redirect_target(target, fallback_endpoint="main.services"):
         return url_for(fallback_endpoint)
     if target.startswith(("//", "\\\\")):
         return url_for(fallback_endpoint)
-    parsed = urlparse(target)
-    if parsed.scheme or parsed.netloc:
+    host_url = request.host_url
+    ref_url = urlparse(host_url)
+    test_url = urlparse(urljoin(host_url, target))
+    if test_url.scheme not in ("http", "https"):
         return url_for(fallback_endpoint)
-    if not target.startswith("/"):
+    if ref_url.netloc != test_url.netloc:
         return url_for(fallback_endpoint)
-    return target
+    safe_path = test_url.path
+    if test_url.query:
+        safe_path = f"{safe_path}?{test_url.query}"
+    if test_url.fragment:
+        safe_path = f"{safe_path}#{test_url.fragment}"
+    return safe_path
