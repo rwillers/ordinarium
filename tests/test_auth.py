@@ -1,4 +1,5 @@
 from ordinarium.db import get_db
+from flask.testing import FlaskClient
 
 
 def test_login_required_redirects_when_logged_out(client):
@@ -22,7 +23,7 @@ def test_signup_creates_user_and_logs_in(app, client):
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/services")
     with client.session_transaction() as session:
-        assert session.get("user_id")
+        assert session.get("_user_id")
     with app.app_context():
         db = get_db()
         user = db.execute(
@@ -31,6 +32,22 @@ def test_signup_creates_user_and_logs_in(app, client):
         ).fetchone()
         assert user is not None
         assert user["first_name"] == "Ada"
+
+
+def test_signup_rejects_missing_csrf(app):
+    app.config.update(WTF_CSRF_ENABLED=True)
+    app.test_client_class = FlaskClient
+    client = app.test_client()
+    response = client.post(
+        "/signup",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "password": "strong-pass",
+        },
+    )
+    assert response.status_code == 400
 
 
 def test_login_rejects_invalid_credentials(client, user_factory):

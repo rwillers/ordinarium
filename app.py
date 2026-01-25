@@ -7,6 +7,7 @@ from ordinarium import create_app
 
 app = create_app()
 
+
 def _debug_enabled():
     return (
         os.getenv("ORDINARIUM_DEBUG") == "1"

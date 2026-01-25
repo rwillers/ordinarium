@@ -42,6 +42,8 @@ def app(tmp_path):
         TESTING=True,
         DATABASE=str(tmp_path / "test.db"),
         SECRET_KEY="test",
+        WTF_CSRF_ENABLED=False,
+        RATELIMIT_ENABLED=False,
     )
     app.test_client_class = CSRFClient
     with app.app_context():
@@ -132,5 +134,6 @@ def service_factory(app):
 def auth_client(client, user_factory):
     user_id = user_factory()
     with client.session_transaction() as session:
-        session["user_id"] = user_id
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
     return client, user_id

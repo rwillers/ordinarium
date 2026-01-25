@@ -1,0 +1,183 @@
+import json
+
+from .db import get_db
+from .service_defaults import DEFAULT_RITE
+from .service_planning import _parse_json_object
+
+
+def blank_service_payload(user_id, rite=DEFAULT_RITE):
+    return {
+        "user_id": user_id,
+        "title": None,
+        "rite": rite,
+        "season": None,
+        "service_date": None,
+        "text_order": None,
+        "text_disabled": None,
+        "observance_handle": None,
+        "lesson_overrides": {},
+        "offertory_sentence_id": None,
+    }
+
+
+def create_service(db, payload):
+    serialized = serialize_service_payload(payload)
+    cursor = db.execute(
+        """
+        insert into services (
+          user_id,
+          title,
+          rite,
+          text_order,
+          text_disabled,
+          season,
+          service_date,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            serialized["user_id"],
+            serialized["title"],
+            serialized["rite"],
+            serialized["text_order"],
+            serialized["text_disabled"],
+            serialized["season"],
+            serialized["service_date"],
+            serialized["observance_handle"],
+            serialized["lesson_overrides"],
+            serialized["offertory_sentence_id"],
+        ),
+    )
+    return cursor.lastrowid
+
+
+def serialize_service_payload(payload):
+    return {
+        "user_id": payload.get("user_id"),
+        "title": payload.get("title"),
+        "rite": payload.get("rite"),
+        "text_order": dump_json_value(payload.get("text_order")),
+        "text_disabled": dump_json_value(payload.get("text_disabled")),
+        "season": payload.get("season"),
+        "service_date": payload.get("service_date"),
+        "observance_handle": payload.get("observance_handle"),
+        "lesson_overrides": dump_json_value(payload.get("lesson_overrides")),
+        "offertory_sentence_id": payload.get("offertory_sentence_id"),
+    }
+
+
+def load_service_payload(db, service_id, user_id=None):
+    if not service_id:
+        return None
+    query = """
+        select
+          user_id,
+          title,
+          rite,
+          text_order,
+          text_disabled,
+          season,
+          service_date,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id
+        from services where id=? {user_filter} limit 1
+        """
+    params = [service_id]
+    user_filter = ""
+    if user_id:
+        user_filter = "and user_id=?"
+        params.append(user_id)
+    row = db.execute(query.format(user_filter=user_filter), params).fetchone()
+    if not row:
+        return None
+    payload = dict(row)
+    payload["lesson_overrides"] = _parse_json_object(payload.get("lesson_overrides"))
+    return payload
+
+
+def update_service_columns(db, service_id, payload):
+    serialized = serialize_service_payload(payload)
+    db.execute(
+        """
+        update services set
+          title=?,
+          rite=?,
+          text_order=?,
+          text_disabled=?,
+          season=?,
+          service_date=?,
+          observance_handle=?,
+          lesson_overrides=?,
+          offertory_sentence_id=?
+        where id=?
+        """,
+        (
+            serialized["title"],
+            serialized["rite"],
+            serialized["text_order"],
+            serialized["text_disabled"],
+            serialized["season"],
+            serialized["service_date"],
+            serialized["observance_handle"],
+            serialized["lesson_overrides"],
+            serialized["offertory_sentence_id"],
+            service_id,
+        ),
+    )
+
+
+def dump_json_value(value):
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return json.dumps(value)
+    return value
+
+
+def load_service_for_text(service_id, user_id=None):
+    if not service_id:
+        return None, {}
+    db = get_db()
+    if user_id:
+        saved_service = db.execute(
+            """
+            select
+              text_order,
+              text_disabled,
+              season,
+              rite,
+              service_date,
+              observance_handle,
+              lesson_overrides,
+              offertory_sentence_id
+            from services where id=? and user_id=? limit 1
+            """,
+            (service_id, user_id),
+        ).fetchone()
+    else:
+        saved_service = db.execute(
+            """
+            select
+              text_order,
+              text_disabled,
+              season,
+              rite,
+              service_date,
+              observance_handle,
+              lesson_overrides,
+              offertory_sentence_id
+            from services where id=? limit 1
+            """,
+            (service_id,),
+        ).fetchone()
+    if not saved_service:
+        return None, {}
+    saved_data = {
+        "observance_handle": saved_service["observance_handle"],
+        "lesson_overrides": _parse_json_object(saved_service["lesson_overrides"]),
+        "offertory_sentence_id": saved_service["offertory_sentence_id"],
+    }
+    return saved_service, saved_data
