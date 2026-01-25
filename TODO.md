@@ -2,10 +2,20 @@
 
 Remaining work and follow-ups.
 
-## Planning Center API (one-way push)
+## High-level
+
+- Implement export formats: PDF (already supported through custom print stylesheet, but would be nice to give download option) and DOCX.
+- Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
+- Implement additional export formats and integrations: Planning Center, ProPresenter, etc.
+- Add team accounts (shared services and element libraries).
+- Add collaboration features for team accounts: comments, approvals, version history.
+
+## Details
+
+### Planning Center API (one-way push)
 Goal: map an Ordinarium `/service` plan to a Planning Center Services plan, then create/update the PCO service order to match Ordinarium elements.
 
-### Open items
+#### Open items
 - Confirm OAuth 2 flow requirements for user-linked accounts (scopes, refresh token handling, org selection).
 - Confirm the exact Services API endpoints and JSON:API shapes for:
   - Service Types
@@ -20,7 +30,7 @@ Goal: map an Ordinarium `/service` plan to a Planning Center Services plan, then
 - Decide whether to support PCO plan templates (import) or always build from scratch.
 - Confirm rate limits and any pagination needs for large service types.
 
-### Planning steps
+#### Planning steps
 - Draft a minimal data model for account linkage and mapping:
   - PCO org + service type mapping per Ordinarium service context.
   - Optional per-plan mapping: Ordinarium service instance ↔ PCO plan id.
@@ -36,7 +46,7 @@ Goal: map an Ordinarium `/service` plan to a Planning Center Services plan, then
   - Preview changes and "push" confirmation.
 - Define audit/logging expectations (push timestamp, plan id, item counts).
 
-### Build details (future implementation)
+#### Build details (future implementation)
 - Add OAuth config + token storage (refresh tokens) in `instance/` or encrypted storage.
 - Add PCO integration module (e.g., `ordinarium/pco.py`) to wrap API calls.
 - Add database tables/migrations for:

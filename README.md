@@ -55,7 +55,7 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
 ## Roadmap
-- Implement export formats: PDF (already supported through custom print stylesheet) and DOCX.
+- Implement export formats: PDF (already supported through custom print stylesheet, but would be nice to give download option) and DOCX.
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
 - Implement additional export formats and integrations: Planning Center, ProPresenter, etc.
 - Add team accounts (shared services and element libraries).
