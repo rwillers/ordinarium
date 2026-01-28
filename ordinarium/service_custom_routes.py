@@ -70,6 +70,7 @@ def register_service_custom_routes(bp):
                 "update service_custom_elements set title=?, text=? where id=?",
                 (title, text_value, custom_id),
             )
+            update_service_columns(db, service_id, service_data)
             db.commit()
             if is_autosave:
                 return jsonify(

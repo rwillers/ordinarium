@@ -133,6 +133,9 @@ def register_service_persist_routes(bp):
                     "ok": True,
                     "can_delete": bool(payload.get("service_date")),
                     "can_share": bool(payload.get("service_date")),
+                    "service_title": payload.get("title") or "",
+                    "service_date": payload.get("service_date") or "",
+                    "service_season": payload.get("season") or "",
                     "observance_handle": payload.get("observance_handle"),
                     "lesson_defaults": _resolve_lesson_references(
                         payload.get("service_date"), payload.get("observance_handle")

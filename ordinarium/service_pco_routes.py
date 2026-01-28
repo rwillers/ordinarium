@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import current_app, flash, g, jsonify, redirect, request, url_for
 
 from .auth_session import login_required
@@ -183,6 +185,7 @@ def register_service_pco_routes(bp):
     @bp.route("/service/<int:service_id>/pco/sync", methods=["POST"])
     @login_required
     def service_pco_sync(service_id):
+        wants_json = "application/json" in request.headers.get("Accept", "")
         if not _pco_feature_enabled():
             return render_error("Not found.", 404)
         db = get_db()
@@ -195,14 +198,47 @@ def register_service_pco_routes(bp):
         try:
             connection = get_valid_pco_connection(g.user["id"], db)
         except PcoAuthError as exc:
+            if wants_json:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "sync_status": "failed",
+                            "error": str(exc),
+                        }
+                    ),
+                    400,
+                )
             return render_error(str(exc), 400)
         if not connection:
+            if wants_json:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "sync_status": "failed",
+                            "error": "Planning Center is not connected.",
+                        }
+                    ),
+                    400,
+                )
             return render_error("Planning Center is not connected.", 400)
         link = db.execute(
             "select * from service_pco_links where service_id=? limit 1",
             (service_id,),
         ).fetchone()
         if not link:
+            if wants_json:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "sync_status": "failed",
+                            "error": "Planning Center plan not linked.",
+                        }
+                    ),
+                    400,
+                )
             return render_error("Planning Center plan not linked.", 400)
         try:
             result = sync_service_plan(
@@ -214,20 +250,54 @@ def register_service_pco_routes(bp):
                 link["pco_plan_id"],
             )
         except PcoAuthError as exc:
+            failed_at = datetime.utcnow().isoformat()
             update_service_pco_sync_status(
-                service_id, "failed", error=str(exc), db=db
+                service_id, "failed", error=str(exc), synced_at=failed_at, db=db
             )
             db.commit()
+            if wants_json:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "sync_status": "failed",
+                            "synced_at": failed_at,
+                            "error": str(exc),
+                        }
+                    ),
+                    400,
+                )
             return render_error("PCO authorization failed.", 400)
         except Exception as exc:
+            failed_at = datetime.utcnow().isoformat()
             update_service_pco_sync_status(
-                service_id, "failed", error=str(exc), db=db
+                service_id, "failed", error=str(exc), synced_at=failed_at, db=db
             )
             db.commit()
+            if wants_json:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "sync_status": "failed",
+                            "synced_at": failed_at,
+                            "error": str(exc),
+                        }
+                    ),
+                    400,
+                )
             return render_error("PCO sync failed.", 400)
         update_service_pco_sync_status(
             service_id, "success", error=None, synced_at=result.get("synced_at"), db=db
         )
         db.commit()
+        if wants_json:
+            return jsonify(
+                {
+                    "ok": True,
+                    "sync_status": "success",
+                    "synced_at": result.get("synced_at"),
+                }
+            )
         flash("Planning Center sync complete.", "success")
         return redirect(url_for("main.service", service_id=service_id))

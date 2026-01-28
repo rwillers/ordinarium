@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, datetime
 
 from flask import current_app, g, redirect, render_template, request, url_for
 
@@ -18,6 +18,14 @@ from .pco_sync import list_service_types
 
 
 def register_service_overview_routes(bp):
+    def parse_timestamp(value):
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
     @bp.route("/services")
     @login_required
     def services():
@@ -160,11 +168,30 @@ def register_service_overview_routes(bp):
                     )
                 except Exception:
                     pco_service_types = []
+        pco_sync_state = None
+        pco_sync_at = None
+        if pco_link:
+            pco_sync_at = pco_link["last_synced_at"]
+            if pco_link["last_sync_status"] == "failed":
+                pco_sync_state = "failed"
+            else:
+                if not pco_link["last_synced_at"]:
+                    pco_sync_state = "unsynced"
+                else:
+                    service_updated_at = context.get("service", {}).get("updated_at")
+                    service_dt = parse_timestamp(service_updated_at)
+                    sync_dt = parse_timestamp(pco_link["last_synced_at"])
+                    if service_dt and sync_dt and service_dt > sync_dt:
+                        pco_sync_state = "unsynced"
+                    else:
+                        pco_sync_state = "synced"
         context.update(
             {
                 "pco_connected": bool(pco_connection) if pco_enabled else False,
                 "pco_link": pco_link,
                 "pco_service_types": pco_service_types,
+                "pco_sync_state": pco_sync_state,
+                "pco_sync_at": pco_sync_at,
             }
         )
         return render_template("service.html", **context)

@@ -111,7 +111,8 @@ def update_service_columns(db, service_id, payload):
           service_date=?,
           observance_handle=?,
           lesson_overrides=?,
-          offertory_sentence_id=?
+          offertory_sentence_id=?,
+          updated_at=CURRENT_TIMESTAMP
         where id=?
         """,
         (

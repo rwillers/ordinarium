@@ -218,6 +218,7 @@ CREATE TABLE services (
   observance_handle TEXT,
   lesson_overrides JSON CHECK (lesson_overrides IS NULL OR json_valid(lesson_overrides)),
   offertory_sentence_id INTEGER,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id) VALUES (1, 1, 'Last Sunday of Christmas', 'Renewed Ancient Text', 'Christmastide', '2026-01-04', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL);

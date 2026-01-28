@@ -31,7 +31,8 @@ def build_plan_context(
           rite,
           observance_handle,
           lesson_overrides,
-          offertory_sentence_id
+          offertory_sentence_id,
+          updated_at
         from services
         where id=? and user_id=? limit 1
         """,
@@ -97,6 +98,7 @@ def build_plan_context(
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": effective_rite,
         "title": saved_plan["title"] if saved_plan else "",
+        "updated_at": saved_plan["updated_at"] if saved_plan else "",
     }
     lesson_overrides = parse_json_object(
         saved_plan["lesson_overrides"] if saved_plan else None

@@ -51,6 +51,12 @@
 	}
 }
 
+@keyframes pco-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 html {
 	margin: 0;
 	padding: 0;
@@ -801,6 +807,75 @@ div#page {
 	.plan-title {
 		font-weight: 600;
 		cursor: pointer;
+	}
+	.pco-sync-panel {
+		float: right;
+		margin-left: auto;
+		margin-bottom: 0.75em;
+		margin-left: 1em;
+		background: #fff;
+		border: 1px solid rgba(118, 50, 63, 0.2);
+		border-radius: var(--radius-sm);
+		padding: 0.75em 0.9em;
+		min-width: 220px;
+	}
+	.pco-sync-panel.is-hidden {
+		display: none;
+	}
+	.pco-sync-label {
+		font-size: 0.7em;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--rubric-color);
+		margin-bottom: 0.35em;
+	}
+	.pco-sync-status {
+		margin: 0 0 0.5em 0;
+		font-size: 0.95em;
+		font-weight: 600;
+	}
+	.pco-sync-status[data-state="failed"] {
+		color: #7c1e1a;
+	}
+	.pco-sync-status[data-state="synced"] {
+		color: var(--body-color);
+	}
+	.pco-sync-status[data-state="unsynced"] {
+		color: var(--rubric-color);
+	}
+	.pco-sync-actions {
+		display: flex;
+		gap: 0.5em;
+		flex-wrap: wrap;
+	}
+	.pco-sync-button {
+		position: relative;
+		padding-right: 2em;
+	}
+	.pco-sync-spinner {
+		position: absolute;
+		right: 0.65em;
+		display: inline-block;
+		width: 0.9em;
+		height: 0.9em;
+		border: 2px solid rgba(118, 50, 63, 0.3);
+		border-top-color: var(--rubric-color);
+		border-radius: 50%;
+		opacity: 0;
+		animation: pco-spin 0.9s linear infinite;
+		transform-origin: 50% 50%;
+	}
+	.pco-sync-button.is-loading .pco-sync-spinner {
+		opacity: 1;
+	}
+	.pco-sync-button.is-loading {
+		pointer-events: none;
+	}
+	@media (max-width: 640px) {
+		.pco-sync-panel {
+			float: none;
+			width: 100%;
+		}
 	}
 	.plan-handle {
 		color: var(--rubric-color);
