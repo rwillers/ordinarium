@@ -8,7 +8,13 @@
 	<p>Select a date to view the season and matching observances with associated propers.</p>
 	<div class="propers-search-controls">
 		<label class="propers-search-label" for="propers-search-date">Service date</label>
-		<input id="propers-search-date" type="date" value="{{ today }}" />
+		<div class="propers-search-date-controls" role="group" aria-label="Service date navigation">
+			<button type="button" class="propers-search-shift" data-shift="-7" aria-label="Previous week">&laquo;</button>
+			<button type="button" class="propers-search-shift" data-shift="-1" aria-label="Previous day">&lsaquo;</button>
+			<input id="propers-search-date" type="date" value="{{ today }}" />
+			<button type="button" class="propers-search-shift" data-shift="1" aria-label="Next day">&rsaquo;</button>
+			<button type="button" class="propers-search-shift" data-shift="7" aria-label="Next week">&raquo;</button>
+		</div>
 		<button type="button" id="propers-search-button">Search</button>
 	</div>
 	<div class="propers-search-summary" id="propers-search-summary" aria-live="polite"></div>
@@ -19,6 +25,35 @@
 	const searchButton = document.querySelector('#propers-search-button')
 	const summary = document.querySelector('#propers-search-summary')
 	const results = document.querySelector('#propers-search-results')
+	const shiftButtons = document.querySelectorAll('.propers-search-shift')
+
+	const formatDateInput = (date) => {
+		const year = date.getFullYear()
+		const month = `${date.getMonth() + 1}`.padStart(2, '0')
+		const day = `${date.getDate()}`.padStart(2, '0')
+		return `${year}-${month}-${day}`
+	}
+
+	const parseDateInput = (value) => {
+		if (!value) {
+			return null
+		}
+		const [year, month, day] = value.split('-').map(Number)
+		if (!year || !month || !day) {
+			return null
+		}
+		return new Date(year, month - 1, day)
+	}
+
+	const shiftDateBy = (days) => {
+		const currentDate = parseDateInput(dateInput.value)
+		if (!currentDate) {
+			return
+		}
+		currentDate.setDate(currentDate.getDate() + days)
+		dateInput.value = formatDateInput(currentDate)
+		fetchResults()
+	}
 
 	const buildLessonList = (lessons) => {
 		const entries = [
@@ -123,6 +158,14 @@
 
 	searchButton.addEventListener('click', fetchResults)
 	dateInput.addEventListener('change', fetchResults)
+	shiftButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			const shift = Number(button.dataset.shift)
+			if (!Number.isNaN(shift)) {
+				shiftDateBy(shift)
+			}
+		})
+	})
 
 	if (dateInput.value) {
 		fetchResults()

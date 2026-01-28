@@ -1209,6 +1209,41 @@ div#text, .propers-search-markdown {
 	margin: 1.2em 0;
 }
 
+.propers-search-date-controls {
+	display: flex;
+	align-items: center;
+	gap: 0;
+}
+
+.propers-search-date-controls > * {
+	border-radius: 0;
+}
+
+.propers-search-date-controls > *:not(:first-child) {
+	margin-left: -1px;
+}
+
+.propers-search-date-controls input[type="date"] {
+	border-radius: 0;
+}
+
+.propers-search-date-controls > :first-child {
+	border-top-left-radius: var(--radius-sm);
+	border-bottom-left-radius: var(--radius-sm);
+}
+
+.propers-search-date-controls > :last-child {
+	border-top-right-radius: var(--radius-sm);
+	border-bottom-right-radius: var(--radius-sm);
+}
+
+.propers-search-shift {
+	padding: 0.4em 0.6em;
+	min-width: 2.2em;
+	font-size: 1em;
+	line-height: 1;
+}
+
 .propers-search-label {
 	font-family: var(--header-font-family);
 	font-size: 0.9em;
