@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+	<div class="plan-header plan-header-inline">
+		<h2>Admin: {{ user_record.first_name }} {{ user_record.last_name }}</h2>
+		<div class="plan-header-actions">
+			<a class="button" href="{{ url_for('main.admin_index') }}">Back to users</a>
+		</div>
+	</div>
+
+	<form class="auth-form" method="post">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+		<p><label class="plan-field">
+			<span>First name:</span>
+			<input type="text" name="first_name" autocomplete="given-name" value="{{ user_record.first_name }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Last name:</span>
+			<input type="text" name="last_name" autocomplete="family-name" value="{{ user_record.last_name }}" required>
+		</label></p>
+		<p><label class="plan-field">
+			<span>Email address:</span>
+			<input type="email" name="email" autocomplete="email" value="{{ user_record.email }}" required>
+		</label></p>
+		<p class="plan-field">
+			<span>Feature flags</span>
+			{% for flag in feature_flags %}
+				<label class="auth-toggle">
+					<input type="checkbox" name="flag_{{ flag.key }}" {% if enabled_flags.get(flag.key) %}checked{% endif %}>
+					{{ flag.label }}
+				</label>
+			{% endfor %}
+		</p>
+		<div class="auth-actions">
+			<button class="plan-submit" type="submit">Save changes</button>
+		</div>
+	</form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+	<div class="plan-header">
+		<h2>Integrations</h2>
+	</div>
+
+	<section class="integration-card">
+		<h3>Planning Center Online</h3>
+		{% if pco_connection %}
+			<p>Connected.</p>
+			<form class="auth-form" action="{{ url_for('main.pco_disconnect') }}" method="post" onsubmit="return confirm('Disconnect Planning Center?');">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<div class="auth-actions">
+					<button class="plan-submit" type="submit">Disconnect</button>
+				</div>
+			</form>
+		{% else %}
+			<p>Connect Planning Center Online to sync service plans.</p>
+			<div class="auth-actions">
+				<a class="plan-submit" href="{{ url_for('main.pco_connect') }}">Connect</a>
+			</div>
+		{% endif %}
+	</section>
+</div>
+
+{% endblock %}

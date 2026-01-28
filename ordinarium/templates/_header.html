@@ -11,6 +11,12 @@
 			<div class="user-dropdown" style="opacity: 0; pointer-events: none; transform: translateY(-4px);">
 				<a href="{{ url_for('main.services') }}">Services</a>
 				<a href="{{ url_for('main.templates') }}">Templates</a>
+				{% if user.has_feature('pco_sync') %}
+				<a href="{{ url_for('main.integrations') }}">Integrations</a>
+				{% endif %}
+				{% if user.has_feature('admin') %}
+				<a href="{{ url_for('main.admin_index') }}">Admin</a>
+				{% endif %}
 				<a href="{{ url_for('main.account') }}">Account</a>
 				<a href="{{ url_for('main.logout') }}">Log out</a>
 			</div>

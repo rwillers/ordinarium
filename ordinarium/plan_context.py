@@ -96,6 +96,7 @@ def build_plan_context(
         "season": saved_plan["season"] if saved_plan else "",
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": effective_rite,
+        "title": saved_plan["title"] if saved_plan else "",
     }
     lesson_overrides = parse_json_object(
         saved_plan["lesson_overrides"] if saved_plan else None

@@ -9,6 +9,9 @@
 				<div class="plan-header-actions">
 					<div class="plan-header-buttons">
 						<a class="button" id="plan-view-link" href="{{ url_for('main.text', service_id=service_id) }}">View</a>
+						{% if pco_connected %}
+						<button class="plan-submit" type="button" id="plan-sync-toggle">Sync</button>
+						{% endif %}
 						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
 						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')" data-plan-delete{% if not can_delete %} style="display: none;"{% endif %}>
 							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -37,6 +40,85 @@
 			</div>
 		</div>
 	</div>
+	{% if pco_connected %}
+	<div class="share-modal" id="pco-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-pco-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="pco-modal-title">
+			<h3 id="pco-modal-title">Planning Center</h3>
+			{% if pco_link %}
+				<p>
+					Linked to
+					<a href="https://services.planningcenteronline.com/plans/{{ pco_link.pco_plan_id }}" target="_blank" rel="noopener">{{ pco_link.pco_plan_title or 'a plan' }}</a>{% if pco_link.pco_service_type_name %} in {{ pco_link.pco_service_type_name }}{% endif %}.
+				</p>
+				{% if pco_link.last_synced_at %}
+					<p>Last sync: <span data-sync-datetime="{{ pco_link.last_synced_at }}"></span>{% if pco_link.last_sync_status %} ({{ pco_link.last_sync_status }}){% endif %}</p>
+				{% endif %}
+				{% if pco_link.last_sync_error %}
+					<p class="plan-error">Last sync error: {{ pco_link.last_sync_error }}</p>
+				{% endif %}
+				<div class="auth-actions">
+					<form action="{{ url_for('main.service_pco_sync', service_id=service_id) }}" method="post" onsubmit="return confirm('This will replace all plan items in Planning Center for this service. Team member assignments will be preserved. Continue?');">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<button class="plan-submit" type="submit">Sync to Planning Center</button>
+					</form>
+					<form action="{{ url_for('main.service_pco_unlink', service_id=service_id) }}" method="post" onsubmit="return confirm('Remove the Planning Center link for this service?');">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<button class="plan-submit" type="submit">Remove link</button>
+					</form>
+				</div>
+			{% else %}
+				<p>Link this service to a Planning Center plan to enable sync.</p>
+				<div class="pco-link-toggle" role="tablist" aria-label="Link mode">
+					<button class="pco-link-option is-active" type="button" data-pco-link-mode="existing">Link existing</button>
+					<button class="pco-link-option" type="button" data-pco-link-mode="create">Create new</button>
+				</div>
+				<div class="plan-inline-fields" data-pco-link-forms>
+					<form class="plan-field" action="{{ url_for('main.service_pco_link', service_id=service_id) }}" method="post" data-pco-link-form="existing">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="mode" value="existing">
+						<input type="hidden" name="pco_service_type_name" data-pco-service-type-name>
+						<span>Link existing plan</span>
+						<select name="pco_service_type_id" data-pco-service-type required>
+							<option value="">Select a service type</option>
+							{% for service_type in pco_service_types %}
+								<option value="{{ service_type.id }}">{{ service_type.attributes.name }}</option>
+							{% endfor %}
+						</select>
+						<div class="pco-plan-row">
+							<select name="pco_plan_id" data-pco-plan-select required>
+								<option value="">Select a plan</option>
+							</select>
+							<button class="plan-icon-button" type="button" data-pco-plan-refresh aria-label="Refresh plans">↻</button>
+						</div>
+						<small class="plan-field-value" data-pco-plan-status>Choose a service type to load plans for this service date.</small>
+						<button class="plan-submit" type="submit">Link plan</button>
+					</form>
+					<form class="plan-field" action="{{ url_for('main.service_pco_link', service_id=service_id) }}" method="post" data-pco-link-form="create" style="display: none;">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="mode" value="create">
+						<input type="hidden" name="pco_service_type_name" data-pco-service-type-name>
+						<span>Create new plan</span>
+						<select name="pco_service_type_id" data-pco-service-type required>
+							<option value="">Select a service type</option>
+							{% for service_type in pco_service_types %}
+								<option value="{{ service_type.id }}">{{ service_type.attributes.name }}</option>
+							{% endfor %}
+						</select>
+					<input type="text" name="pco_plan_title" placeholder="Plan title" value="{{ service.title or '' }}" required>
+					<input type="date" name="pco_plan_date" value="{{ service.service_date or '' }}" required>
+					<input type="time" name="pco_plan_time" required>
+					<input type="hidden" name="pco_series_title" value="{{ service.season or '' }}">
+					<input type="hidden" name="pco_plan_tz_offset" value="">
+					<button class="plan-submit" type="submit">Create and link</button>
+				</form>
+			</div>
+			{% endif %}
+			<div class="share-modal-actions">
+				<button type="button" class="plan-submit" data-pco-close>Close</button>
+			</div>
+		</div>
+	</div>
+	{% endif %}
 	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “View” to see your service text.</p>
 
 	<strong>{{ rite }}</strong>
@@ -250,14 +332,20 @@
 		</div>
 	</div>
 
-	<script>
-		const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-		const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-		const shareButton = document.querySelector('[data-share-url]')
+<script>
+	const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+	const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+	const mainEl = document.querySelector('main')
+	if (mainEl && document.querySelector('.plan-page')) {
+		mainEl.classList.add('has-action-bar')
+	}
+	const shareButton = document.querySelector('[data-share-url]')
 		const shareModal = document.querySelector('#share-modal')
 		const shareModalUrl = document.querySelector('#share-modal-url')
 		const shareCopyButton = document.querySelector('#share-copy-button')
 		const shareCopyFeedback = document.querySelector('#share-copy-feedback')
+		const syncToggle = document.querySelector('#plan-sync-toggle')
+		const pcoModal = document.querySelector('#pco-modal')
 
 		const openShareModal = (url) => {
 			if (!shareModal || !shareModalUrl) {
@@ -277,6 +365,22 @@
 				return
 			}
 			shareModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+		}
+
+		const openPcoModal = () => {
+			if (!pcoModal) {
+				return
+			}
+			pcoModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+		}
+
+		const closePcoModal = () => {
+			if (!pcoModal) {
+				return
+			}
+			pcoModal.setAttribute('aria-hidden', 'true')
 			document.body.classList.remove('is-modal-open')
 		}
 
@@ -309,6 +413,20 @@
 			})
 		}
 
+		if (pcoModal) {
+			pcoModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-pco-close]')) {
+					closePcoModal()
+				}
+			})
+		}
+
+		if (syncToggle) {
+			syncToggle.addEventListener('click', () => {
+				openPcoModal()
+			})
+		}
+
 		if (shareCopyButton && shareModalUrl) {
 			shareCopyButton.addEventListener('click', async () => {
 				let copied = false
@@ -327,8 +445,14 @@
 		}
 
 		document.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape' && shareModal && shareModal.getAttribute('aria-hidden') === 'false') {
+			if (event.key !== 'Escape') {
+				return
+			}
+			if (shareModal && shareModal.getAttribute('aria-hidden') === 'false') {
 				closeShareModal()
+			}
+			if (pcoModal && pcoModal.getAttribute('aria-hidden') === 'false') {
+				closePcoModal()
 			}
 		})
 
@@ -682,7 +806,170 @@
 		const offertoryError = offertoryModal?.querySelector('#offertory-sentence-error')
 		let activeLessonRow = null
 		let activeOffertoryRow = null
-		const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
+	const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
+
+	const pcoServiceTypeSelects = document.querySelectorAll('[data-pco-service-type]')
+	const pcoLinkForms = document.querySelectorAll('[data-pco-link-form]')
+	const pcoLinkButtons = document.querySelectorAll('[data-pco-link-mode]')
+	const syncDateNodes = document.querySelectorAll('[data-sync-datetime]')
+	pcoServiceTypeSelects.forEach((select) => {
+		const formatPlanDate = (value) => {
+			if (!value) {
+				return ''
+			}
+			const hasTime = value.includes('T')
+			const date = new Date(value)
+			if (Number.isNaN(date.getTime())) {
+				return value
+			}
+			const options = {
+				year: 'numeric',
+				month: 'long',
+				day: 'numeric',
+			}
+			if (hasTime) {
+				options.hour = 'numeric'
+				options.minute = '2-digit'
+			}
+			const hasUtc = /[zZ]$/.test(value)
+			if (hasUtc) {
+				return date.toLocaleString(undefined, { ...options, timeZone: 'UTC' })
+			}
+			return date.toLocaleString(undefined, options)
+		}
+		const updateHidden = () => {
+			const hidden = select.form?.querySelector('[data-pco-service-type-name]')
+			if (!hidden) {
+				return
+			}
+			const selected = select.selectedOptions?.[0]
+			hidden.value = selected ? selected.textContent.trim() : ''
+		}
+		const updatePlans = async () => {
+			const planSelect = select.form?.querySelector('[data-pco-plan-select]')
+			const status = select.form?.querySelector('[data-pco-plan-status]')
+			if (!planSelect || !serviceId) {
+				return
+			}
+			planSelect.innerHTML = '<option value="">Select a plan</option>'
+			const selectedId = select.value
+			if (!selectedId) {
+				if (status) {
+					status.textContent = 'Choose a service type to load plans for this service date.'
+				}
+				return
+			}
+			if (!planServiceDate?.value) {
+				if (status) {
+					status.textContent = 'Set a service date to load matching plans.'
+				}
+				return
+			}
+			if (status) {
+				status.textContent = 'Loading plans...'
+			}
+			try {
+				const response = await fetch(`/service/${serviceId}/pco/plans?service_type_id=${encodeURIComponent(selectedId)}`)
+				const payload = await response.json()
+				if (!response.ok || !payload.ok) {
+					throw new Error(payload.error || 'Unable to load plans.')
+				}
+				const plans = payload.plans || []
+				if (!plans.length) {
+					if (status) {
+						status.textContent = 'No plans match this service date.'
+					}
+					return
+				}
+				plans.forEach((plan) => {
+					const option = document.createElement('option')
+					option.value = plan.id
+					const formatted = formatPlanDate(plan.sort_date)
+					option.textContent = formatted ? `${plan.title} (${formatted})` : plan.title
+					planSelect.appendChild(option)
+				})
+				if (status) {
+					status.textContent = 'Select a plan to link.'
+				}
+			} catch (error) {
+				if (status) {
+					status.textContent = error?.message || 'Unable to load plans.'
+				}
+			}
+		}
+		select.addEventListener('change', () => {
+			updateHidden()
+			updatePlans()
+		})
+		const refreshButton = select.form?.querySelector('[data-pco-plan-refresh]')
+		if (refreshButton) {
+			refreshButton.addEventListener('click', updatePlans)
+		}
+		const nonEmptyOptions = Array.from(select.options).filter((option) => option.value)
+		if (nonEmptyOptions.length === 1) {
+			select.value = nonEmptyOptions[0].value
+			updateHidden()
+			updatePlans()
+		} else {
+			updateHidden()
+		}
+	})
+
+	const setPcoLinkMode = (mode) => {
+		pcoLinkButtons.forEach((button) => {
+			button.classList.toggle('is-active', button.getAttribute('data-pco-link-mode') === mode)
+		})
+		pcoLinkForms.forEach((form) => {
+			form.style.display = form.getAttribute('data-pco-link-form') === mode ? '' : 'none'
+		})
+	}
+
+		if (pcoLinkButtons.length) {
+			pcoLinkButtons.forEach((button) => {
+				button.addEventListener('click', () => {
+					setPcoLinkMode(button.getAttribute('data-pco-link-mode'))
+				})
+			})
+			setPcoLinkMode('existing')
+		}
+
+		const updatePcoTimezoneOffset = () => {
+			const offsetInput = document.querySelector('input[name="pco_plan_tz_offset"]')
+			if (!offsetInput) {
+				return
+			}
+			offsetInput.value = String(new Date().getTimezoneOffset())
+		}
+
+		updatePcoTimezoneOffset()
+
+
+		const formatSyncDate = (value) => {
+			if (!value) {
+				return ''
+			}
+			const hasZone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value)
+			const normalized = hasZone ? value : `${value}Z`
+			const date = new Date(normalized)
+			if (Number.isNaN(date.getTime())) {
+				return value
+			}
+			const pad = (num) => String(num).padStart(2, '0')
+			const month = date.getMonth() + 1
+			const day = date.getDate()
+			const year = date.getFullYear()
+			const rawHours = date.getHours()
+			const hours = String(rawHours % 12 || 12)
+			const minutes = pad(date.getMinutes())
+			const seconds = pad(date.getSeconds())
+			const meridiem = rawHours >= 12 ? 'PM' : 'AM'
+			return `${month}/${day}/${year} ${hours}:${minutes}:${seconds} ${meridiem}`
+		}
+
+		syncDateNodes.forEach((node) => {
+			const value = node.getAttribute('data-sync-datetime')
+			node.textContent = formatSyncDate(value)
+		})
 
 		const closeRowMenus = (exceptMenu = null) => {
 			const menus = document.querySelectorAll('[data-row-menu]')

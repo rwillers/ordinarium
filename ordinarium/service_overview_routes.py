@@ -1,7 +1,7 @@
 import json
 from datetime import date
 
-from flask import g, redirect, render_template, request, url_for
+from flask import current_app, g, redirect, render_template, request, url_for
 
 from .auth_session import login_required
 from .db import get_db
@@ -10,7 +10,11 @@ from .service_defaults import DEFAULT_RITE, OFFERTORY_DEFAULT_PREFIX
 from .service_planning import build_plan_context, parse_plan_tokens, _parse_json_object
 from .service_formatting import format_services
 from .service_options import load_rite_options
+from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .service_store import blank_service_payload, create_service, update_service_columns
+from .pco_auth import get_valid_pco_connection
+from .pco_store import get_service_pco_link
+from .pco_sync import list_service_types
 
 
 def register_service_overview_routes(bp):
@@ -138,6 +142,30 @@ def register_service_overview_routes(bp):
             return render_error("Service not found.", 404)
         context = build_plan_context(
             service_id, rite, g.user["id"], OFFERTORY_DEFAULT_PREFIX
+        )
+        pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
+        pco_connection = None
+        pco_service_types = []
+        pco_link = get_service_pco_link(service_id, db=db)
+        if pco_enabled:
+            try:
+                pco_connection = get_valid_pco_connection(g.user["id"], db)
+            except Exception:
+                pco_connection = None
+            if pco_connection:
+                try:
+                    pco_service_types = list_service_types(
+                        current_app.config.get("PCO_API_BASE"),
+                        pco_connection["access_token"],
+                    )
+                except Exception:
+                    pco_service_types = []
+        context.update(
+            {
+                "pco_connected": bool(pco_connection) if pco_enabled else False,
+                "pco_link": pco_link,
+                "pco_service_types": pco_service_types,
+            }
         )
         return render_template("service.html", **context)
 

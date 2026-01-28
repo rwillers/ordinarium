@@ -220,7 +220,14 @@ main {
 }
 
 .flash-list {
-	margin: 0.8em 0 1em 0;
+	margin: 0.8em 0 calc(1em - 30px) 0;
+}
+main.has-action-bar .flash-list {
+	margin-top: calc(var(--action-bar-height) + 0.8em);
+	margin-bottom: calc(1em - 60px);
+}
+main.has-action-bar .flash-list {
+	margin-top: calc(var(--action-bar-height) + 0.8em);
 }
 .flash-banner {
 	border: 1px solid rgba(118, 50, 63, 0.35);
@@ -340,7 +347,7 @@ footer {
 	}
 }
 
-input[type="text"], input[type="date"], select {
+input[type="text"], input[type="date"], input[type="time"], select {
 	background: #f6f6f6;
 	border: 1px solid var(--line-color);
 	border-radius: 5px;
@@ -684,6 +691,24 @@ div#page {
 	.plan-actions {
 		margin: 0.8em 0 0 0;
 	}
+	.integration-card {
+		margin: 1.2em 0;
+		padding: 1em 1.2em;
+		border-radius: 0.75em;
+		border: 1px solid rgba(27, 27, 27, 0.12);
+		background: #fff;
+	}
+	.integration-card h3 {
+		margin-top: 0;
+	}
+	.pco-plan-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+	}
+	.pco-plan-row .plan-icon-button {
+		margin-top: 0.2em;
+	}
 	.plan-inline-fields {
 		display: flex;
 		gap: 1em;
@@ -754,6 +779,7 @@ div#page {
 		display: flex;
 		justify-content: flex-start;
 		margin-top: 0.5em;
+		gap: 0.75em;
 	}
 	.auth-toggle {
 		display: inline-flex;
@@ -908,13 +934,96 @@ div#page {
 		margin-top: 0.2em;
 		gap: 0.75em;
 	}
-	.share-modal-card .plan-custom-form {
-		border: none;
-		border-radius: 0;
-		padding: 0;
-		background: transparent;
-		gap: 0.6em;
-	}
+.share-modal-card .plan-custom-form {
+	border: none;
+	border-radius: 0;
+	padding: 0;
+	background: transparent;
+	gap: 0.6em;
+}
+.share-modal-card input[type="text"],
+.share-modal-card input[type="date"],
+.share-modal-card input[type="time"],
+.share-modal-card input[type="email"],
+.share-modal-card input[type="password"],
+.share-modal-card select,
+.share-modal-card textarea {
+	max-width: 100%;
+	box-sizing: border-box;
+}
+.share-modal-card select {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+#pco-modal .plan-inline-fields {
+	flex-direction: column;
+	align-items: stretch;
+	width: 100%;
+}
+#pco-modal .plan-inline-fields > * {
+	flex: 1 1 auto;
+	min-width: 0;
+	width: 100%;
+}
+#pco-modal .plan-field input,
+#pco-modal .plan-field select,
+#pco-modal .plan-field textarea {
+	width: 100%;
+}
+#pco-modal .pco-plan-row {
+	width: 100%;
+}
+#pco-modal .pco-plan-row select {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+#pco-modal .plan-submit,
+#pco-modal button {
+	max-width: 100%;
+	box-sizing: border-box;
+}
+.pco-link-toggle {
+	display: flex;
+	width: 100%;
+	border: 1px solid var(--line-color);
+	border-radius: 8px;
+	overflow: hidden;
+	margin: 0.6em 0 1em 0;
+	background: #f6f6f6;
+}
+.pco-link-option {
+	flex: 1 1 50%;
+	padding: 0.6em 1em;
+	border: none;
+	background: transparent;
+	font-family: var(--header-font-family);
+	font-size: 0.9em;
+	cursor: pointer;
+	color: #555 !important;
+	border-radius: 0;
+}
+.pco-link-option.is-active {
+	background: #fff;
+	color: var(--body-color);
+	font-weight: 600;
+}
+.pco-link-option:hover {
+	background: #fff;
+	color: var(--body-color);
+}
+.pco-link-option + .pco-link-option {
+	border-left: 1px solid var(--line-color);
+}
+.pco-link-option:first-child {
+	border-top-left-radius: 8px;
+	border-bottom-left-radius: 8px;
+}
+.pco-link-option:last-child {
+	border-top-right-radius: 8px;
+	border-bottom-right-radius: 8px;
+}
 }
 
 div#text {

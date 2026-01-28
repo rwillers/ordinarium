@@ -201,10 +201,11 @@ CREATE TABLE users (
   first_name TEXT,
   last_name TEXT,
   email TEXT NOT NULL,
-  password_hash TEXT
+  password_hash TEXT,
+  feature_flags TEXT CHECK (feature_flags IS NULL OR json_valid(feature_flags))
 );
 CREATE UNIQUE INDEX idx_users_email ON users(email);
-INSERT INTO users (id, first_name, last_name, email, password_hash) VALUES (1, 'Demo', 'User', 'demo@example.com', NULL);
+INSERT INTO users (id, first_name, last_name, email, password_hash, feature_flags) VALUES (1, 'Demo', 'User', 'demo@example.com', NULL, '{"admin": true}');
 CREATE TABLE services (
   id INTEGER PRIMARY KEY,
   user_id INTEGER NOT NULL,
@@ -226,6 +227,32 @@ CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
 CREATE INDEX idx_services_service_date ON services(service_date);
 CREATE INDEX idx_services_user_id_service_date ON services(user_id, service_date);
+CREATE TABLE pco_connections (
+  user_id INTEGER PRIMARY KEY,
+  access_token TEXT NOT NULL,
+  refresh_token TEXT,
+  token_type TEXT,
+  scope TEXT,
+  expires_at TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE TABLE service_pco_links (
+  id INTEGER PRIMARY KEY,
+  service_id INTEGER NOT NULL,
+  pco_service_type_id TEXT NOT NULL,
+  pco_service_type_name TEXT,
+  pco_plan_id TEXT NOT NULL,
+  pco_plan_title TEXT,
+  last_synced_at TEXT,
+  last_sync_status TEXT,
+  last_sync_error TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(service_id) REFERENCES services(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_service_pco_links_service_id ON service_pco_links(service_id);
 CREATE TABLE service_shares (
   id INTEGER PRIMARY KEY,
   service_id INTEGER NOT NULL,

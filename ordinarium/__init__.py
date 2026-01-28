@@ -67,6 +67,21 @@ def create_app():
         RATELIMIT_LOGIN=os.environ.get("RATELIMIT_LOGIN", "10/minute"),
         RATELIMIT_SIGNUP=os.environ.get("RATELIMIT_SIGNUP", "10/minute"),
         RATELIMIT_PASSWORD_RESET=os.environ.get("RATELIMIT_PASSWORD_RESET", "5/minute"),
+        PCO_API_BASE=os.environ.get(
+            "PCO_API_BASE", "https://api.planningcenteronline.com"
+        ),
+        PCO_OAUTH_AUTHORIZE_URL=os.environ.get(
+            "PCO_OAUTH_AUTHORIZE_URL",
+            "https://api.planningcenteronline.com/oauth/authorize",
+        ),
+        PCO_OAUTH_TOKEN_URL=os.environ.get(
+            "PCO_OAUTH_TOKEN_URL",
+            "https://api.planningcenteronline.com/oauth/token",
+        ),
+        PCO_CLIENT_ID=os.environ.get("PCO_CLIENT_ID"),
+        PCO_CLIENT_SECRET=os.environ.get("PCO_CLIENT_SECRET"),
+        PCO_OAUTH_REDIRECT_URI=os.environ.get("PCO_OAUTH_REDIRECT_URI"),
+        PCO_OAUTH_SCOPES=os.environ.get("PCO_OAUTH_SCOPES", "services"),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
         SESSION_COOKIE_SECURE=_config_bool(

@@ -8,6 +8,7 @@ from flask_login import (
     login_required as flask_login_required,
 )
 
+from .feature_flags import parse_feature_flags
 from .user_store import get_user_by_id
 
 login_manager = LoginManager()
@@ -20,21 +21,31 @@ class OrdinariumUser(UserMixin):
     last_name: str
     email: str
     password_hash: str | None = None
+    feature_flags: dict | None = None
 
     @classmethod
     def from_row(cls, row):
         if not row:
             return None
+        feature_value = None
+        if hasattr(row, "keys") and "feature_flags" in row.keys():
+            feature_value = row["feature_flags"]
         return cls(
             id=row["id"],
             first_name=row["first_name"],
             last_name=row["last_name"],
             email=row["email"],
             password_hash=row["password_hash"],
+            feature_flags=parse_feature_flags(feature_value),
         )
 
     def __getitem__(self, key):
         return getattr(self, key)
+
+    def has_feature(self, feature):
+        if not self.feature_flags:
+            return False
+        return bool(self.feature_flags.get(feature))
 
 
 def init_login(app):

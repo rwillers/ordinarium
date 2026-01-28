@@ -63,12 +63,22 @@ def user_factory(app):
         password="password123",
         first_name="Test",
         last_name="User",
+        feature_flags=None,
     ):
         with app.app_context():
             db = get_db()
+            flags_value = (
+                json.dumps(feature_flags) if feature_flags is not None else None
+            )
             db.execute(
-                "insert into users (first_name, last_name, email, password_hash) values (?, ?, ?, ?)",
-                (first_name, last_name, email, generate_password_hash(password)),
+                "insert into users (first_name, last_name, email, password_hash, feature_flags) values (?, ?, ?, ?, ?)",
+                (
+                    first_name,
+                    last_name,
+                    email,
+                    generate_password_hash(password),
+                    flags_value,
+                ),
             )
             db.commit()
             user = db.execute(
