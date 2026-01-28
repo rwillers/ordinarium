@@ -3,6 +3,8 @@
 	--body-font-family: apple-system-ui-serif, ui-serif, Georgia, serif;
 	--header-height: 64px;
 	--action-bar-height: 44px;
+	--radius-sm: 8px;
+	--radius-lg: 12px;
 	/* Occasional Prayers theme: */
 	--body-background-color: #f4f2f0; /* ivory */
 	--body-color: #565656; /* neutral gray */
@@ -126,7 +128,7 @@ header {
 		font-size: 0.9em;
 		border: 1px solid rgba(27, 27, 27, 0.2);
 		padding: 0.35em 0.65em;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.5);
 		display: inline-flex;
 		align-items: center;
@@ -155,7 +157,7 @@ header {
 		margin-top: 0;
 		background: #fff;
 		border: 1px solid rgba(27, 27, 27, 0.2);
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		padding: 0.4em;
 		min-width: 140px;
 		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.15);
@@ -234,7 +236,7 @@ main.has-action-bar .flash-list {
 	background: rgba(118, 50, 63, 0.12);
 	color: var(--rubric-color);
 	padding: 0.6em 0.8em;
-	border-radius: 0.5em;
+	border-radius: var(--radius-sm);
 	margin: 0 0 0.6em 0;
 }
 .flash-banner:last-child {
@@ -268,7 +270,7 @@ main.has-action-bar .flash-list {
 .share-modal-card {
 	position: relative;
 	background: #fff;
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 	padding: 24px;
 	width: min(520px, 92vw);
 	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
@@ -300,7 +302,7 @@ main.has-action-bar .flash-list {
 .share-modal-link input {
 	flex: 1;
 	border: 1px solid rgba(27, 27, 27, 0.2);
-	border-radius: 6px;
+	border-radius: var(--radius-sm);
 	padding: 0.6em 0.9em;
 	font-family: var(--header-font-family);
 	font-size: 0.9em;
@@ -350,7 +352,7 @@ footer {
 input[type="text"], input[type="date"], input[type="time"], select {
 	background: #f6f6f6;
 	border: 1px solid var(--line-color);
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	color: #555 !important;
 	font-family: var(--header-font-family);
 	font-size: 0.9em;
@@ -364,7 +366,7 @@ input[type="text"], input[type="date"], input[type="time"], select {
 button, input[type="submit"], .button, .button:visited {
 	background: #f6f6f6;
 	border: 1px solid var(--line-color);
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	color: #555 !important;
 	cursor: pointer;
 	font-family: var(--header-font-family);
@@ -483,7 +485,7 @@ div#page {
 	.plan-header-actions-fixed .plan-header-actions input[type="submit"],
 	.plan-header-actions-fixed .plan-header-actions .button {
 		border: none;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 	}
 	.plan-header-actions > * + * {
 		margin-left: 0;
@@ -504,31 +506,31 @@ div#page {
 	.plan-header-actions button,
 	.plan-header-actions input[type="submit"],
 	.plan-header-actions .button {
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 	}
 	.plan-header-actions > :first-child button,
 	.plan-header-actions > :first-child input[type="submit"],
 	.plan-header-actions > :first-child .button {
-		border-top-left-radius: 5px;
-		border-bottom-left-radius: 5px;
+		border-top-left-radius: var(--radius-sm);
+		border-bottom-left-radius: var(--radius-sm);
 	}
 	.plan-header-actions > button:first-child,
 	.plan-header-actions > input[type="submit"]:first-child,
 	.plan-header-actions > .button:first-child {
-		border-top-left-radius: 5px;
-		border-bottom-left-radius: 5px;
+		border-top-left-radius: var(--radius-sm);
+		border-bottom-left-radius: var(--radius-sm);
 	}
 	.plan-header-actions > :last-child button,
 	.plan-header-actions > :last-child input[type="submit"],
 	.plan-header-actions > :last-child .button {
-		border-top-right-radius: 5px;
-		border-bottom-right-radius: 5px;
+		border-top-right-radius: var(--radius-sm);
+		border-bottom-right-radius: var(--radius-sm);
 	}
 	.plan-header-actions > button:last-child,
 	.plan-header-actions > input[type="submit"]:last-child,
 	.plan-header-actions > .button:last-child {
-		border-top-right-radius: 5px;
-		border-bottom-right-radius: 5px;
+		border-top-right-radius: var(--radius-sm);
+		border-bottom-right-radius: var(--radius-sm);
 	}
 	.plan-header-buttons > * + * {
 		margin-left: -1px;
@@ -546,31 +548,31 @@ div#page {
 	.plan-header-buttons button,
 	.plan-header-buttons input[type="submit"],
 	.plan-header-buttons .button {
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 	}
 	.plan-header-buttons > :first-child button,
 	.plan-header-buttons > :first-child input[type="submit"],
 	.plan-header-buttons > :first-child .button {
-		border-top-left-radius: 5px;
-		border-bottom-left-radius: 5px;
+		border-top-left-radius: var(--radius-sm);
+		border-bottom-left-radius: var(--radius-sm);
 	}
 	.plan-header-buttons > button:first-child,
 	.plan-header-buttons > input[type="submit"]:first-child,
 	.plan-header-buttons > .button:first-child {
-		border-top-left-radius: 5px;
-		border-bottom-left-radius: 5px;
+		border-top-left-radius: var(--radius-sm);
+		border-bottom-left-radius: var(--radius-sm);
 	}
 	.plan-header-buttons > :last-child button,
 	.plan-header-buttons > :last-child input[type="submit"],
 	.plan-header-buttons > :last-child .button {
-		border-top-right-radius: 5px;
-		border-bottom-right-radius: 5px;
+		border-top-right-radius: var(--radius-sm);
+		border-bottom-right-radius: var(--radius-sm);
 	}
 	.plan-header-buttons > button:last-child,
 	.plan-header-buttons > input[type="submit"]:last-child,
 	.plan-header-buttons > .button:last-child {
-		border-top-right-radius: 5px;
-		border-bottom-right-radius: 5px;
+		border-top-right-radius: var(--radius-sm);
+		border-bottom-right-radius: var(--radius-sm);
 	}
 	p {
 		line-height: 1.5;
@@ -638,12 +640,12 @@ div#page {
 		border-top: 0;
 	}
 	.plan-row:first-child {
-		border-top-left-radius: 5px;
-		border-top-right-radius: 5px;
+		border-top-left-radius: var(--radius-sm);
+		border-top-right-radius: var(--radius-sm);
 	}
 	.plan-row:last-child {
-		border-bottom-left-radius: 5px;
-		border-bottom-right-radius: 5px;
+		border-bottom-left-radius: var(--radius-sm);
+		border-bottom-right-radius: var(--radius-sm);
 	}
 	.plan-row:hover {
 		background-color: #fff;
@@ -664,7 +666,7 @@ div#page {
 		appearance: none;
 		background: #fff;
 		border: 2px solid var(--line-color);
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		height: 1.5em;
 		left: 1.5em;
 		margin: 0;
@@ -694,7 +696,7 @@ div#page {
 	.integration-card {
 		margin: 1.2em 0;
 		padding: 1em 1.2em;
-		border-radius: 0.75em;
+		border-radius: var(--radius-lg);
 		border: 1px solid rgba(27, 27, 27, 0.12);
 		background: #fff;
 	}
@@ -732,14 +734,14 @@ div#page {
 	}
 	.plan-field input {
 		padding: 0.6em 0.75em;
-		border-radius: 0.5em;
+		border-radius: var(--radius-sm);
 		border: 1px solid rgba(27, 27, 27, 0.2);
 		background: #fff;
 		font-size: 0.95em;
 	}
 	.plan-field textarea {
 		padding: 0.6em 0.75em;
-		border-radius: 0.5em;
+		border-radius: var(--radius-sm);
 		border: 1px solid rgba(27, 27, 27, 0.2);
 		background: #fff;
 		font-size: 0.95em;
@@ -769,7 +771,7 @@ div#page {
 		background: rgba(124, 30, 26, 0.08);
 		color: #7c1e1a;
 		padding: 0.6em 0.8em;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		margin: 0.8em 0 1em 0;
 	}
 	.auth-form {
@@ -821,7 +823,7 @@ div#page {
 		justify-content: center;
 		color: var(--rubric-color) !important;
 		cursor: pointer;
-		border-radius: 4px;
+		border-radius: var(--radius-sm);
 		font-size: 1.05em;
 		line-height: 1;
 	}
@@ -837,7 +839,7 @@ div#page {
 	.plan-menu-toggle {
 		width: 2em;
 		height: 2em;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		font-size: 1em;
 		line-height: 1;
 	}
@@ -847,7 +849,7 @@ div#page {
 		top: calc(100% + 0.35em);
 		background: #fff;
 		border: 1px solid rgba(27, 27, 27, 0.15);
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
 		min-width: 11.5em;
 		padding: 0.4em;
@@ -873,7 +875,7 @@ div#page {
 		border: none;
 		padding: 0.45em 0.6em;
 		text-align: left;
-		border-radius: 5px;
+		border-radius: var(--radius-sm);
 		font-family: var(--header-font-family);
 		font-size: 0.9em;
 		color: var(--body-color);
@@ -921,7 +923,7 @@ div#page {
 	}
 	.plan-custom-form {
 		border: 1px solid var(--line-color);
-		border-radius: 0.6em;
+		border-radius: var(--radius-lg);
 		padding: 1.1em 1.25em;
 		background: #fff;
 		display: flex;
@@ -988,7 +990,7 @@ div#page {
 	display: flex;
 	width: 100%;
 	border: 1px solid var(--line-color);
-	border-radius: 8px;
+	border-radius: var(--radius-sm);
 	overflow: hidden;
 	margin: 0.6em 0 1em 0;
 	background: #f6f6f6;
@@ -1017,12 +1019,12 @@ div#page {
 	border-left: 1px solid var(--line-color);
 }
 .pco-link-option:first-child {
-	border-top-left-radius: 8px;
-	border-bottom-left-radius: 8px;
+	border-top-left-radius: var(--radius-sm);
+	border-bottom-left-radius: var(--radius-sm);
 }
 .pco-link-option:last-child {
-	border-top-right-radius: 8px;
-	border-bottom-right-radius: 8px;
+	border-top-right-radius: var(--radius-sm);
+	border-bottom-right-radius: var(--radius-sm);
 }
 }
 
@@ -1229,7 +1231,7 @@ div#text, .propers-search-markdown {
 .propers-search-card {
 	background: #fff;
 	border: 1px solid var(--line-color);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	padding: 1.2em;
 	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.04);
 }
