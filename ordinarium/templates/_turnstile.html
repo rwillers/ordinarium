@@ -16,6 +16,16 @@
 			return
 		}
 		const submit = form.querySelector('button[type="submit"], input[type="submit"]')
+		const setSubmitEnabled = (enabled) => {
+			if (!submit) {
+				return
+			}
+			if (enabled) {
+				submit.removeAttribute('disabled')
+			} else {
+				submit.setAttribute('disabled', 'disabled')
+			}
+		}
 
 		function onLoad() {
 			const widget = form.querySelector('.turnstile-widget')
@@ -26,21 +36,24 @@
 				sitekey: "{{ turnstile_site_key }}",
 				theme: "light",
 				callback: (value) => {
-					token = value
-					if (submit) {
-						submit.removeAttribute('disabled')
-					}
+					token = value || null
+					setSubmitEnabled(Boolean(token))
 				},
 				"error-callback": () => {
-					if (submit) {
-						submit.removeAttribute('disabled')
-					}
+					token = null
+					setSubmitEnabled(false)
+				},
+				"expired-callback": () => {
+					token = null
+					setSubmitEnabled(false)
+				},
+				"timeout-callback": () => {
+					token = null
+					setSubmitEnabled(false)
 				},
 			})
 			ready = true
-			if (submit && widgetId) {
-				submit.setAttribute('disabled', 'disabled')
-			}
+			setSubmitEnabled(false)
 		}
 
 		window.__turnstileQueue.push(onLoad)
@@ -57,9 +70,7 @@
 				return
 			}
 			event.preventDefault()
-			if (submit) {
-				submit.setAttribute('disabled', 'disabled')
-			}
+			setSubmitEnabled(false)
 		})
 	})()
 </script>
