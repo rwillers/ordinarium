@@ -24,6 +24,7 @@
 			}
 			widgetId = window.turnstile.render(widget, {
 				sitekey: "{{ turnstile_site_key }}",
+				theme: "light",
 				callback: (value) => {
 					token = value
 					if (submit) {
