@@ -44,6 +44,9 @@ def create_app():
         PASSWORD_RESET_EXPIRY_MINUTES=int(
             os.environ.get("PASSWORD_RESET_EXPIRY_MINUTES", "60")
         ),
+        TURNSTILE_ENABLED=_config_bool(
+            os.environ.get("TURNSTILE_ENABLED"), not _is_dev_env()
+        ),
         TURNSTILE_SITE_KEY=os.environ.get("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.environ.get("TURNSTILE_SECRET_KEY"),
         SMTP_HOST=os.environ.get("SMTP_HOST"),

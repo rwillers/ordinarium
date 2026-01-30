@@ -6,6 +6,8 @@ from flask import current_app
 
 
 def turnstile_enabled():
+    if not current_app.config.get("TURNSTILE_ENABLED", True):
+        return False
     return bool(current_app.config.get("TURNSTILE_SECRET_KEY")) and bool(
         current_app.config.get("TURNSTILE_SITE_KEY")
     )

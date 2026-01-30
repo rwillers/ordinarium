@@ -1,5 +1,5 @@
 {% if turnstile_site_key %}
-<div class="turnstile-widget" aria-hidden="true"></div>
+<div class="turnstile-widget"></div>
 <script>
 	window.__turnstileQueue = window.__turnstileQueue || []
 	window.ordinariumTurnstileOnload = window.ordinariumTurnstileOnload || function () {
@@ -10,7 +10,6 @@
 		let widgetId = null
 		let token = null
 		let ready = false
-		let submitting = false
 
 		const form = document.querySelector('{{ form_selector | default(".auth-form") }}')
 		if (!form) {
@@ -25,21 +24,22 @@
 			}
 			widgetId = window.turnstile.render(widget, {
 				sitekey: "{{ turnstile_site_key }}",
-				size: "invisible",
 				callback: (value) => {
 					token = value
-					if (submitting) {
-						form.submit()
+					if (submit) {
+						submit.removeAttribute('disabled')
 					}
 				},
 				"error-callback": () => {
-					submitting = false
 					if (submit) {
 						submit.removeAttribute('disabled')
 					}
 				},
 			})
 			ready = true
+			if (submit && widgetId) {
+				submit.setAttribute('disabled', 'disabled')
+			}
 		}
 
 		window.__turnstileQueue.push(onLoad)
@@ -56,11 +56,9 @@
 				return
 			}
 			event.preventDefault()
-			submitting = true
 			if (submit) {
 				submit.setAttribute('disabled', 'disabled')
 			}
-			window.turnstile.execute(widgetId)
 		})
 	})()
 </script>

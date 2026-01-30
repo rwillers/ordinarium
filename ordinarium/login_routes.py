@@ -58,7 +58,11 @@ def register_login_routes(bp):
             flash(error, "error")
         return render_template(
             "login.html",
-            turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+            turnstile_site_key=(
+                current_app.config.get("TURNSTILE_SITE_KEY")
+                if turnstile_enabled()
+                else None
+            ),
         )
 
     @bp.route("/signup", methods=["GET", "POST"])
@@ -97,7 +101,11 @@ def register_login_routes(bp):
             flash(error, "error")
         return render_template(
             "signup.html",
-            turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+            turnstile_site_key=(
+                current_app.config.get("TURNSTILE_SITE_KEY")
+                if turnstile_enabled()
+                else None
+            ),
         )
 
 

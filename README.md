@@ -54,6 +54,15 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 5) Run the app: `flask --app ordinarium run`.
 6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
+### Turnstile (Cloudflare)
+Turnstile is disabled by default in local/dev. It is enabled when both keys are set and
+`TURNSTILE_ENABLED` is true (defaults to false in dev, true otherwise).
+
+Optional env vars:
+- `TURNSTILE_ENABLED=true|false`
+- `TURNSTILE_SITE_KEY=...`
+- `TURNSTILE_SECRET_KEY=...`
+
 ## Roadmap
 - Implement export formats: PDF (already supported through custom print stylesheet, but would be nice to give download option) and DOCX.
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).

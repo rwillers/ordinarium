@@ -61,7 +61,11 @@ def register_password_reset_routes(bp):
             flash(error, "error")
         return render_template(
             "reset_request.html",
-            turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+            turnstile_site_key=(
+                current_app.config.get("TURNSTILE_SITE_KEY")
+                if turnstile_enabled()
+                else None
+            ),
         )
 
     @bp.route("/reset-password/<token>", methods=["GET", "POST"])
@@ -103,5 +107,9 @@ def register_password_reset_routes(bp):
         return render_template(
             "reset_password.html",
             token=token,
-            turnstile_site_key=current_app.config.get("TURNSTILE_SITE_KEY"),
+            turnstile_site_key=(
+                current_app.config.get("TURNSTILE_SITE_KEY")
+                if turnstile_enabled()
+                else None
+            ),
         )
