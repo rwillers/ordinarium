@@ -10,6 +10,30 @@
 		</div>
 	</div>
 
+	<h3>User details</h3>
+	<table class="shared-table">
+		<thead>
+			<tr>
+				<th>Field</th>
+				<th>Value</th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td>Created</td>
+				<td>{{ user_record.created_at or '—' }}</td>
+			</tr>
+			<tr>
+				<td>Last login</td>
+				<td>{{ user_record.last_login_at or '—' }}</td>
+			</tr>
+			<tr>
+				<td>Services</td>
+				<td>{{ service_count }}</td>
+			</tr>
+		</tbody>
+	</table>
+
 	<form class="auth-form" method="post">
 		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<p><label class="plan-field">

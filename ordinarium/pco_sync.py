@@ -145,9 +145,7 @@ def list_service_types(base_url, access_token):
 
 
 def list_plan_items(base_url, access_token, service_type_id, plan_id):
-    path = (
-        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items"
-    )
+    path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items"
 
     def fetch_page(next_url=None):
         return api_request(
@@ -212,9 +210,7 @@ def delete_plan_item(base_url, access_token, service_type_id, plan_id, item_id):
 
 
 def create_plan_item(base_url, access_token, service_type_id, plan_id, payload):
-    path = (
-        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items"
-    )
+    path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items"
     return api_request("POST", base_url, path, access_token, json=payload)
 
 
@@ -223,7 +219,9 @@ def fetch_plan(base_url, access_token, service_type_id, plan_id):
     return api_request("GET", base_url, path, access_token)
 
 
-def create_plan(base_url, access_token, service_type_id, title, plan_date, series_title):
+def create_plan(
+    base_url, access_token, service_type_id, title, plan_date, series_title
+):
     attributes = {"title": title}
     if series_title:
         attributes["series_title"] = series_title
@@ -241,9 +239,7 @@ def create_plan_time(
     plan_time,
     tz_offset_minutes,
 ):
-    starts_at, ends_at = _build_plan_time_range(
-        plan_date, plan_time, tz_offset_minutes
-    )
+    starts_at, ends_at = _build_plan_time_range(plan_date, plan_time, tz_offset_minutes)
     payload = {
         "data": {
             "type": "PlanTime",
@@ -254,9 +250,7 @@ def create_plan_time(
             },
         }
     }
-    path = (
-        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/plan_times"
-    )
+    path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/plan_times"
     return api_request("POST", base_url, path, access_token, json=payload)
 
 
@@ -308,9 +302,7 @@ def sync_service_plan(
                 base_url, access_token, service_type_id, plan_id, item["id"]
             )
         for payload in payloads:
-            create_plan_item(
-                base_url, access_token, service_type_id, plan_id, payload
-            )
+            create_plan_item(base_url, access_token, service_type_id, plan_id, payload)
     except PcoApiError as exc:
         raise PcoSyncError(str(exc)) from exc
     return {

@@ -827,6 +827,9 @@ div#page {
 		color: rgba(27, 27, 27, 0.7);
 		margin-top: 0.25em;
 	}
+	.shared-table-title .shared-table-details {
+		font-weight: 400;
+	}
 	.shared-table-actions {
 		text-align: right;
 		white-space: nowrap;

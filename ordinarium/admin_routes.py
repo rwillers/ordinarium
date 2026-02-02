@@ -25,7 +25,8 @@ def register_admin_routes(bp):
         db = get_db()
         rows = db.execute(
             """
-            select id, first_name, last_name, email, feature_flags
+            select id, first_name, last_name, email, feature_flags,
+                   created_at, last_login_at
             from users
             where deleted_at is null
             order by id asc
@@ -40,6 +41,8 @@ def register_admin_routes(bp):
                     "last_name": row["last_name"] or "",
                     "email": row["email"] or "",
                     "feature_flags": parse_feature_flags(row["feature_flags"]),
+                    "created_at": row["created_at"],
+                    "last_login_at": row["last_login_at"],
                 }
             )
         return render_template("admin.html", users=users)
@@ -84,11 +87,17 @@ def register_admin_routes(bp):
             db.commit()
             flash("User updated.", "success")
             return redirect(url_for("main.admin_user_edit", user_id=user_id))
+        db = get_db()
+        service_count = db.execute(
+            "select count(*) as total from services where user_id=?",
+            (user_id,),
+        ).fetchone()["total"]
         return render_template(
             "admin_user.html",
             user_record=user,
             feature_flags=list_feature_flags(),
             enabled_flags=flags,
+            service_count=service_count,
         )
 
     @bp.route("/admin/users/<int:user_id>/delete", methods=["POST"])

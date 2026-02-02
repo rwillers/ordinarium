@@ -22,14 +22,17 @@
 				<th class="shared-table-sortable" data-sort-key="id" data-sort-dir="asc" aria-sort="ascending">
 					<button class="shared-table-sort" type="button">ID</button>
 				</th>
-				<th class="shared-table-sortable" data-sort-key="name" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Name</button>
-				</th>
-				<th class="shared-table-sortable" data-sort-key="email" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Email</button>
+				<th class="shared-table-sortable" data-sort-key="name_email" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Name / Email</button>
 				</th>
 				<th class="shared-table-sortable" data-sort-key="flags" data-sort-dir="none" aria-sort="none">
 					<button class="shared-table-sort" type="button">Flags</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="created_at" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Created</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="last_login_at" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Last login</button>
 				</th>
 				<th class="shared-table-actions"></th>
 			</tr>
@@ -38,16 +41,20 @@
 			{% for user in users %}
 				{% set full_name = (user.first_name ~ ' ' ~ user.last_name).strip() %}
 				{% set flags = user.feature_flags.keys()|list|join(', ') %}
+				{% set created_date = (user.created_at or '').split('T')[0] %}
+				{% set last_login_date = (user.last_login_at or '').split('T')[0] %}
 				<tr>
 					<td class="shared-table-select">
 						<input type="checkbox" form="admin-users-bulk" name="user_ids" value="{{ user.id }}" aria-label="Select user {{ full_name }}">
 					</td>
 					<td data-sort-value="{{ user.id }}">{{ user.id }}</td>
-					<td class="shared-table-title" data-sort-value="{{ full_name | lower }}">
-						<a href="{{ url_for('main.admin_user_edit', user_id=user.id) }}">{{ full_name }}</a>
+					<td class="shared-table-title" data-sort-value="{{ (full_name ~ ' ' ~ user.email) | lower }}">
+						<a href="{{ url_for('main.admin_user_edit', user_id=user.id) }}">{{ full_name }}</a><br>
+						<span class="shared-table-details">{{ user.email }}</span>
 					</td>
-					<td data-sort-value="{{ user.email | lower }}">{{ user.email }}</td>
 					<td data-sort-value="{{ flags | lower }}">{{ flags or '—' }}</td>
+					<td data-sort-value="{{ created_date }}">{{ created_date or '—' }}</td>
+					<td data-sort-value="{{ last_login_date }}">{{ last_login_date or '—' }}</td>
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
 							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="User actions">▾</button>

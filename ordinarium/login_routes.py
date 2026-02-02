@@ -1,3 +1,4 @@
+from datetime import datetime
 from urllib.parse import urljoin, urlparse
 
 from flask import (
@@ -48,6 +49,12 @@ def register_login_routes(bp):
                 if not verified:
                     error = "Please verify you're human."
             if not error and user:
+                db = get_db()
+                db.execute(
+                    "update users set last_login_at=? where id=?",
+                    (datetime.utcnow().isoformat(), user["id"]),
+                )
+                db.commit()
                 session.permanent = True
                 login_user(build_user(user))
                 next_url = (
@@ -91,9 +98,27 @@ def register_login_routes(bp):
                     error = "Please verify you're human."
             if not error:
                 db = get_db()
+                now = datetime.utcnow().isoformat()
                 db.execute(
-                    "insert into users (first_name, last_name, email, password_hash) values (?, ?, ?, ?)",
-                    (first_name, last_name, email, generate_password_hash(password)),
+                    """
+                    insert into users (
+                        first_name,
+                        last_name,
+                        email,
+                        password_hash,
+                        created_at,
+                        last_login_at
+                    )
+                    values (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        first_name,
+                        last_name,
+                        email,
+                        generate_password_hash(password),
+                        now,
+                        now,
+                    ),
                 )
                 db.commit()
                 user = get_user_by_email(email)

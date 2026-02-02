@@ -22,6 +22,7 @@ from .pco_sync import (
     sync_service_plan,
 )
 
+
 def register_service_pco_routes(bp):
     def _pco_feature_enabled():
         return user_has_feature(g.user, FEATURE_PCO_SYNC)
@@ -170,7 +171,10 @@ def register_service_pco_routes(bp):
         except PcoAuthError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         if not connection:
-            return jsonify({"ok": False, "error": "Planning Center not connected."}), 400
+            return (
+                jsonify({"ok": False, "error": "Planning Center not connected."}),
+                400,
+            )
         try:
             plans = list_plans_for_date(
                 current_app.config.get("PCO_API_BASE"),
