@@ -41,8 +41,10 @@
 			{% for user in users %}
 				{% set full_name = (user.first_name ~ ' ' ~ user.last_name).strip() %}
 				{% set flags = user.feature_flags.keys()|list|join(', ') %}
-				{% set created_date = (user.created_at or '').split('T')[0] %}
-				{% set last_login_date = (user.last_login_at or '').split('T')[0] %}
+				{% set created_raw = (user.created_at or '') %}
+				{% set last_login_raw = (user.last_login_at or '') %}
+				{% set created_date = (created_raw.split('T')[0]).split(' ')[0] %}
+				{% set last_login_date = (last_login_raw.split('T')[0]).split(' ')[0] %}
 				<tr>
 					<td class="shared-table-select">
 						<input type="checkbox" form="admin-users-bulk" name="user_ids" value="{{ user.id }}" aria-label="Select user {{ full_name }}">
