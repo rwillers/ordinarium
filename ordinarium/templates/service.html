@@ -140,7 +140,7 @@
 
 	<strong>{{ rite }}</strong>
 
-	<form class="plan-actions" id="plan-meta-form" action="{{ url_for('main.persist_service') }}" method="post">
+	<form class="plan-actions" id="plan-meta-form" action="{{ url_for('main.service_update', service_id=service_id) }}" method="post">
 		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<input type="hidden" name="service_id" value="{{ service_id }}">
 		<input type="hidden" name="ids" value="">
@@ -606,7 +606,7 @@
 			setSaveStatus('Saving...', 'saving')
 			try {
 				const response = await fetch(planMetaForm.action, {
-					method: 'POST',
+					method: 'PATCH',
 					body: formData,
 					headers: {
 						Accept: 'application/json',

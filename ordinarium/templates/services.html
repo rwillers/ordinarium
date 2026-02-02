@@ -127,7 +127,7 @@
 		<div class="share-modal-backdrop" data-service-add-close></div>
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-add-title">
 			<h3 id="service-add-title">Add a service</h3>
-			<form class="plan-custom-form" action="{{ url_for('main.services_new') }}" method="post">
+			<form class="plan-custom-form" action="{{ url_for('main.services_create') }}" method="post">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<p class="plan-field">
 					<span>Rite</span>

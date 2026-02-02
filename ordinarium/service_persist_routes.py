@@ -17,9 +17,9 @@ from .service_store import load_service_payload, update_service_columns
 
 
 def register_service_persist_routes(bp):
-    @bp.route("/persist/service", methods=["POST"])
+    @bp.route("/service/<int:service_id>", methods=["PATCH"])
     @login_required
-    def persist_service():
+    def service_update(service_id):
         def normalize_value(value):
             if value is None:
                 return None
@@ -29,14 +29,6 @@ def register_service_persist_routes(bp):
         is_autosave = request.form.get(
             "autosave"
         ) == "1" or "application/json" in request.headers.get("Accept", "")
-
-        service_id = request.form.get("service_id")
-        try:
-            service_id = int(service_id)
-        except (TypeError, ValueError):
-            if is_autosave:
-                return jsonify({"ok": False, "error": "Service ID is required."}), 400
-            return render_error("Service ID is required.", 400)
 
         raw_order = request.form.get("ids", "")
         order_tokens = []

@@ -53,9 +53,7 @@ def register_service_overview_routes(bp):
             rite_options=load_rite_options(),
         )
 
-    @bp.route("/services/new", methods=["GET", "POST"])
-    @login_required
-    def services_new():
+    def _create_service_from_request():
         db = get_db()
         rite = DEFAULT_RITE
         if request.method == "POST":
@@ -139,6 +137,16 @@ def register_service_overview_routes(bp):
         db.commit()
         return redirect(url_for("main.service", service_id=new_service_id))
 
+    @bp.route("/services", methods=["POST"])
+    @login_required
+    def services_create():
+        return _create_service_from_request()
+
+    @bp.route("/services/new", methods=["GET", "POST"])
+    @login_required
+    def services_new():
+        return _create_service_from_request()
+
     @bp.route("/service/<int:service_id>")
     @login_required
     def service(service_id, rite=DEFAULT_RITE):
@@ -195,13 +203,6 @@ def register_service_overview_routes(bp):
             }
         )
         return render_template("service.html", **context)
-
-    @bp.route("/service")
-    @login_required
-    def service_missing_id():
-        return render_error(
-            "Service ID required. Open a service from the Services list.", 400
-        )
 
     @bp.route("/service/<int:service_id>/delete", methods=["POST"])
     @login_required

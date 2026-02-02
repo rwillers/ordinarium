@@ -4,6 +4,9 @@ Remaining work and follow-ups.
 
 - Add recurring service creation and PCO sync. (Base on new, flexible shared table view that has optional reordering and action drop down.)
 - Rethink /service action bar given Services management changes.
+- Reconsider header menu organization and icons.
+- Reconsider down chevrons/arrows for action drop downs.
+- Add shared table standard footer with flexible record counts, limits, and pagination options.
 - Implement Planning Center Online integration (WIP behind feature flag).
 - Implement export formats: PDF (already supported through custom print stylesheet, but would be nice to give download option) and DOCX.
 - Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
