@@ -7,19 +7,17 @@ def format_services(services):
     formatted = []
     for service in services:
         display_date = service["service_date"]
+        parsed_date = None
         try:
-            parsed = date.fromisoformat(service["service_date"])
-            display_date = f"{parsed.month}/{parsed.day}/{parsed.year}"
+            parsed_date = date.fromisoformat(service["service_date"])
+            display_date = f"{parsed_date.month}/{parsed_date.day}/{parsed_date.year}"
         except (TypeError, ValueError):
             pass
         title = None
         observance_handle = service["observance_handle"]
-        if service["service_date"]:
+        if service["service_date"] and parsed_date:
             try:
-                observance = resolve_observance(
-                    date.fromisoformat(service["service_date"]),
-                    observance_handle,
-                )
+                observance = resolve_observance(parsed_date, observance_handle)
             except ValueError:
                 observance = None
             if observance:
@@ -32,6 +30,7 @@ def format_services(services):
                 "title": title or "Untitled Service",
                 "service_date": service["service_date"],
                 "display_date": display_date,
+                "season": service["season"],
                 "rite": service["rite"],
             }
         )

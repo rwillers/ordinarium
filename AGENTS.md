@@ -22,11 +22,12 @@
 - Template filenames are lowercase and descriptive (`plan.html`, `text.html`).
 - App UI titles and headers use sentence case (e.g., "Propers search").
 - Liturgical text conventions are documented in `README.md`; preserve Markdown formatting rules when editing content.
+- Shared table is the default UI pattern for tabular data. See `README.md` for markup, options, and behavior.
 
 ## Testing Guidelines
 - Automated tests live in `tests/` and use pytest.
 - Run the suite with `pytest` (or `pytest -q` for quiet output).
-- Manual verification: run the dev server and check `/`, `/services`, `/service/<id>`, and `/text/<rite_slug>` flows. If you touch DB logic, apply migrations and verify a fresh database works.
+- Manual verification: run the dev server and check `/`, `/services`, `/service/<id>`, and `/service/<id>/view` flows. If you touch DB logic, apply migrations and verify a fresh database works.
 
 ## Commit & Pull Request Guidelines
 - Existing commits use short, imperative, sentence-case summaries (e.g., “Add …”, “Enhance …”). Follow that pattern.

@@ -6,37 +6,119 @@
 
 	<div class="plan-header plan-header-inline">
 		<h2>Services</h2>
-		<div class="plan-header-actions">
-			<button class="button" type="button" id="service-add-toggle" aria-expanded="false" aria-controls="service-add-modal">Add a service</button>
-		</div>
 	</div>
 
 	<h3>Upcoming services</h3>
+	<form class="shared-table-bulk" id="services-upcoming-bulk" method="post" action="{{ url_for('main.services_bulk_delete') }}" data-bulk-actions data-bulk-target="#services-upcoming-table" data-bulk-confirm="Delete the selected services? This cannot be undone.">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+		<div class="shared-table-bulk-actions">
+			<button class="plan-submit" type="button" id="service-add-toggle" aria-expanded="false" aria-controls="service-add-modal">Add</button>
+			{% if current_services %}
+			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
+			{% endif %}
+		</div>
+	</form>
 	{% if current_services %}
-	<ul>
-		{% for service in current_services %}
-			<li>
-				{{ service.display_date }} —
-				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-				(<a href="{{ url_for('main.text', service_id=service.id) }}">view</a>)
-			</li>
-		{% endfor %}
-	</ul>
+	<table class="shared-table" id="services-upcoming-table">
+		<thead>
+			<tr>
+				<th class="shared-table-select"></th>
+				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="asc" aria-sort="ascending">
+					<button class="shared-table-sort" type="button">Date</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Season</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Title</button>
+				</th>
+				<th class="shared-table-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for service in current_services %}
+				<tr>
+					<td class="shared-table-select">
+						<input type="checkbox" form="services-upcoming-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
+					</td>
+					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
+					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
+					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
+						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
+					</td>
+					<td class="shared-table-actions">
+						<div class="shared-table-menu plan-row-menu" data-row-menu>
+							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
+							<div class="plan-row-menu-panel" role="menu">
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
+								<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+									<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+									<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+								</form>
+							</div>
+						</div>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
 	{% else %}
 	<p>No upcoming services.</p>
 	{% endif %}
 
 	<h3>Past services</h3>
 	{% if past_services %}
-	<ul>
-		{% for service in past_services %}
-			<li>
-				{{ service.display_date }} —
-				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-				(<a href="{{ url_for('main.text', service_id=service.id) }}">view</a>)
-			</li>
-		{% endfor %}
-	</ul>
+	<form class="shared-table-bulk" id="services-past-bulk" method="post" action="{{ url_for('main.services_bulk_delete') }}" data-bulk-actions data-bulk-target="#services-past-table" data-bulk-confirm="Delete the selected services? This cannot be undone.">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+		<div class="shared-table-bulk-actions">
+			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
+		</div>
+	</form>
+	<table class="shared-table" id="services-past-table">
+		<thead>
+			<tr>
+				<th class="shared-table-select"></th>
+				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="desc" aria-sort="descending">
+					<button class="shared-table-sort" type="button">Date</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Season</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Title</button>
+				</th>
+				<th class="shared-table-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for service in past_services %}
+				<tr>
+					<td class="shared-table-select">
+						<input type="checkbox" form="services-past-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
+					</td>
+					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
+					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
+					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
+						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
+					</td>
+					<td class="shared-table-actions">
+						<div class="shared-table-menu plan-row-menu" data-row-menu>
+							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
+							<div class="plan-row-menu-panel" role="menu">
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
+								<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+									<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+									<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+								</form>
+							</div>
+						</div>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
 	{% else %}
 	<p>No past services.</p>
 	{% endif %}
@@ -151,6 +233,7 @@
 		}
 	}
 
+
 	if (serviceAddToggle && serviceAddModal) {
 		serviceAddToggle.addEventListener('click', () => {
 			serviceAddModal.setAttribute('aria-hidden', 'false')
@@ -180,6 +263,7 @@
 	if (serviceRiteSelect) {
 		serviceRiteSelect.addEventListener('change', updateServiceAddMode)
 	}
+
 </script>
 
 {% endblock %}

@@ -144,5 +144,5 @@ def register_service_persist_routes(bp):
             )
         action = request.form.get("action", "")
         if action == "generate":
-            return redirect(url_for("main.text", service_id=service_id))
+            return redirect(url_for("main.service_view", service_id=service_id))
         return redirect(url_for("main.service", service_id=service_id))

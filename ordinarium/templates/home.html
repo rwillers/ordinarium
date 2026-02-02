@@ -14,15 +14,42 @@ Ordinarium is a liturgy planning workspace supporting the assembly, ordering, an
 	{% if user %}
 	<h3>Upcoming services</h3>
 	{% if upcoming_services %}
-	<ul>
-		{% for service in upcoming_services %}
-			<li>
-				{{ service.display_date }} —
-				<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-				(<a href="{{ url_for('main.text', service_id=service.id) }}">view</a>)
-			</li>
-		{% endfor %}
-	</ul>
+	<table class="shared-table">
+		<thead>
+			<tr>
+				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="asc" aria-sort="ascending">
+					<button class="shared-table-sort" type="button">Date</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Season</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Title</button>
+				</th>
+				<th class="shared-table-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for service in upcoming_services %}
+				<tr>
+					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
+					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
+					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
+						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
+					</td>
+					<td class="shared-table-actions">
+						<div class="shared-table-menu plan-row-menu" data-row-menu>
+							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
+							<div class="plan-row-menu-panel" role="menu">
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
+								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
+							</div>
+						</div>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
 	{% else %}
 	<p>No upcoming services.</p>
 	{% endif %}

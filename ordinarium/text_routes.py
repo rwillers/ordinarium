@@ -8,9 +8,9 @@ from .text_rendering import render_text_page
 
 
 def register_text_routes(bp):
-    @bp.route("/text/<int:service_id>")
+    @bp.route("/service/<int:service_id>/view")
     @login_required
-    def text(service_id):
+    def service_view(service_id):
         saved_service, saved_data = load_service_for_text(service_id, g.user["id"])
         return render_text_page(
             service_id, saved_service, saved_data, user_id=g.user["id"]

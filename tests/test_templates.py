@@ -111,6 +111,39 @@ def test_templates_delete_denies_other_user(app, auth_client, user_factory):
     assert response.status_code == 404
 
 
+def test_templates_bulk_delete_removes_selected(app, auth_client, user_factory):
+    client, user_id = auth_client
+    other_user_id = user_factory(email="other3@example.com")
+    template_id_one = create_template(app, user_id, title="Bulk One", text="One")
+    template_id_two = create_template(app, user_id, title="Bulk Two", text="Two")
+    other_template_id = create_template(
+        app, other_user_id, title="Other Bulk", text="Nope"
+    )
+
+    response = client.post(
+        "/templates/bulk-delete",
+        data={
+            "template_ids": [
+                str(template_id_one),
+                str(template_id_two),
+                str(other_template_id),
+            ]
+        },
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        db = get_db()
+        remaining = db.execute(
+            "select id from service_custom_templates where id in (?, ?, ?)",
+            (template_id_one, template_id_two, other_template_id),
+        ).fetchall()
+        remaining_ids = {row["id"] for row in remaining}
+        assert template_id_one not in remaining_ids
+        assert template_id_two not in remaining_ids
+        assert other_template_id in remaining_ids
+
+
 def test_templates_sorted_by_recent_update(app, auth_client):
     client, user_id = auth_client
     first_id = create_template(app, user_id, title="First Template", text="One")

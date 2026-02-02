@@ -32,15 +32,15 @@ def register_service_overview_routes(bp):
         db = get_db()
         today = date.today().isoformat()
         current_services = db.execute(
-            "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+            "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
             (g.user["id"], today),
         ).fetchall()
         past_services = db.execute(
-            "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
+            "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
             (g.user["id"], today),
         ).fetchall()
         copy_services = db.execute(
-            "select id, title, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
+            "select id, title, season, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
             (g.user["id"],),
         ).fetchall()
 
@@ -217,6 +217,37 @@ def register_service_overview_routes(bp):
         )
         db.execute(
             "delete from services where id=? and user_id=?", (service_id, g.user["id"])
+        )
+        db.commit()
+        return redirect(url_for("main.services"))
+
+    @bp.route("/services/bulk-delete", methods=["POST"])
+    @login_required
+    def services_bulk_delete():
+        raw_ids = request.form.getlist("service_ids")
+        service_ids = []
+        for raw_id in raw_ids:
+            try:
+                service_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+        if not service_ids:
+            return redirect(url_for("main.services"))
+
+        placeholders = ",".join(["?"] * len(service_ids))
+        params = [g.user["id"], *service_ids]
+        db = get_db()
+        db.execute(
+            f"delete from service_custom_elements where user_id=? and service_id in ({placeholders})",
+            params,
+        )
+        db.execute(
+            f"delete from service_shares where service_id in ({placeholders})",
+            service_ids,
+        )
+        db.execute(
+            f"delete from services where user_id=? and id in ({placeholders})",
+            params,
         )
         db.commit()
         return redirect(url_for("main.services"))

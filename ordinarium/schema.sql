@@ -202,6 +202,7 @@ CREATE TABLE users (
   last_name TEXT,
   email TEXT NOT NULL,
   password_hash TEXT,
+  deleted_at TEXT,
   feature_flags TEXT CHECK (feature_flags IS NULL OR json_valid(feature_flags))
 );
 CREATE UNIQUE INDEX idx_users_email ON users(email);

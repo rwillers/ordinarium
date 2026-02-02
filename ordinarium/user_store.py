@@ -10,7 +10,7 @@ def get_user_by_id(user_id):
         return None
     db = get_db()
     user = db.execute(
-        "select id, first_name, last_name, email, password_hash, feature_flags from users where id=? limit 1",
+        "select id, first_name, last_name, email, password_hash, feature_flags from users where id=? and deleted_at is null limit 1",
         (user_id,),
     ).fetchone()
     return user
@@ -21,7 +21,7 @@ def get_user_by_email(email):
         return None
     db = get_db()
     user = db.execute(
-        "select id, first_name, last_name, email, password_hash, feature_flags from users where email=? limit 1",
+        "select id, first_name, last_name, email, password_hash, feature_flags from users where email=? and deleted_at is null limit 1",
         (email,),
     ).fetchone()
     return user

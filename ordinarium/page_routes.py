@@ -41,7 +41,7 @@ def register_page_routes(bp):
             db = get_db()
             today = date.today().isoformat()
             rows = db.execute(
-                "select id, title, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
+                "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
                 (g.user["id"], today),
             ).fetchall()
             upcoming_services = format_services(rows)

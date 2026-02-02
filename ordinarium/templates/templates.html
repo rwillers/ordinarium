@@ -6,35 +6,59 @@
 
 	<div class="plan-header">
 		<h2>Templates</h2>
-		<div class="plan-header-actions">
-			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add template</button>
-		</div>
 	</div>
 
 	{% if templates %}
-	<ul class="plan-list">
+	<form class="shared-table-bulk" id="templates-bulk" method="post" action="{{ url_for('main.templates_bulk_delete') }}" data-bulk-actions data-bulk-target="#templates-table" data-bulk-confirm="Delete the selected templates? This cannot be undone.">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+		<div class="shared-table-bulk-actions">
+			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add</button>
+			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
+		</div>
+	</form>
+	<table class="shared-table" id="templates-table">
+		<thead>
+			<tr>
+				<th class="shared-table-select"></th>
+				<th>Title and text</th>
+				<th class="shared-table-actions"></th>
+			</tr>
+		</thead>
+		<tbody>
 	{% for template in templates %}
-		<li class="plan-row plan-row-template" data-template-id="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">
-			<div class="plan-row-main">
-				<div class="plan-item">
+		{% set checkbox_id = 'template-' ~ template.id %}
+		<tr class="plan-row plan-row-template" data-template-id="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">
+			<td class="shared-table-select">
+				<input id="{{ checkbox_id }}" type="checkbox" form="templates-bulk" name="template_ids" value="{{ template.id }}" aria-label="Select template {{ template.title }}">
+			</td>
+			<td>
+				<label class="plan-item" for="{{ checkbox_id }}">
 					<span class="plan-title">{{ template.title }}</span>
 					{% if template.text %}<small>{{ template.text | markdown_user | striptags | clean | truncate(200) }}</small>{% endif %}
+				</label>
+			</td>
+			<td class="shared-table-actions">
+				<div class="shared-table-menu plan-row-menu" data-row-menu>
+					<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Template actions">▾</button>
+		<div class="plan-row-menu-panel" role="menu">
+			<button class="plan-row-menu-item" type="button" data-template-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
+			<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this template? This cannot be undone.')">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+			</form>
+		</div>
 				</div>
-			</div>
-			<div class="plan-row-menu" data-row-menu>
-				<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Template actions">▾</button>
-				<div class="plan-row-menu-panel" role="menu">
-					<button class="plan-row-menu-item" type="button" data-template-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
-					<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this template?')">
-						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
-					</form>
-				</div>
-			</div>
-		</li>
+			</td>
+		</tr>
 	{% endfor %}
-	</ul>
+		</tbody>
+	</table>
 	{% else %}
+	<form class="shared-table-bulk">
+		<div class="shared-table-bulk-actions">
+			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add</button>
+		</div>
+	</form>
 	<p>No templates yet.</p>
 	{% endif %}
 
@@ -71,51 +95,6 @@
 		const templateToggle = document.querySelector('#template-toggle')
 		const templateModal = document.querySelector('#template-modal')
 		const templateEditButtons = document.querySelectorAll('[data-template-edit]')
-		const rowMenus = document.querySelectorAll('[data-row-menu]')
-		const rowMenuToggles = document.querySelectorAll('[data-row-menu-toggle]')
-
-		const closeRowMenus = (exceptMenu = null) => {
-			rowMenus.forEach((menu) => {
-				if (menu === exceptMenu) {
-					return
-				}
-				menu.classList.remove('is-open')
-				const toggle = menu.querySelector('[data-row-menu-toggle]')
-				if (toggle) {
-					toggle.setAttribute('aria-expanded', 'false')
-				}
-				const row = menu.closest('.plan-row')
-				if (row) {
-					row.classList.remove('is-menu-open')
-				}
-			})
-		}
-
-		if (rowMenuToggles.length) {
-			rowMenuToggles.forEach((toggle) => {
-				toggle.addEventListener('click', (event) => {
-					event.stopPropagation()
-					const menu = toggle.closest('[data-row-menu]')
-					if (!menu) {
-						return
-					}
-					const isOpen = !menu.classList.contains('is-open')
-					closeRowMenus(menu)
-					menu.classList.toggle('is-open', isOpen)
-					toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
-					const row = menu.closest('.plan-row')
-					if (row) {
-						row.classList.toggle('is-menu-open', isOpen)
-					}
-				})
-			})
-		}
-
-		document.addEventListener('click', (event) => {
-			if (!event.target.closest('[data-row-menu]')) {
-				closeRowMenus()
-			}
-		})
 
 		const openTemplateModal = (mode) => {
 			if (!templateModal) {
@@ -201,7 +180,6 @@
 					if (!row) {
 						return
 					}
-					closeRowMenus()
 					openTemplateModal({
 						type: 'edit',
 						id: row.getAttribute('data-template-id'),
@@ -251,9 +229,6 @@
 		document.addEventListener('keydown', (event) => {
 			if (event.key === 'Escape' && templateModal && templateModal.getAttribute('aria-hidden') === 'false') {
 				closeTemplateModal()
-			}
-			if (event.key === 'Escape') {
-				closeRowMenus()
 			}
 		})
 	</script>

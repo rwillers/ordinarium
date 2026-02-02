@@ -192,6 +192,60 @@ def test_service_delete_removes_related_rows(app, auth_client, service_factory):
         assert share_count == 0
 
 
+def test_services_bulk_delete_removes_selected_rows(
+    app, auth_client, service_factory, user_factory
+):
+    client, user_id = auth_client
+    other_user_id = user_factory(email="other-bulk@example.com")
+    service_id_one = service_factory(user_id=user_id, service_id=90)
+    service_id_two = service_factory(user_id=user_id, service_id=91)
+    other_service_id = service_factory(user_id=other_user_id, service_id=92)
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (service_id_one, user_id, "Custom Blessing", "Custom text"),
+        )
+        db.execute(
+            "insert into service_shares (service_id, share_uuid) values (?, ?)",
+            (service_id_one, "share-uuid-bulk"),
+        )
+        db.commit()
+
+    response = client.post(
+        "/services/bulk-delete",
+        data={
+            "service_ids": [
+                str(service_id_one),
+                str(service_id_two),
+                str(other_service_id),
+            ]
+        },
+    )
+    assert response.status_code == 302
+
+    with app.app_context():
+        db = get_db()
+        remaining = db.execute(
+            "select id from services where id in (?, ?, ?)",
+            (service_id_one, service_id_two, other_service_id),
+        ).fetchall()
+        remaining_ids = {row["id"] for row in remaining}
+        assert service_id_one not in remaining_ids
+        assert service_id_two not in remaining_ids
+        assert other_service_id in remaining_ids
+        element_count = db.execute(
+            "select count(*) from service_custom_elements where service_id=?",
+            (service_id_one,),
+        ).fetchone()[0]
+        share_count = db.execute(
+            "select count(*) from service_shares where service_id=?",
+            (service_id_one,),
+        ).fetchone()[0]
+        assert element_count == 0
+        assert share_count == 0
+
+
 def test_service_plan_uses_saved_rite_ordinaries(auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=60, rite="Anglican Standard Text")
@@ -246,7 +300,7 @@ def test_persist_service_saves_and_generates_text(app, auth_client, service_fact
         },
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/text/7")
+    assert response.headers["Location"].endswith("/service/7/view")
     with app.app_context():
         db = get_db()
         service = db.execute(
@@ -367,7 +421,7 @@ def test_persist_service_autosave_denies_other_user(
 
 def test_text_missing_service_returns_error(auth_client):
     client, _ = auth_client
-    response = client.get("/text/999")
+    response = client.get("/service/999/view")
     assert response.status_code == 400
     assert b"Service ID required" in response.data
 
@@ -380,7 +434,7 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
         service_date="2026-01-04",
         rite="Renewed Ancient Text",
     )
-    response = client.get("/text/14")
+    response = client.get("/service/14/view")
     assert response.status_code == 200
     assert b"Holy Eucharist" in response.data
 
@@ -448,7 +502,7 @@ def test_text_uses_lesson_override(app, auth_client, service_factory):
             (json.dumps({"gospel": "Mark 1:1-8"}), service_id),
         )
         db.commit()
-    response = client.get(f"/text/{service_id}")
+    response = client.get(f"/service/{service_id}/view")
     assert response.status_code == 200
     assert b"Mark 1:1-8" in response.data
 
@@ -490,7 +544,7 @@ def test_custom_element_added_to_service_plan_and_text(
         assert order_tokens[:2] == ["text:68", "text:69"]
         assert order_tokens[-1] == f"custom:{element['id']}"
 
-    text_response = client.get(f"/text/{service_id}")
+    text_response = client.get(f"/service/{service_id}/view")
     assert text_response.status_code == 200
     assert b"Custom Blessing" in text_response.data
     assert b"Custom text" in text_response.data
@@ -747,7 +801,7 @@ def test_custom_elements_escape_html_in_text(app, auth_client, service_factory):
         )
         db.commit()
 
-    response = client.get(f"/text/{service_id}")
+    response = client.get(f"/service/{service_id}/view")
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert "<script>custom-title</script>" not in body

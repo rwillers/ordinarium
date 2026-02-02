@@ -7,6 +7,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_login import login_user
@@ -47,6 +48,7 @@ def register_login_routes(bp):
                 if not verified:
                     error = "Please verify you're human."
             if not error and user:
+                session.permanent = True
                 login_user(build_user(user))
                 next_url = (
                     request.form.get("next")
@@ -95,6 +97,7 @@ def register_login_routes(bp):
                 )
                 db.commit()
                 user = get_user_by_email(email)
+                session.permanent = True
                 login_user(build_user(user))
                 return redirect(url_for("main.services"))
         if error:

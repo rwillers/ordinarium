@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 
 from flask import flash, g, redirect, render_template, request, url_for
 
@@ -26,6 +27,7 @@ def register_admin_routes(bp):
             """
             select id, first_name, last_name, email, feature_flags
             from users
+            where deleted_at is null
             order by id asc
             """
         ).fetchall()
@@ -88,3 +90,50 @@ def register_admin_routes(bp):
             feature_flags=list_feature_flags(),
             enabled_flags=flags,
         )
+
+    @bp.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+    @login_required
+    def admin_user_delete(user_id):
+        guard = _require_admin()
+        if guard:
+            return guard
+        if user_id == g.user["id"]:
+            flash("You cannot delete your own account.", "error")
+            return redirect(url_for("main.admin_index"))
+        db = get_db()
+        db.execute(
+            "update users set deleted_at=? where id=?",
+            (datetime.utcnow().isoformat(), user_id),
+        )
+        db.commit()
+        flash("User deleted.", "success")
+        return redirect(url_for("main.admin_index"))
+
+    @bp.route("/admin/users/bulk-delete", methods=["POST"])
+    @login_required
+    def admin_users_bulk_delete():
+        guard = _require_admin()
+        if guard:
+            return guard
+        raw_ids = request.form.getlist("user_ids")
+        user_ids = []
+        for raw_id in raw_ids:
+            try:
+                user_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+        user_ids = [user_id for user_id in user_ids if user_id != g.user["id"]]
+        if not user_ids:
+            flash("No users selected.", "error")
+            return redirect(url_for("main.admin_index"))
+
+        placeholders = ",".join(["?"] * len(user_ids))
+        db = get_db()
+        params = [datetime.utcnow().isoformat(), *user_ids]
+        db.execute(
+            f"update users set deleted_at=? where id in ({placeholders})",
+            params,
+        )
+        db.commit()
+        flash("Users deleted.", "success")
+        return redirect(url_for("main.admin_index"))

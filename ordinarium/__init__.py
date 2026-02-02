@@ -1,6 +1,7 @@
 import html
 import os
 import re
+from datetime import timedelta
 from html.parser import HTMLParser
 from functools import lru_cache
 
@@ -89,6 +90,9 @@ def create_app():
         SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
         SESSION_COOKIE_SECURE=_config_bool(
             os.environ.get("SESSION_COOKIE_SECURE", "false"), False
+        ),
+        PERMANENT_SESSION_LIFETIME=timedelta(
+            days=int(os.environ.get("SESSION_LIFETIME_DAYS", "30"))
         ),
     )
 

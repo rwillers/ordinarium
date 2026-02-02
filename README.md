@@ -54,6 +54,23 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 5) Run the app: `flask --app ordinarium run`.
 6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
+## UI patterns: shared table
+
+The app uses a shared table pattern for tabular data. New table-like views should default to this pattern unless there is a specific reason to diverge.
+
+**Shared table markup**
+- Use the `shared-table` class on a `table` element.
+- `th[data-sort-key]` with a `.shared-table-sort` button enables click-to-sort and chevrons.
+- Action menus use the existing plan row menu markup (`.plan-row-menu`, `.plan-menu-toggle`, `.plan-row-menu-panel`) inside a `.shared-table-actions` cell.
+- Optional columns:
+  - Selection: `th.shared-table-select` and `td.shared-table-select` with row checkboxes.
+  - Action: `th.shared-table-actions` (often blank) with dropdown menu.
+  - Handle: `td.shared-table-actions` with `.shared-table-handle` if you need reordering.
+  - Details: free-form content (often combined “Title and text”).
+
+**Behavior**
+- Sorting, menu toggles, focus trapping, and ESC-to-close are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
+
 ### Turnstile (Cloudflare)
 Turnstile is disabled by default in local/dev. It is enabled when both keys are set and
 `TURNSTILE_ENABLED` is true (defaults to false in dev, true otherwise).

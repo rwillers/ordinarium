@@ -65,3 +65,26 @@ def register_service_template_routes(bp):
         )
         db.commit()
         return redirect(url_for("main.templates"))
+
+    @bp.route("/templates/bulk-delete", methods=["POST"])
+    @login_required
+    def templates_bulk_delete():
+        raw_ids = request.form.getlist("template_ids")
+        template_ids = []
+        for raw_id in raw_ids:
+            try:
+                template_ids.append(int(raw_id))
+            except (TypeError, ValueError):
+                continue
+        if not template_ids:
+            flash("No templates selected.", "error")
+            return redirect(url_for("main.templates"))
+
+        placeholders = ",".join(["?"] * len(template_ids))
+        db = get_db()
+        db.execute(
+            f"delete from service_custom_templates where user_id=? and id in ({placeholders})",
+            (g.user["id"], *template_ids),
+        )
+        db.commit()
+        return redirect(url_for("main.templates"))

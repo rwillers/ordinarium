@@ -8,7 +8,7 @@
 			<div class="plan-header-actions-fixed">
 				<div class="plan-header-actions">
 					<div class="plan-header-buttons">
-						<a class="button" id="plan-view-link" href="{{ url_for('main.text', service_id=service_id) }}">View</a>
+						<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
 						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
 						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')" data-plan-delete{% if not can_delete %} style="display: none;"{% endif %}>
 							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -182,7 +182,16 @@
 
 	<div class="plan-list-wrapper"{% if not service.service_date %} data-plan-locked="true"{% endif %}>
 		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Start by entering a service date to enable the full plan.</p>
-		<ul class="plan-list{% if not service.service_date %} is-disabled{% endif %}">
+		<table class="shared-table plan-list-table{% if not service.service_date %} is-disabled{% endif %}">
+			<thead>
+				<tr>
+					<th class="shared-table-select">Include?</th>
+					<th>Title and text</th>
+					<th class="shared-table-actions"></th>
+					<th class="shared-table-actions"></th>
+				</tr>
+			</thead>
+			<tbody class="plan-list{% if not service.service_date %} is-disabled{% endif %}">
 	{% for ordinary in ordinaries %}
 		{% set lesson_kind = '' %}
 		{% if ordinary.title == 'The Lessons' %}
@@ -197,10 +206,13 @@
 			{% endif %}
 		{% endif %}
 		{% set is_offertory = ordinary.title == 'The Offertory' %}
-		<li class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
-			<div class="plan-row-main">
-				<label class="plan-item">
-					<input type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
+		{% set checkbox_id = 'include-' ~ loop.index0 %}
+		<tr class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
+			<td class="shared-table-select">
+				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
+			</td>
+			<td>
+				<label class="plan-item" for="{{ checkbox_id }}">
 					<span class="plan-title">
 						{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}
 						{% if lesson_kind %}
@@ -215,30 +227,35 @@
 						{% endif %}
 					{% endif %}
 				</label>
-				<span class="plan-handle" aria-hidden="true">⠿</span>
-			</div>
-			<div class="plan-row-menu" data-row-menu>
-				<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Row actions">▾</button>
-				<div class="plan-row-menu-panel" role="menu">
-					{% if ordinary.type == 'custom' %}
-					<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
-					<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
-						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-						<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
-					</form>
-					{% endif %}
-					{% if lesson_kind %}
-					<button class="plan-row-menu-item" type="button" data-lesson-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">⇄</span>Override passage</button>
-					{% endif %}
-					{% if is_offertory %}
-					<button class="plan-row-menu-item" type="button" data-offertory-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✓</span>Select sentence</button>
-					{% endif %}
-					<button class="plan-row-menu-item" type="button" data-custom-add role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new</button>
+			</td>
+			<td class="shared-table-actions">
+				<div class="shared-table-menu plan-row-menu" data-row-menu>
+					<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Row actions">▾</button>
+					<div class="plan-row-menu-panel" role="menu">
+						{% if ordinary.type == 'custom' %}
+						<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
+						<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
+							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+							<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+						</form>
+						{% endif %}
+						{% if lesson_kind %}
+						<button class="plan-row-menu-item" type="button" data-lesson-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">⇄</span>Override passage</button>
+						{% endif %}
+						{% if is_offertory %}
+						<button class="plan-row-menu-item" type="button" data-offertory-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✓</span>Select sentence</button>
+						{% endif %}
+						<button class="plan-row-menu-item" type="button" data-custom-add role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new</button>
+					</div>
 				</div>
-			</div>
-		</li>
+			</td>
+			<td class="shared-table-actions">
+				<span class="plan-handle shared-table-handle" aria-hidden="true">⠿</span>
+			</td>
+		</tr>
 	{% endfor %}
-		</ul>
+			</tbody>
+		</table>
 	</div>
 	<div class="share-modal" id="custom-element-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-custom-element-close></div>
