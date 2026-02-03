@@ -67,30 +67,15 @@ def register_service_overview_routes(bp):
             return value or None
 
         mode = request.form.get("mode", "defaults")
+        add_mode = request.form.get("add_mode", "single")
         rite = request.form.get("rite") or DEFAULT_RITE
-        raw_date = normalize_value(request.form.get("service_date"))
-        if not raw_date:
-            return render_error("Service date is required.", 400)
-        try:
-            parsed_date = date.fromisoformat(raw_date)
-        except ValueError:
-            return render_error("Invalid service date.", 400)
 
-        observance = resolve_observance(
-            parsed_date, normalize_value(request.form.get("observance_handle"))
-        )
-        title = None
-        observance_handle = None
-        if observance:
-            observance_handle = observance.handle
-            title = observance.name or observance.alternative_name or ""
-
-        base_payload = {
-            "service_date": raw_date,
-            "season": resolve_season(parsed_date),
-            "observance_handle": observance_handle,
-            "title": title or None,
-        }
+        source = None
+        custom_rows = []
+        source_order_tokens = []
+        source_disabled_tokens = []
+        source_lesson_overrides = None
+        source_offertory_sentence_id = None
 
         if mode == "copy":
             raw_source_id = request.form.get("from_service_id")
@@ -117,57 +102,121 @@ def register_service_overview_routes(bp):
                 return render_error("Service not found.", 404)
             if source["rite"] != rite:
                 return render_error("Service rite does not match.", 400)
-
-            payload = blank_service_payload(
-                g.user["id"], source["rite"] or DEFAULT_RITE
-            )
-            payload.update(base_payload)
-            new_service_id = create_service(db, payload)
-
             custom_rows = db.execute(
                 "select id, title, text, created_at from service_custom_elements where service_id=? and user_id=? order by created_at, id",
                 (source_id, g.user["id"]),
             ).fetchall()
-            custom_id_map = {}
-            for row in custom_rows:
-                cursor = db.execute(
-                    "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
-                    (new_service_id, g.user["id"], row["title"], row["text"]),
-                )
-                custom_id_map[row["id"]] = cursor.lastrowid
+            source_order_tokens = parse_plan_tokens(source["text_order"])
+            source_disabled_tokens = parse_plan_tokens(source["text_disabled"])
+            source_lesson_overrides = _parse_json_object(source["lesson_overrides"])
+            source_offertory_sentence_id = source["offertory_sentence_id"]
 
-            def remap_tokens(tokens):
-                remapped = []
-                for token in tokens:
-                    if token.startswith("custom:"):
-                        try:
-                            old_id = int(token.split(":", 1)[1])
-                        except (IndexError, ValueError):
-                            continue
-                        new_id = custom_id_map.get(old_id)
-                        if new_id:
-                            remapped.append(f"custom:{new_id}")
+        def build_base_payload(raw_date, handle):
+            if not raw_date:
+                return None, "Service date is required."
+            try:
+                parsed_date = date.fromisoformat(raw_date)
+            except ValueError:
+                return None, "Invalid service date."
+            observance = resolve_observance(parsed_date, handle)
+            title = None
+            observance_handle = None
+            if observance:
+                observance_handle = observance.handle
+                title = observance.name or observance.alternative_name or ""
+            return (
+                {
+                    "service_date": raw_date,
+                    "season": resolve_season(parsed_date),
+                    "observance_handle": observance_handle,
+                    "title": title or None,
+                },
+                None,
+            )
+
+        def remap_tokens(tokens, custom_id_map):
+            remapped = []
+            for token in tokens:
+                if token.startswith("custom:"):
+                    try:
+                        old_id = int(token.split(":", 1)[1])
+                    except (IndexError, ValueError):
                         continue
-                    remapped.append(token)
-                return remapped
+                    new_id = custom_id_map.get(old_id)
+                    if new_id:
+                        remapped.append(f"custom:{new_id}")
+                    continue
+                remapped.append(token)
+            return remapped
 
-            order_tokens = remap_tokens(parse_plan_tokens(source["text_order"]))
-            disabled_tokens = remap_tokens(parse_plan_tokens(source["text_disabled"]))
-            payload["rite"] = source["rite"] or DEFAULT_RITE
-            payload["text_order"] = json.dumps(order_tokens)
-            payload["text_disabled"] = json.dumps(disabled_tokens)
-            lesson_overrides = _parse_json_object(source["lesson_overrides"])
-            if lesson_overrides:
-                payload["lesson_overrides"] = lesson_overrides
-            if source["offertory_sentence_id"] is not None:
-                payload["offertory_sentence_id"] = source["offertory_sentence_id"]
-            update_service_columns(db, new_service_id, payload)
+        def create_service_from_payload(base_payload):
+            if mode == "copy":
+                payload = blank_service_payload(
+                    g.user["id"], source["rite"] or DEFAULT_RITE
+                )
+                payload.update(base_payload)
+                new_service_id = create_service(db, payload)
+                custom_id_map = {}
+                for row in custom_rows:
+                    cursor = db.execute(
+                        "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+                        (new_service_id, g.user["id"], row["title"], row["text"]),
+                    )
+                    custom_id_map[row["id"]] = cursor.lastrowid
+                order_tokens = remap_tokens(source_order_tokens, custom_id_map)
+                disabled_tokens = remap_tokens(source_disabled_tokens, custom_id_map)
+                payload["rite"] = source["rite"] or DEFAULT_RITE
+                payload["text_order"] = json.dumps(order_tokens)
+                payload["text_disabled"] = json.dumps(disabled_tokens)
+                if source_lesson_overrides:
+                    payload["lesson_overrides"] = source_lesson_overrides
+                if source_offertory_sentence_id is not None:
+                    payload["offertory_sentence_id"] = source_offertory_sentence_id
+                update_service_columns(db, new_service_id, payload)
+                return new_service_id
+
+            payload = blank_service_payload(g.user["id"], rite)
+            payload.update(base_payload)
+            return create_service(db, payload)
+
+        if add_mode == "multiple":
+            raw_count = normalize_value(request.form.get("multi_count"))
+            try:
+                count = int(raw_count)
+            except (TypeError, ValueError):
+                count = 0
+            if count < 2 or count > 10:
+                return render_error("Select how many services to add (2-10).", 400)
+            raw_dates = request.form.getlist("service_dates")
+            if len(raw_dates) != count:
+                return render_error("Provide a service date for each service.", 400)
+            raw_handles = request.form.getlist("observance_handles")
+            for index, raw_date in enumerate(raw_dates):
+                normalized_date = normalize_value(raw_date)
+                handle = (
+                    normalize_value(raw_handles[index])
+                    if index < len(raw_handles)
+                    else None
+                )
+                base_payload, error = build_base_payload(normalized_date, handle)
+                if error:
+                    message = (
+                        "Service dates are required for each service."
+                        if error == "Service date is required."
+                        else error
+                    )
+                    return render_error(message, 400)
+                create_service_from_payload(base_payload)
             db.commit()
-            return redirect(url_for("main.service", service_id=new_service_id))
+            return redirect(url_for("main.services"))
 
-        payload = blank_service_payload(g.user["id"], rite)
-        payload.update(base_payload)
-        new_service_id = create_service(db, payload)
+        raw_date = normalize_value(request.form.get("service_date"))
+        base_payload, error = build_base_payload(
+            raw_date, normalize_value(request.form.get("observance_handle"))
+        )
+        if error:
+            return render_error(error, 400)
+        new_service_id = create_service_from_payload(base_payload)
         db.commit()
         return redirect(url_for("main.service", service_id=new_service_id))
 

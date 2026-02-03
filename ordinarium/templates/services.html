@@ -127,20 +127,74 @@
 		<div class="share-modal-backdrop" data-service-add-close></div>
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-add-title">
 			<h3 id="service-add-title">Add a service</h3>
-			<form class="plan-custom-form" action="{{ url_for('main.services_create') }}" method="post">
+			<form class="plan-custom-form service-add-form" action="{{ url_for('main.services_create') }}" method="post">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-				<p class="plan-field">
-					<span>Service date</span>
-					<input type="date" name="service_date" id="service-date-input" required>
-				</p>
-				<div class="plan-inline-fields">
-					<p id="service-observance-row" style="display: none;">
-						<label class="plan-field">
-							<span>Observance</span>
-							<strong class="plan-field-value" id="service-observance-display">Auto-detect</strong>
-							<select id="service-observance-select" name="observance_handle" style="display: none;"></select>
-						</label>
+				<div class="pco-link-toggle" role="tablist" aria-label="Add mode">
+					<button class="pco-link-option is-active" type="button" data-service-add-mode="single">Single</button>
+					<button class="pco-link-option" type="button" data-service-add-mode="multiple">Multiple</button>
+				</div>
+				<input type="hidden" name="add_mode" id="service-add-mode" value="single">
+				<div id="service-add-single">
+					<p class="plan-field">
+						<span>Service date</span>
+						<input type="date" name="service_date" id="service-date-input" required>
 					</p>
+					<div class="plan-inline-fields service-add-multi-fields">
+						<p id="service-observance-row" style="display: none;">
+							<label class="plan-field">
+								<span>Observance</span>
+								<strong class="plan-field-value" id="service-observance-display">Auto-detect</strong>
+								<select id="service-observance-select" name="observance_handle" style="display: none;"></select>
+							</label>
+						</p>
+					</div>
+				</div>
+				<div id="service-add-multiple" style="display: none;">
+					<div class="plan-inline-fields">
+						<p class="plan-field">
+							<span>Number of services</span>
+							<select name="multi_count" id="service-multi-count" disabled>
+								<option value="">Select</option>
+								{% for count in range(2, 11) %}
+									<option value="{{ count }}">{{ count }}</option>
+								{% endfor %}
+							</select>
+						</p>
+						<p class="plan-field">
+							<span>First service date</span>
+							<input type="date" name="multi_start_date" id="service-multi-start-date" disabled>
+						</p>
+					</div>
+					<div class="auth-actions">
+						<button class="plan-submit" type="button" data-service-multi-generate disabled>Generate list</button>
+					</div>
+					<p class="plan-error" id="service-multi-error" style="display: none;"></p>
+					<div id="service-multi-list" style="display: none;">
+						<table class="shared-table">
+							<thead>
+								<tr>
+									<th>Service date</th>
+									<th>Observance</th>
+								</tr>
+							</thead>
+							<tbody id="service-multi-body"></tbody>
+						</table>
+					</div>
+					<template id="service-multi-row-template">
+						<tr data-service-multi-row>
+							<td>
+								<div class="plan-field">
+									<input type="date" name="service_dates" data-service-multi-date required aria-label="Service date">
+								</div>
+							</td>
+							<td>
+								<div class="plan-field">
+									<strong class="plan-field-value" data-service-multi-observance-display>Auto-detect</strong>
+									<select name="observance_handles" data-service-multi-observance-select aria-label="Observance" style="display: none;"></select>
+								</div>
+							</td>
+						</tr>
+					</template>
 				</div>
 				<p class="plan-field">
 					<span>Rite</span>
@@ -176,7 +230,7 @@
 				<p id="service-copy-empty"{% if copy_services %} style="display: none;"{% endif %}>No services from this rite yet.</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-service-add-close>Cancel</button>
-					<button class="plan-submit" type="submit">Continue</button>
+					<button class="plan-submit" type="submit" data-service-add-submit>Continue</button>
 				</div>
 			</form>
 		</div>
@@ -188,6 +242,11 @@
 	const serviceAddToggle = document.querySelector('#service-add-toggle')
 	const serviceAddModal = document.querySelector('#service-add-modal')
 	const serviceAddCloseButtons = document.querySelectorAll('[data-service-add-close]')
+	const serviceAddModeButtons = document.querySelectorAll('[data-service-add-mode]')
+	const serviceAddModeInput = document.querySelector('#service-add-mode')
+	const serviceAddSubmit = document.querySelector('[data-service-add-submit]')
+	const serviceAddSingle = document.querySelector('#service-add-single')
+	const serviceAddMultiple = document.querySelector('#service-add-multiple')
 	const serviceAddModes = document.querySelectorAll('input[name="mode"]')
 	const serviceCopyFields = document.querySelector('#service-copy-fields')
 	const serviceCopySelect = document.querySelector('#service-copy-select')
@@ -198,8 +257,16 @@
 	const serviceObservanceRow = document.querySelector('#service-observance-row')
 	const serviceObservanceDisplay = document.querySelector('#service-observance-display')
 	const serviceObservanceSelect = document.querySelector('#service-observance-select')
+	const serviceMultiCount = document.querySelector('#service-multi-count')
+	const serviceMultiStartDate = document.querySelector('#service-multi-start-date')
+	const serviceMultiGenerate = document.querySelector('[data-service-multi-generate]')
+	const serviceMultiError = document.querySelector('#service-multi-error')
+	const serviceMultiList = document.querySelector('#service-multi-list')
+	const serviceMultiBody = document.querySelector('#service-multi-body')
+	const serviceMultiRowTemplate = document.querySelector('#service-multi-row-template')
 	const emptyObservanceLabel = 'No observance found'
 	const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
+	const maxMultiServices = 10
 
 	const filterCopyOptions = () => {
 		if (!serviceCopySelect) {
@@ -226,7 +293,7 @@
 		return available
 	}
 
-	const updateServiceAddMode = () => {
+	const updateServiceCopyMode = () => {
 		const selected = document.querySelector('input[name="mode"]:checked')
 		let isCopy = selected && selected.value === 'copy'
 		const available = filterCopyOptions()
@@ -252,15 +319,15 @@
 		}
 	}
 
-	const setEmptyObservanceDisplay = () => {
-		if (!serviceObservanceDisplay) {
+	const setEmptyObservanceDisplay = (displayTarget) => {
+		if (!displayTarget) {
 			return
 		}
-		serviceObservanceDisplay.textContent = ''
+		displayTarget.textContent = ''
 		const abbr = document.createElement('abbr')
 		abbr.title = emptyObservanceTooltip
 		abbr.textContent = emptyObservanceLabel
-		serviceObservanceDisplay.appendChild(abbr)
+		displayTarget.appendChild(abbr)
 	}
 
 	const resetObservanceFields = () => {
@@ -299,15 +366,15 @@
 				serviceObservanceSelect.innerHTML = ''
 			}
 			if (!hasOptions) {
-				if (serviceObservanceSelect) {
-					serviceObservanceSelect.disabled = true
-					serviceObservanceSelect.style.display = 'none'
-				}
-				setEmptyObservanceDisplay()
-				if (serviceObservanceDisplay) {
-					serviceObservanceDisplay.style.display = ''
-				}
-				return
+			if (serviceObservanceSelect) {
+				serviceObservanceSelect.disabled = true
+				serviceObservanceSelect.style.display = 'none'
+			}
+			setEmptyObservanceDisplay(serviceObservanceDisplay)
+			if (serviceObservanceDisplay) {
+				serviceObservanceDisplay.style.display = ''
+			}
+			return
 			}
 			const selectedHandle = data?.handle || options[0].handle
 			options.forEach((option, index) => {
@@ -339,14 +406,263 @@
 		}
 	}
 
+	const setServiceMultiError = (message) => {
+		if (!serviceMultiError) {
+			return
+		}
+		serviceMultiError.textContent = message || ''
+		serviceMultiError.style.display = message ? '' : 'none'
+	}
+
+	const parseDateValue = (value) => {
+		if (!value) {
+			return null
+		}
+		const parts = value.split('-').map((item) => Number(item))
+		if (parts.length !== 3 || parts.some((item) => Number.isNaN(item))) {
+			return null
+		}
+		const [year, month, day] = parts
+		return new Date(year, month - 1, day)
+	}
+
+	const formatDateValue = (dateValue) => {
+		if (!(dateValue instanceof Date)) {
+			return ''
+		}
+		const year = dateValue.getFullYear()
+		const month = String(dateValue.getMonth() + 1).padStart(2, '0')
+		const day = String(dateValue.getDate()).padStart(2, '0')
+		return `${year}-${month}-${day}`
+	}
+
+	const nextSunday = (dateValue) => {
+		const candidate = new Date(dateValue)
+		const day = candidate.getDay()
+		const offset = (7 - day) % 7 || 7
+		candidate.setDate(candidate.getDate() + offset)
+		return candidate
+	}
+
+	const buildMultiDates = (startDate, count) => {
+		const dates = []
+		const first = new Date(startDate)
+		dates.push(first)
+		if (count <= 1) {
+			return dates
+		}
+		let current = nextSunday(first)
+		dates.push(current)
+		for (let index = 2; index < count; index += 1) {
+			const nextDate = new Date(current)
+			nextDate.setDate(nextDate.getDate() + 7)
+			dates.push(nextDate)
+			current = nextDate
+		}
+		return dates
+	}
+
+	const updateMultiGenerateState = () => {
+		if (!serviceMultiGenerate) {
+			return
+		}
+		const count = Number.parseInt(serviceMultiCount ? serviceMultiCount.value : '', 10)
+		const hasValidCount = Number.isInteger(count) && count >= 2 && count <= maxMultiServices
+		const hasValidDate = Boolean(parseDateValue(serviceMultiStartDate ? serviceMultiStartDate.value : ''))
+		serviceMultiGenerate.disabled = !(hasValidCount && hasValidDate)
+	}
+
+	const updateServiceAddSubmitState = () => {
+		if (!serviceAddSubmit) {
+			return
+		}
+		const isMultiple = serviceAddModeInput && serviceAddModeInput.value === 'multiple'
+		if (!isMultiple) {
+			serviceAddSubmit.disabled = false
+			return
+		}
+		const hasRows = serviceMultiBody && serviceMultiBody.children.length > 0
+		serviceAddSubmit.disabled = !hasRows
+	}
+
+	const resetMultiObservanceFields = (displayTarget, selectTarget) => {
+		if (displayTarget) {
+			displayTarget.textContent = 'Auto-detect'
+			displayTarget.style.display = ''
+		}
+		if (selectTarget) {
+			selectTarget.innerHTML = ''
+			selectTarget.style.display = 'none'
+		}
+	}
+
+	const updateMultiObservanceForRow = async (row) => {
+		if (!row) {
+			return
+		}
+		const dateInput = row.querySelector('[data-service-multi-date]')
+		const displayTarget = row.querySelector('[data-service-multi-observance-display]')
+		const selectTarget = row.querySelector('[data-service-multi-observance-select]')
+		if (!dateInput || !dateInput.value) {
+			resetMultiObservanceFields(displayTarget, selectTarget)
+			return
+		}
+		try {
+			const currentHandle = selectTarget ? selectTarget.value : ''
+			const response = await fetch(`/observance?date=${dateInput.value}&handle=${encodeURIComponent(currentHandle)}`)
+			if (!response.ok) {
+				return
+			}
+			const data = await response.json()
+			const options = Array.isArray(data?.options) ? data.options : []
+			if (selectTarget) {
+				selectTarget.innerHTML = ''
+			}
+			if (!options.length) {
+				if (selectTarget) {
+					const optionEl = document.createElement('option')
+					optionEl.value = ''
+					optionEl.textContent = emptyObservanceLabel
+					selectTarget.appendChild(optionEl)
+					selectTarget.value = ''
+					selectTarget.style.display = 'none'
+				}
+				setEmptyObservanceDisplay(displayTarget)
+				if (displayTarget) {
+					displayTarget.style.display = ''
+				}
+				return
+			}
+			const selectedHandle = data?.handle || options[0].handle
+			options.forEach((option, index) => {
+				if (!selectTarget) {
+					return
+				}
+				const optionEl = document.createElement('option')
+				optionEl.value = option.handle
+				optionEl.textContent = option.title + (index === 0 ? ' (default)' : '')
+				selectTarget.appendChild(optionEl)
+			})
+			if (selectTarget) {
+				selectTarget.value = selectedHandle
+			}
+			const selectedOption = options.find((option) => option.handle === selectedHandle)
+			if (displayTarget) {
+				displayTarget.textContent = selectedOption ? selectedOption.title : data?.title || 'Auto-detect'
+			}
+			const showSelect = options.length > 1
+			if (selectTarget) {
+				selectTarget.style.display = showSelect ? '' : 'none'
+			}
+			if (displayTarget) {
+				displayTarget.style.display = showSelect ? 'none' : ''
+			}
+		} catch (error) {
+			// Ignore lookup failures.
+		}
+	}
+
+	const renderMultiRows = async (dates) => {
+		if (!serviceMultiBody) {
+			return
+		}
+		serviceMultiBody.innerHTML = ''
+		const rows = dates.map((dateValue) => {
+			const row = serviceMultiRowTemplate
+				? serviceMultiRowTemplate.content.firstElementChild.cloneNode(true)
+				: document.createElement('tr')
+			const dateInput = row.querySelector('[data-service-multi-date]')
+			if (dateInput) {
+				dateInput.value = formatDateValue(dateValue)
+				dateInput.addEventListener('change', () => updateMultiObservanceForRow(row))
+			}
+			return row
+		})
+		rows.forEach((row) => serviceMultiBody.appendChild(row))
+		for (const row of rows) {
+			await updateMultiObservanceForRow(row)
+		}
+	}
+
+	const generateMultiList = async () => {
+		setServiceMultiError('')
+		const count = Number.parseInt(serviceMultiCount ? serviceMultiCount.value : '', 10)
+		if (!Number.isInteger(count) || count < 2 || count > maxMultiServices) {
+			setServiceMultiError('Select how many services to add (2-10).')
+			return
+		}
+		const startDate = parseDateValue(serviceMultiStartDate ? serviceMultiStartDate.value : '')
+		if (!startDate) {
+			setServiceMultiError('Choose the first service date.')
+			return
+		}
+		if (serviceMultiBody && serviceMultiBody.children.length > 0) {
+			const confirmed = window.confirm('Regenerate the list? This will reset any edits.')
+			if (!confirmed) {
+				return
+			}
+		}
+		const dates = buildMultiDates(startDate, count)
+		await renderMultiRows(dates)
+		if (serviceMultiList) {
+			serviceMultiList.style.display = ''
+		}
+		if (serviceMultiGenerate) {
+			serviceMultiGenerate.textContent = 'Regenerate list'
+		}
+		updateServiceAddSubmitState()
+	}
+
+	const setServiceAddMode = (mode) => {
+		const isMultiple = mode === 'multiple'
+		if (serviceAddModeInput) {
+			serviceAddModeInput.value = mode
+		}
+		serviceAddModeButtons.forEach((button) => {
+			button.classList.toggle('is-active', button.dataset.serviceAddMode === mode)
+		})
+		if (serviceAddSingle) {
+			serviceAddSingle.style.display = isMultiple ? 'none' : ''
+		}
+		if (serviceAddMultiple) {
+			serviceAddMultiple.style.display = isMultiple ? '' : 'none'
+		}
+		if (serviceDateInput) {
+			serviceDateInput.required = !isMultiple
+		}
+		if (serviceMultiCount) {
+			serviceMultiCount.disabled = !isMultiple
+		}
+		if (serviceMultiStartDate) {
+			serviceMultiStartDate.disabled = !isMultiple
+		}
+		if (serviceMultiGenerate) {
+			serviceMultiGenerate.disabled = !isMultiple
+		}
+		if (serviceAddMultiple) {
+			const multiInputs = serviceAddMultiple.querySelectorAll('[data-service-multi-date], [data-service-multi-observance-select]')
+			multiInputs.forEach((input) => {
+				input.disabled = !isMultiple
+			})
+		}
+		if (!isMultiple) {
+			setServiceMultiError('')
+		}
+		updateMultiGenerateState()
+		updateServiceAddSubmitState()
+		if (!isMultiple) {
+			updateObservanceFromDate()
+		}
+	}
+
 
 	if (serviceAddToggle && serviceAddModal) {
 		serviceAddToggle.addEventListener('click', () => {
 			serviceAddModal.setAttribute('aria-hidden', 'false')
 			serviceAddToggle.setAttribute('aria-expanded', 'true')
 			document.body.classList.add('is-modal-open')
-			updateServiceAddMode()
-			updateObservanceFromDate()
+			setServiceAddMode(serviceAddModeInput ? serviceAddModeInput.value : 'single')
+			updateServiceCopyMode()
 		})
 	}
 
@@ -364,15 +680,33 @@
 	})
 
 	serviceAddModes.forEach((mode) => {
-		mode.addEventListener('change', updateServiceAddMode)
+		mode.addEventListener('change', updateServiceCopyMode)
 	})
 
 	if (serviceRiteSelect) {
-		serviceRiteSelect.addEventListener('change', updateServiceAddMode)
+		serviceRiteSelect.addEventListener('change', updateServiceCopyMode)
 	}
 
 	if (serviceDateInput) {
 		serviceDateInput.addEventListener('change', updateObservanceFromDate)
+	}
+
+	serviceAddModeButtons.forEach((button) => {
+		button.addEventListener('click', () => {
+			setServiceAddMode(button.dataset.serviceAddMode || 'single')
+		})
+	})
+
+	if (serviceMultiCount) {
+		serviceMultiCount.addEventListener('change', updateMultiGenerateState)
+	}
+
+	if (serviceMultiStartDate) {
+		serviceMultiStartDate.addEventListener('change', updateMultiGenerateState)
+	}
+
+	if (serviceMultiGenerate) {
+		serviceMultiGenerate.addEventListener('click', generateMultiList)
 	}
 
 </script>

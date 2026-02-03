@@ -279,6 +279,8 @@ main.has-action-bar .flash-list {
 	border-radius: var(--radius-lg);
 	padding: 24px;
 	width: min(520px, 92vw);
+	max-height: 90vh;
+	overflow-y: auto;
 	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.3);
 	text-align: left;
 }
@@ -771,6 +773,16 @@ div#page {
 		background: #f6f6f6;
 		position: relative;
 	}
+	.shared-table .plan-field {
+		gap: 0.2em;
+	}
+	.shared-table input[type="text"],
+	.shared-table input[type="date"],
+	.shared-table input[type="time"],
+	.shared-table select {
+		padding: 0.45em 0.6em;
+		font-size: 0.9em;
+	}
 	.shared-table tbody tr:hover td {
 		background: #fff;
 	}
@@ -941,6 +953,18 @@ div#page {
 	.plan-inline-fields > * {
 		flex: 1 1 300px;
 		margin: 0;
+	}
+	.service-add-multi-fields {
+		flex-wrap: nowrap;
+	}
+	.service-add-multi-fields > * {
+		flex: 1 1 0;
+		min-width: 0;
+	}
+	@media (max-width: 540px) {
+		.service-add-multi-fields {
+			flex-wrap: wrap;
+		}
 	}
 	.plan-field {
 		display: flex;
@@ -1252,6 +1276,12 @@ div#page {
 	padding: 0;
 	background: transparent;
 	gap: 0.6em;
+}
+.service-add-form p {
+	margin: 0;
+}
+.service-add-form .shared-table {
+	margin: 0.4em 0 0.8em 0;
 }
 .share-modal-card input[type="text"],
 .share-modal-card input[type="date"],

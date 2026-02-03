@@ -160,6 +160,45 @@ def test_services_new_copies_non_default_rite(app, auth_client, service_factory)
         assert copied["rite"] == "Anglican Standard Text"
 
 
+def test_services_multi_add_creates_services(app, auth_client):
+    client, user_id = auth_client
+    response = client.post(
+        "/services",
+        data={
+            "add_mode": "multiple",
+            "mode": "defaults",
+            "rite": "Renewed Ancient Text",
+            "multi_count": "2",
+            "service_dates": ["2024-12-01", "2024-12-08"],
+            "observance_handles": ["", ""],
+        },
+    )
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/services")
+    with app.app_context():
+        db = get_db()
+        rows = db.execute(
+            """
+            select service_date, season, observance_handle, title
+            from services
+            where user_id=? and service_date in (?, ?)
+            order by service_date asc
+            """,
+            (user_id, "2024-12-01", "2024-12-08"),
+        ).fetchall()
+        assert len(rows) == 2
+        for row in rows:
+            parsed_date = date.fromisoformat(row["service_date"])
+            observance = resolve_observance(parsed_date)
+            expected_handle = observance.handle if observance else None
+            expected_title = None
+            if observance:
+                expected_title = observance.name or observance.alternative_name or None
+            assert row["season"] == resolve_season(parsed_date)
+            assert row["observance_handle"] == expected_handle
+            assert row["title"] == expected_title
+
+
 def test_service_missing_id_returns_error(auth_client):
     client, _ = auth_client
     response = client.get("/service")
