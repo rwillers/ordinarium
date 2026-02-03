@@ -123,7 +123,6 @@ def register_service_persist_routes(bp):
             return jsonify(
                 {
                     "ok": True,
-                    "can_delete": bool(payload.get("service_date")),
                     "can_share": bool(payload.get("service_date")),
                     "service_title": payload.get("title") or "",
                     "service_date": payload.get("service_date") or "",

@@ -10,10 +10,6 @@
 					<div class="plan-header-buttons">
 						<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
 						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
-						<form action="{{ url_for('main.service_delete', service_id=service_id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')" data-plan-delete{% if not can_delete %} style="display: none;"{% endif %}>
-							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-							<button class="plan-submit" type="submit">Delete</button>
-						</form>
 					</div>
 					<div class="plan-header-status">
 						<span class="plan-save-status" id="plan-save-status" aria-live="polite"></span>
@@ -21,7 +17,12 @@
 				</div>
 			</div>
 		</div>
-	<h2 class="plan-title">Plan a service</h2>
+	<div class="plan-header plan-header-inline">
+		<h2 class="plan-title">Plan a service</h2>
+		<div class="plan-header-actions">
+			<a class="button" href="{{ url_for('main.services') }}">Back to services</a>
+		</div>
+	</div>
 {% if pco_connected %}
 	<aside class="pco-sync-panel{% if not service.service_date %} is-hidden{% endif %}" data-pco-sync-panel data-pco-sync-state="{{ pco_sync_state or '' }}">
 		<div class="pco-sync-label">PCO sync</div>
@@ -136,52 +137,45 @@
 		</div>
 	</div>
 	{% endif %}
-	<p>Select and arrange the ordinaries you would like to include in your service plan for the <em>{{ rite }}</em> rite. You can drag and drop the items to reorder them as needed. When you are satisfied with your selection and order, click “View” to see your service text.</p>
-
-	<strong>{{ rite }}</strong>
-
 	<form class="plan-actions" id="plan-meta-form" action="{{ url_for('main.service_update', service_id=service_id) }}" method="post">
 		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<input type="hidden" name="service_id" value="{{ service_id }}">
 		<input type="hidden" name="ids" value="">
 		<input type="hidden" name="disabled" value="">
-		<p><label class="plan-field">
-			<span>Service date:</span>
-			<input type="date" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}" required>
-		</label></p>
+		<input type="hidden" name="service_date" id="plan-service-date" value="{{ service.service_date or '' }}">
+		<input type="hidden" name="observance_handle" value="{{ service.observance_handle or '' }}">
 		<p class="plan-save-error" id="plan-save-error" aria-live="polite"></p>
-		<div class="plan-inline-fields">
-			<p id="plan-season-row"{% if not service.service_date %} style="display: none;"{% endif %}>
-				<label class="plan-field">
-					<span>Season:</span>
-					<strong class="plan-field-value" id="plan-season-display">{{ service.season or 'Auto-detect' }}</strong>
-				</label>
-			</p>
-			<p id="plan-observance-row"{% if not service.service_date %} style="display: none;"{% endif %}>
-				<label class="plan-field">
-					<span>Observance:</span>
-					<strong class="plan-field-value" id="plan-observance-display"{% if observance_options and observance_options|length > 1 %} style="display: none;"{% endif %}>
-						{% if observance_options %}
-							{{ observance_title or 'Auto-detect' }}
-						{% elif service.service_date %}
-							<abbr title="No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.">No observance found</abbr>
-						{% else %}
-							Auto-detect
-						{% endif %}
-					</strong>
-					<select id="plan-observance-select" name="observance_handle"{% if not observance_options or observance_options|length == 1 %} style="display: none;"{% endif %}>
-						{% for option in observance_options %}
-						<option value="{{ option.handle }}"{% if option.selected %} selected{% endif %}>{{ option.title }}{% if option.is_default %} (default){% endif %}</option>
-						{% endfor %}
-					</select>
-				</label>
-			</p>
-		</div>
 		<input type="hidden" name="rite" value="{{ service.rite or rite }}">
 	</form>
+	{% set display_date = '' %}
+	{% if service.service_date %}
+		{% set date_parts = service.service_date.split('-') %}
+		{% if date_parts|length == 3 %}
+			{% set display_date = date_parts[1]|int ~ '/' ~ date_parts[2]|int ~ '/' ~ date_parts[0] %}
+		{% else %}
+			{% set display_date = service.service_date %}
+		{% endif %}
+	{% endif %}
+	<h3 id="plan-observance-row">
+		<span id="plan-observance-display">
+			{% if observance_title %}
+				{{ observance_title }}
+			{% elif service.service_date %}
+				<abbr title="No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.">No observance found</abbr>
+			{% else %}
+				Auto-detect
+			{% endif %}
+			{% if display_date %}
+				({{ display_date }})
+			{% endif %}
+		</span>
+	</h3>
+	<p id="plan-season-row" class="plan-meta">
+		Season: <span id="plan-season-display">{{ service.season or 'Auto-detect' }}</span>
+	</p>
 
 	<div class="plan-list-wrapper"{% if not service.service_date %} data-plan-locked="true"{% endif %}>
-		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Start by entering a service date to enable the full plan.</p>
+		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Service date is set when the service is created. Create a dated service to enable the full plan.</p>
 		<table class="shared-table plan-list-table{% if not service.service_date %} is-disabled{% endif %}">
 			<thead>
 				<tr>
@@ -500,18 +494,11 @@
 		const planMetaForm = document.querySelector('#plan-meta-form')
 		const planServiceDate = document.querySelector('#plan-service-date')
 		const planSeasonDisplay = document.querySelector('#plan-season-display')
-		const planSeasonRow = document.querySelector('#plan-season-row')
-		const planObservanceRow = document.querySelector('#plan-observance-row')
 		const planObservanceDisplay = document.querySelector('#plan-observance-display')
 		const planObservanceSelect = document.querySelector('#plan-observance-select')
-		const emptyObservanceLabel = 'No observance found'
-		const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 		const planSaveStatus = document.querySelector('#plan-save-status')
 		const planSaveError = document.querySelector('#plan-save-error')
-		const planDeleteForm = document.querySelector('[data-plan-delete]')
-		const planListWrapper = document.querySelector('.plan-list-wrapper')
 		const planList = document.querySelector('.plan-list')
-		const planLockedMessage = document.querySelector('.plan-locked-message')
 		let draggedRow = null
 
 		const updatePlanInputs = () => {
@@ -554,17 +541,6 @@
 		let autosaveTimer = null
 		let autosaveInFlight = false
 		let autosaveQueued = false
-
-		const setEmptyObservanceDisplay = () => {
-			if (!planObservanceDisplay) {
-				return
-			}
-			planObservanceDisplay.textContent = ''
-			const abbr = document.createElement('abbr')
-			abbr.title = emptyObservanceTooltip
-			abbr.textContent = emptyObservanceLabel
-			planObservanceDisplay.appendChild(abbr)
-		}
 
 		const updateLessonDefaults = (lessonDefaults) => {
 			if (!lessonDefaults || typeof lessonDefaults !== 'object') {
@@ -624,9 +600,6 @@
 				if (data?.lesson_defaults) {
 					updateLessonDefaults(data.lesson_defaults)
 				}
-				if (planDeleteForm) {
-					planDeleteForm.style.display = data?.can_delete ? '' : 'none'
-				}
 				if (shareButton) {
 					shareButton.style.display = data?.can_share ? '' : 'none'
 				}
@@ -676,18 +649,6 @@
 			setSaveStatus('Saved', 'saved')
 		}
 
-		const setPlanLocked = (locked) => {
-			if (planList) {
-				planList.classList.toggle('is-disabled', locked)
-			}
-			if (planListWrapper) {
-				planListWrapper.dataset.planLocked = locked ? 'true' : 'false'
-			}
-			if (planLockedMessage) {
-				planLockedMessage.style.display = locked ? '' : 'none'
-			}
-		}
-
 		if (planList) {
 			planList.addEventListener('dragstart', (event) => {
 				const row = event.target.closest('.plan-row')
@@ -731,112 +692,6 @@
 			planMetaForm.addEventListener('submit', (event) => {
 				event.preventDefault()
 				scheduleAutosave(0)
-			})
-		}
-
-		if (planServiceDate && planSeasonDisplay) {
-			const updateObservanceFromDate = async () => {
-				if (!planServiceDate.value) {
-					setPlanLocked(true)
-					planSeasonDisplay.textContent = 'Auto-detect'
-					if (planSeasonRow) {
-						planSeasonRow.style.display = 'none'
-					}
-					if (planObservanceRow) {
-						planObservanceRow.style.display = 'none'
-					}
-					updateLessonDefaults({})
-					setPcoPanelVisibility()
-					if (planDeleteForm) {
-						planDeleteForm.style.display = 'none'
-					}
-					if (shareButton) {
-						shareButton.style.display = 'none'
-					}
-					return
-				}
-				setPlanLocked(false)
-				try {
-					const currentHandle = planObservanceSelect ? planObservanceSelect.value : ''
-					const response = await fetch(`/observance?date=${planServiceDate.value}&handle=${encodeURIComponent(currentHandle)}`)
-					if (!response.ok) {
-						return
-					}
-					const data = await response.json()
-					if (data && data.season) {
-						planSeasonDisplay.textContent = data.season
-					}
-					if (planSeasonRow) {
-						planSeasonRow.style.display = ''
-					}
-					if (planObservanceRow) {
-						const options = Array.isArray(data?.options) ? data.options : []
-						const hasOptions = options.length > 0
-						planObservanceRow.style.display = ''
-						if (hasOptions && planObservanceSelect) {
-							const currentValue = planObservanceSelect.value
-							planObservanceSelect.innerHTML = ''
-							options.forEach((option, index) => {
-								const optionEl = document.createElement('option')
-								optionEl.value = option.handle
-								optionEl.textContent = option.title + (index === 0 ? ' (default)' : '')
-								planObservanceSelect.appendChild(optionEl)
-							})
-							const stillValid = options.some((option) => option.handle === currentValue)
-							const selectedHandle = stillValid
-								? currentValue
-								: data.default_handle || options[0].handle
-							if (selectedHandle) {
-								planObservanceSelect.value = selectedHandle
-							}
-							planObservanceSelect.style.display = options.length > 1 ? '' : 'none'
-						} else if (planObservanceSelect) {
-							planObservanceSelect.innerHTML = ''
-							planObservanceSelect.style.display = 'none'
-						}
-						if (planObservanceDisplay) {
-							if (hasOptions) {
-								planObservanceDisplay.textContent = data.title || 'Auto-detect'
-							} else {
-								setEmptyObservanceDisplay()
-							}
-							planObservanceDisplay.style.display = options.length > 1 ? 'none' : ''
-						}
-					}
-					setPcoPanelVisibility()
-					if (data?.lesson_defaults) {
-						updateLessonDefaults(data.lesson_defaults)
-					}
-				} catch (error) {
-					// Ignore lookup failures.
-				}
-			}
-
-			planServiceDate.addEventListener('change', () => {
-				updateObservanceFromDate()
-				scheduleAutosave()
-			})
-			if (planServiceDate.value) {
-				updateObservanceFromDate()
-			}
-		}
-
-		if (planObservanceSelect) {
-			planObservanceSelect.addEventListener('change', () => {
-				if (planServiceDate && planServiceDate.value) {
-					const selectedHandle = planObservanceSelect.value
-					fetch(`/observance?date=${planServiceDate.value}&handle=${encodeURIComponent(selectedHandle)}`)
-						.then((response) => (response.ok ? response.json() : null))
-						.then((data) => {
-							if (data?.lesson_defaults) {
-								updateLessonDefaults(data.lesson_defaults)
-							}
-						})
-						.catch(() => {
-							// Ignore lookup failures.
-						})
-				}
-				scheduleAutosave()
 			})
 		}
 

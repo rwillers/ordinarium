@@ -1,6 +1,8 @@
 import json
+from datetime import date
 
 from ordinarium.db import get_db
+from ordinarium.liturgical_calendar import resolve_observance, resolve_season
 
 
 def test_services_new_redirects_to_next_id(auth_client, service_factory):
@@ -8,7 +10,7 @@ def test_services_new_redirects_to_next_id(auth_client, service_factory):
     service_factory(user_id=user_id, service_id=10)
     response = client.get("/services/new")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/service/11")
+    assert response.headers["Location"].endswith("/services")
 
 
 def test_services_new_copies_service_template(app, auth_client, service_factory):
@@ -47,10 +49,18 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
             "mode": "copy",
             "from_service_id": str(source_id),
             "rite": "Renewed Ancient Text",
+            "service_date": "2024-12-01",
         },
     )
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/service/21")
+    expected_date = "2024-12-01"
+    parsed_date = date.fromisoformat(expected_date)
+    observance = resolve_observance(parsed_date)
+    expected_handle = observance.handle if observance else None
+    expected_title = None
+    if observance:
+        expected_title = observance.name or observance.alternative_name or None
     with app.app_context():
         db = get_db()
         copied = db.execute(
@@ -62,10 +72,10 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
             (21,),
         ).fetchone()
         assert copied["user_id"] == user_id
-        assert copied["service_date"] is None
-        assert copied["season"] is None
-        assert copied["observance_handle"] is None
-        assert copied["title"] is None
+        assert copied["service_date"] == expected_date
+        assert copied["season"] == resolve_season(parsed_date)
+        assert copied["observance_handle"] == expected_handle
+        assert copied["title"] == expected_title
         assert copied["rite"] == "Renewed Ancient Text"
         order_tokens = json.loads(copied["text_order"])
         disabled_tokens = json.loads(copied["text_disabled"])
@@ -95,6 +105,7 @@ def test_services_new_rejects_mismatched_rite(auth_client, service_factory):
             "mode": "copy",
             "from_service_id": str(source_id),
             "rite": "Renewed Ancient Text",
+            "service_date": "2024-12-01",
         },
     )
     assert response.status_code == 400
@@ -106,7 +117,11 @@ def test_services_new_uses_selected_rite(app, auth_client, service_factory):
     service_factory(user_id=user_id, service_id=30)
     response = client.post(
         "/services",
-        data={"mode": "defaults", "rite": "Anglican Standard Text"},
+        data={
+            "mode": "defaults",
+            "rite": "Anglican Standard Text",
+            "service_date": "2024-12-01",
+        },
     )
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/service/31")
@@ -132,6 +147,7 @@ def test_services_new_copies_non_default_rite(app, auth_client, service_factory)
             "mode": "copy",
             "from_service_id": str(source_id),
             "rite": "Anglican Standard Text",
+            "service_date": "2024-12-01",
         },
     )
     assert response.status_code == 302
@@ -323,7 +339,6 @@ def test_persist_service_autosave_saves_data(app, auth_client, service_factory):
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["ok"] is True
-    assert payload["can_delete"] is True
     lesson_defaults = payload["lesson_defaults"]
     assert isinstance(lesson_defaults, dict)
     assert set(lesson_defaults.keys()) == {

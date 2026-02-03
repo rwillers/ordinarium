@@ -2,13 +2,6 @@
 
 Remaining work and follow-ups.
 
-- Update service add functionality to drive off the services modal.
-  - Move date and observance selection to “add service” modal.
-  - Confirm /service is pulling season and observance from DB and not recalculating.
-  - Remove view/sync enablement JS code on service page given that the date and observance will always be set now.
-  - Confirm /service shows date, season, and observance
-  - Add "Back to services" button on service page.
-  - Remove “delete” action from service page.
 - Add batch option to add service modal.
 - Add batch PCO sync to services.
 - Consider removing service header action bar completely.

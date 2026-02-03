@@ -130,6 +130,19 @@
 			<form class="plan-custom-form" action="{{ url_for('main.services_create') }}" method="post">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<p class="plan-field">
+					<span>Service date</span>
+					<input type="date" name="service_date" id="service-date-input" required>
+				</p>
+				<div class="plan-inline-fields">
+					<p id="service-observance-row" style="display: none;">
+						<label class="plan-field">
+							<span>Observance</span>
+							<strong class="plan-field-value" id="service-observance-display">Auto-detect</strong>
+							<select id="service-observance-select" name="observance_handle" style="display: none;"></select>
+						</label>
+					</p>
+				</div>
+				<p class="plan-field">
 					<span>Rite</span>
 					<select name="rite" id="service-rite-select">
 						{% for rite in rite_options %}
@@ -181,6 +194,12 @@
 	const serviceRiteSelect = document.querySelector('#service-rite-select')
 	const serviceCopyEmpty = document.querySelector('#service-copy-empty')
 	const serviceCopyToggle = document.querySelector('input[name="mode"][value="copy"]')
+	const serviceDateInput = document.querySelector('#service-date-input')
+	const serviceObservanceRow = document.querySelector('#service-observance-row')
+	const serviceObservanceDisplay = document.querySelector('#service-observance-display')
+	const serviceObservanceSelect = document.querySelector('#service-observance-select')
+	const emptyObservanceLabel = 'No observance found'
+	const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 
 	const filterCopyOptions = () => {
 		if (!serviceCopySelect) {
@@ -233,6 +252,93 @@
 		}
 	}
 
+	const setEmptyObservanceDisplay = () => {
+		if (!serviceObservanceDisplay) {
+			return
+		}
+		serviceObservanceDisplay.textContent = ''
+		const abbr = document.createElement('abbr')
+		abbr.title = emptyObservanceTooltip
+		abbr.textContent = emptyObservanceLabel
+		serviceObservanceDisplay.appendChild(abbr)
+	}
+
+	const resetObservanceFields = () => {
+		if (serviceObservanceDisplay) {
+			serviceObservanceDisplay.textContent = 'Auto-detect'
+			serviceObservanceDisplay.style.display = ''
+		}
+		if (serviceObservanceRow) {
+			serviceObservanceRow.style.display = 'none'
+		}
+		if (serviceObservanceSelect) {
+			serviceObservanceSelect.innerHTML = ''
+			serviceObservanceSelect.style.display = 'none'
+			serviceObservanceSelect.disabled = true
+		}
+	}
+
+	const updateObservanceFromDate = async () => {
+		if (!serviceDateInput || !serviceDateInput.value) {
+			resetObservanceFields()
+			return
+		}
+		if (serviceObservanceRow) {
+			serviceObservanceRow.style.display = ''
+		}
+		try {
+			const currentHandle = serviceObservanceSelect ? serviceObservanceSelect.value : ''
+			const response = await fetch(`/observance?date=${serviceDateInput.value}&handle=${encodeURIComponent(currentHandle)}`)
+			if (!response.ok) {
+				return
+			}
+			const data = await response.json()
+			const options = Array.isArray(data?.options) ? data.options : []
+			const hasOptions = options.length > 0
+			if (serviceObservanceSelect) {
+				serviceObservanceSelect.innerHTML = ''
+			}
+			if (!hasOptions) {
+				if (serviceObservanceSelect) {
+					serviceObservanceSelect.disabled = true
+					serviceObservanceSelect.style.display = 'none'
+				}
+				setEmptyObservanceDisplay()
+				if (serviceObservanceDisplay) {
+					serviceObservanceDisplay.style.display = ''
+				}
+				return
+			}
+			const selectedHandle = data?.handle || options[0].handle
+			options.forEach((option, index) => {
+				if (!serviceObservanceSelect) {
+					return
+				}
+				const optionEl = document.createElement('option')
+				optionEl.value = option.handle
+				optionEl.textContent = option.title + (index === 0 ? ' (default)' : '')
+				serviceObservanceSelect.appendChild(optionEl)
+			})
+			if (serviceObservanceSelect) {
+				serviceObservanceSelect.value = selectedHandle
+				serviceObservanceSelect.disabled = false
+			}
+			const selectedOption = options.find((option) => option.handle === selectedHandle)
+			if (serviceObservanceDisplay) {
+				serviceObservanceDisplay.textContent = selectedOption ? selectedOption.title : data?.title || 'Auto-detect'
+			}
+			const showSelect = options.length > 1
+			if (serviceObservanceSelect) {
+				serviceObservanceSelect.style.display = showSelect ? '' : 'none'
+			}
+			if (serviceObservanceDisplay) {
+				serviceObservanceDisplay.style.display = showSelect ? 'none' : ''
+			}
+		} catch (error) {
+			// Ignore lookup failures.
+		}
+	}
+
 
 	if (serviceAddToggle && serviceAddModal) {
 		serviceAddToggle.addEventListener('click', () => {
@@ -240,6 +346,7 @@
 			serviceAddToggle.setAttribute('aria-expanded', 'true')
 			document.body.classList.add('is-modal-open')
 			updateServiceAddMode()
+			updateObservanceFromDate()
 		})
 	}
 
@@ -262,6 +369,10 @@
 
 	if (serviceRiteSelect) {
 		serviceRiteSelect.addEventListener('change', updateServiceAddMode)
+	}
+
+	if (serviceDateInput) {
+		serviceDateInput.addEventListener('change', updateObservanceFromDate)
 	}
 
 </script>

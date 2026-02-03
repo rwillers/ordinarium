@@ -1,7 +1,6 @@
 from datetime import date
 
 from .db import get_db
-from .liturgical_calendar import resolve_observance_options
 from .plan_customizations import load_custom_templates
 from .plan_items import build_plan_items
 from .plan_lessons import _resolve_lesson_references
@@ -51,8 +50,7 @@ def build_plan_context(
         disabled_tokens,
         user_id=user_id,
     )
-    observance_options = []
-    observance_title = ""
+    observance_title = saved_plan["title"] if saved_plan and saved_plan["title"] else ""
     observance_handle = saved_plan["observance_handle"] if saved_plan else None
     lesson_defaults = {}
     if saved_plan and saved_plan["service_date"]:
@@ -64,40 +62,14 @@ def build_plan_context(
             lesson_defaults = _resolve_lesson_references(
                 saved_plan["service_date"], observance_handle
             )
-            options = resolve_observance_options(service_date)
-            if options:
-                observance_options = []
-                selected_handle = observance_handle
-                if selected_handle and not any(
-                    option.handle == selected_handle for option in options
-                ):
-                    selected_handle = None
-                if not selected_handle:
-                    selected_handle = options[0].handle
-                for index, option in enumerate(options):
-                    title = option.name or option.alternative_name
-                    observance_options.append(
-                        {
-                            "handle": option.handle,
-                            "title": title,
-                            "is_default": index == 0,
-                            "selected": option.handle == selected_handle,
-                        }
-                    )
-                observance_title = next(
-                    (
-                        option["title"]
-                        for option in observance_options
-                        if option["selected"]
-                    ),
-                    "",
-                )
+            observance_title = observance_title or ""
 
     service_data = {
         "season": saved_plan["season"] if saved_plan else "",
         "service_date": saved_plan["service_date"] if saved_plan else "",
         "rite": effective_rite,
         "title": saved_plan["title"] if saved_plan else "",
+        "observance_handle": observance_handle or "",
         "updated_at": saved_plan["updated_at"] if saved_plan else "",
     }
     lesson_overrides = parse_json_object(
@@ -126,9 +98,7 @@ def build_plan_context(
         "ordinaries": ordinaries,
         "service_id": service_id,
         "service": service_data,
-        "observance_options": observance_options,
         "observance_title": observance_title,
-        "can_delete": bool(saved_plan and saved_plan["service_date"]),
         "can_share": bool(saved_plan and saved_plan["service_date"]),
         "custom_templates": load_custom_templates(user_id),
         "lesson_overrides": lesson_overrides,

@@ -987,6 +987,16 @@ div#page {
 		font-weight: 600;
 		color: var(--body-color);
 	}
+	.plan-meta {
+		margin: 0.2em 0 1em;
+		font-size: 0.85em;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: rgba(86, 86, 86, 0.78);
+	}
+	.plan-meta span {
+		color: var(--body-color);
+	}
 	.plan-error {
 		border: 1px solid rgba(124, 30, 26, 0.4);
 		background: rgba(124, 30, 26, 0.08);
