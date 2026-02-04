@@ -2,7 +2,6 @@
 
 Remaining work and follow-ups.
 
-- Add batch option to add service modal.
 - Add batch PCO sync to services.
 - Consider removing service header action bar completely.
 - Reconsider header menu organization and icons.
