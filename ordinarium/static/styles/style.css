@@ -3,6 +3,7 @@
 	--body-font-family: apple-system-ui-serif, ui-serif, Georgia, serif;
 	--header-height: 64px;
 	--action-bar-height: 44px;
+	--radius-xsm: 4px;
 	--radius-sm: 8px;
 	--radius-lg: 12px;
 	/* Occasional Prayers theme: */
@@ -808,7 +809,7 @@ div#page {
 		appearance: none;
 		background: #fff;
 		border: 2px solid var(--line-color);
-		border-radius: var(--radius-sm);
+		border-radius: var(--radius-xsm);
 		height: 1.5em;
 		margin: 0;
 		width: 1.5em;
