@@ -15,6 +15,7 @@
 			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
 		</div>
 	</form>
+	<div class="shared-table-wrap">
 	<table class="shared-table" id="admin-users-table">
 		<thead>
 			<tr>
@@ -73,6 +74,7 @@
 			{% endfor %}
 		</tbody>
 	</table>
+	</div>
 	{% else %}
 	<p>No users found.</p>
 	{% endif %}

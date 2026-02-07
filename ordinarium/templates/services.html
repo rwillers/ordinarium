@@ -19,6 +19,7 @@
 		</div>
 	</form>
 	{% if current_services %}
+	<div class="shared-table-wrap">
 	<table class="shared-table" id="services-upcoming-table">
 		<thead>
 			<tr>
@@ -26,11 +27,11 @@
 				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="asc" aria-sort="ascending">
 					<button class="shared-table-sort" type="button">Date</button>
 				</th>
-				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Season</button>
-				</th>
 				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
 					<button class="shared-table-sort" type="button">Title</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Season</button>
 				</th>
 				<th class="shared-table-actions"></th>
 			</tr>
@@ -42,10 +43,10 @@
 						<input type="checkbox" form="services-upcoming-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
 					</td>
 					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
-					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
 						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
 					</td>
+					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
 							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
@@ -63,6 +64,7 @@
 			{% endfor %}
 		</tbody>
 	</table>
+	</div>
 	{% else %}
 	<p>No upcoming services.</p>
 	{% endif %}
@@ -75,6 +77,7 @@
 			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
 		</div>
 	</form>
+	<div class="shared-table-wrap">
 	<table class="shared-table" id="services-past-table">
 		<thead>
 			<tr>
@@ -82,11 +85,11 @@
 				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="desc" aria-sort="descending">
 					<button class="shared-table-sort" type="button">Date</button>
 				</th>
-				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Season</button>
-				</th>
 				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
 					<button class="shared-table-sort" type="button">Title</button>
+				</th>
+				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Season</button>
 				</th>
 				<th class="shared-table-actions"></th>
 			</tr>
@@ -98,10 +101,10 @@
 						<input type="checkbox" form="services-past-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
 					</td>
 					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
-					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
 						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
 					</td>
+					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
 							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
@@ -119,6 +122,7 @@
 			{% endfor %}
 		</tbody>
 	</table>
+	</div>
 	{% else %}
 	<p>No past services.</p>
 	{% endif %}
@@ -170,6 +174,7 @@
 					</div>
 					<p class="plan-error" id="service-multi-error" style="display: none;"></p>
 					<div id="service-multi-list" style="display: none;">
+						<div class="shared-table-wrap">
 						<table class="shared-table">
 							<thead>
 								<tr>
@@ -179,6 +184,7 @@
 							</thead>
 							<tbody id="service-multi-body"></tbody>
 						</table>
+						</div>
 					</div>
 					<template id="service-multi-row-template">
 						<tr data-service-multi-row>

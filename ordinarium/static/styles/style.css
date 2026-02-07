@@ -747,16 +747,25 @@ div#page {
 	.plan-actions {
 		margin: 0.8em 0 0 0;
 	}
+	.shared-table-wrap {
+		margin: 0.8em 0 1.4em 0;
+		border: 1px solid var(--line-color);
+		border-radius: var(--radius-sm);
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
+	}
 	.shared-table {
 		width: 100%;
+		min-width: 100%;
+		max-width: 100%;
 		border-collapse: separate;
 		border-spacing: 0;
-		margin: 0.8em 0 1.4em 0;
+		margin: 0;
 		font-family: var(--header-font-family);
 		font-size: 0.9em;
 		color: var(--body-color);
-		border: 1px solid var(--line-color);
-		border-radius: var(--radius-sm);
+		border: none;
 	}
 	.shared-table thead th {
 		text-align: left;
@@ -766,6 +775,7 @@ div#page {
 		color: var(--rubric-color);
 		padding: 0.6em 0.75em;
 		border-bottom: 1px solid var(--line-color);
+		background: var(--body-background-color);
 	}
 	.shared-table tbody td {
 		padding: 0.75em 0.75em;
@@ -773,6 +783,7 @@ div#page {
 		vertical-align: middle;
 		background: #f6f6f6;
 		position: relative;
+		overflow-wrap: anywhere;
 	}
 	.shared-table .plan-field {
 		gap: 0.2em;
@@ -785,6 +796,21 @@ div#page {
 		font-size: 0.9em;
 	}
 	.shared-table tbody tr:hover td {
+		background: #fff;
+	}
+	.shared-table thead th.shared-table-select,
+	.shared-table tbody td.shared-table-select {
+		position: sticky;
+		left: 0;
+	}
+	.shared-table thead th.shared-table-select {
+		z-index: 4;
+	}
+	.shared-table tbody td.shared-table-select {
+		z-index: 2;
+		box-shadow: 1px 0 0 var(--line-color);
+	}
+	.shared-table tbody tr:hover td.shared-table-select {
 		background: #fff;
 	}
 	.shared-table tbody tr:last-child td {
@@ -805,6 +831,12 @@ div#page {
 	.shared-table-select {
 		width: 2.2em;
 	}
+	.shared-table th.shared-table-select,
+	.shared-table td.shared-table-select {
+		text-align: center;
+		padding-left: 0.45em;
+		padding-right: 0.45em;
+	}
 	.shared-table-select input[type="checkbox"] {
 		appearance: none;
 		background: #fff;
@@ -813,8 +845,10 @@ div#page {
 		height: 1.5em;
 		margin: 0;
 		width: 1.5em;
-		display: inline-block;
+		display: block;
 		position: relative;
+		margin-left: auto;
+		margin-right: auto;
 	}
 	.shared-table-select input[type="checkbox"]:checked {
 		background: var(--rubric-color);
@@ -926,6 +960,18 @@ div#page {
 	.shared-table .plan-row-menu-panel {
 		top: calc(100% + 0.25em);
 		z-index: 1200;
+	}
+	@media (max-width: 700px) {
+		.shared-table {
+			min-width: min(40rem, 180%);
+		}
+		.shared-table thead th {
+			font-size: 0.65em;
+			padding: 0.5em 0.55em;
+		}
+		.shared-table tbody td {
+			padding: 0.55em;
+		}
 	}
 	.integration-card {
 		margin: 1.2em 0;
@@ -1281,7 +1327,7 @@ div#page {
 .service-add-form p {
 	margin: 0;
 }
-.service-add-form .shared-table {
+.service-add-form .shared-table-wrap {
 	margin: 0.4em 0 0.8em 0;
 }
 .share-modal-card input[type="text"],

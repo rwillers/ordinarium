@@ -59,6 +59,7 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 The app uses a shared table pattern for tabular data. New table-like views should default to this pattern unless there is a specific reason to diverge.
 
 **Shared table markup**
+- Wrap each shared table in `<div class="shared-table-wrap">...</div>` to keep horizontal scrolling inside the rounded table border on small screens.
 - Use the `shared-table` class on a `table` element.
 - `th[data-sort-key]` with a `.shared-table-sort` button enables click-to-sort and chevrons.
 - Action menus use the existing plan row menu markup (`.plan-row-menu`, `.plan-menu-toggle`, `.plan-row-menu-panel`) inside a `.shared-table-actions` cell.

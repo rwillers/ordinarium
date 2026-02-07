@@ -176,6 +176,7 @@
 
 	<div class="plan-list-wrapper"{% if not service.service_date %} data-plan-locked="true"{% endif %}>
 		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Service date is set when the service is created. Create a dated service to enable the full plan.</p>
+		<div class="shared-table-wrap">
 		<table class="shared-table plan-list-table{% if not service.service_date %} is-disabled{% endif %}">
 			<thead>
 				<tr>
@@ -250,6 +251,7 @@
 	{% endfor %}
 			</tbody>
 		</table>
+		</div>
 	</div>
 	<div class="share-modal" id="custom-element-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-custom-element-close></div>
