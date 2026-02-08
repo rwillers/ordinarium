@@ -18,6 +18,7 @@ def get_pco_connection(user_id, db=None):
           token_type,
           scope,
           expires_at,
+          pco_account_name,
           created_at,
           updated_at
         from pco_connections
@@ -35,6 +36,7 @@ def upsert_pco_connection(
     token_type=None,
     scope=None,
     expires_at=None,
+    pco_account_name=None,
     db=None,
 ):
     if not user_id:
@@ -49,15 +51,20 @@ def upsert_pco_connection(
           token_type,
           scope,
           expires_at,
+          pco_account_name,
           created_at,
           updated_at
-        ) values (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) values (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         on conflict(user_id) do update set
           access_token=excluded.access_token,
           refresh_token=excluded.refresh_token,
           token_type=excluded.token_type,
           scope=excluded.scope,
           expires_at=excluded.expires_at,
+          pco_account_name=coalesce(
+            excluded.pco_account_name,
+            pco_connections.pco_account_name
+          ),
           updated_at=CURRENT_TIMESTAMP
         """,
         (
@@ -67,6 +74,7 @@ def upsert_pco_connection(
             token_type,
             scope,
             expires_at,
+            pco_account_name,
         ),
     )
 
@@ -76,6 +84,25 @@ def delete_pco_connection(user_id, db=None):
         return
     db = db or get_db()
     db.execute("delete from pco_connections where user_id=?", (user_id,))
+
+
+def clear_upcoming_service_pco_links_for_user(user_id, on_or_after_date, db=None):
+    if not user_id or not on_or_after_date:
+        return
+    db = db or get_db()
+    db.execute(
+        """
+        delete from service_pco_links
+        where service_id in (
+          select id
+          from services
+          where user_id=?
+            and service_date is not null
+            and service_date >= ?
+        )
+        """,
+        (user_id, on_or_after_date),
+    )
 
 
 def get_service_pco_link(service_id, db=None):

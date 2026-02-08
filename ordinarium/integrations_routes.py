@@ -1,4 +1,5 @@
 import secrets
+from datetime import date
 
 from flask import (
     current_app,
@@ -17,8 +18,14 @@ from .pco_client import (
     PcoAuthError,
     build_authorize_url,
     exchange_code_for_token,
+    fetch_services_organization_name,
 )
-from .pco_store import delete_pco_connection, get_pco_connection, upsert_pco_connection
+from .pco_store import (
+    clear_upcoming_service_pco_links_for_user,
+    delete_pco_connection,
+    get_pco_connection,
+    upsert_pco_connection,
+)
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .error_pages import render_error
 
@@ -107,6 +114,14 @@ def register_integration_routes(bp):
         except PcoAuthError:
             flash("PCO authorization failed during token exchange.", "error")
             return redirect(url_for("main.integrations"))
+        pco_account_name = None
+        try:
+            pco_account_name = fetch_services_organization_name(
+                current_app.config.get("PCO_API_BASE"),
+                token.access_token,
+            )
+        except Exception:
+            pco_account_name = None
         db = get_db()
         upsert_pco_connection(
             user_id=g.user["id"],
@@ -115,6 +130,7 @@ def register_integration_routes(bp):
             token_type=token.token_type,
             scope=token.scope,
             expires_at=token.expires_at,
+            pco_account_name=pco_account_name,
             db=db,
         )
         db.commit()
@@ -129,6 +145,13 @@ def register_integration_routes(bp):
             return guard
         db = get_db()
         delete_pco_connection(g.user["id"], db=db)
+        clear_upcoming_service_pco_links_for_user(
+            g.user["id"],
+            date.today().isoformat(),
+            db=db,
+        )
         db.commit()
-        flash("Planning Center disconnected.", "success")
+        flash(
+            "Planning Center disconnected and upcoming service links reset.", "success"
+        )
         return redirect(url_for("main.integrations"))

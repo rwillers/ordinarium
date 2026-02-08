@@ -10,7 +10,11 @@
 	<section class="integration-card">
 		<h3>Planning Center Online</h3>
 		{% if pco_connection %}
-			<p>Connected.</p>
+			{% if pco_connection.pco_account_name %}
+				<p>Connected to {{ pco_connection.pco_account_name }}.</p>
+			{% else %}
+				<p>Connected.</p>
+			{% endif %}
 			<form class="auth-form" action="{{ url_for('main.pco_disconnect') }}" method="post" onsubmit="return confirm('Disconnect Planning Center?');">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<div class="auth-actions">

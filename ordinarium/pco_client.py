@@ -200,3 +200,19 @@ def list_all_pages(fetch_page):
         if not next_url:
             break
     return data
+
+
+def fetch_services_organization_name(base_url, access_token):
+    payload = api_request(
+        "GET",
+        base_url or DEFAULT_API_BASE,
+        "/services/v2",
+        access_token,
+    )
+    data = (payload or {}).get("data") or {}
+    attributes = data.get("attributes") or {}
+    name = attributes.get("name")
+    if not isinstance(name, str):
+        return None
+    normalized = name.strip()
+    return normalized or None

@@ -238,6 +238,7 @@ CREATE TABLE pco_connections (
   token_type TEXT,
   scope TEXT,
   expires_at TEXT,
+  pco_account_name TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
