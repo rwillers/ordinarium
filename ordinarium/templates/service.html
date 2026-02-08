@@ -2,24 +2,28 @@
 
 {% block content %}
 
-<div id="page" class="plan-page" data-service-title="{{ service.title or '' }}">
-
-		<div class="plan-header">
-			<div class="plan-header-actions-fixed">
-				<div class="plan-header-actions">
-					<div class="plan-header-buttons">
-						<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
-						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
+	<div id="page" data-service-title="{{ service.title or '' }}">
+		<div class="plan-header plan-header-inline">
+			<h2 class="plan-title">Plan a service</h2>
+			<div class="plan-header-actions plan-header-actions-spaced">
+				<div class="service-header-actions-inline">
+					<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
+					<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
+					<a class="button" href="{{ url_for('main.services') }}">Back to services</a>
 					</div>
+					<details class="service-header-actions-menu">
+						<summary class="button service-header-actions-toggle">
+							<span>Actions</span>
+							<span class="service-header-actions-caret" aria-hidden="true">▼</span>
+						</summary>
+						<div class="service-header-actions-panel">
+							<a class="button service-header-actions-item" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
+							<button class="plan-submit service-header-actions-item" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
+							<a class="button service-header-actions-item" href="{{ url_for('main.services') }}">Back to services</a>
+						</div>
+					</details>
 				</div>
-			</div>
 		</div>
-	<div class="plan-header plan-header-inline">
-		<h2 class="plan-title">Plan a service</h2>
-		<div class="plan-header-actions">
-			<a class="button" href="{{ url_for('main.services') }}">Back to services</a>
-		</div>
-	</div>
 {% if pco_connected %}
 	{% endif %}
 	<div class="share-modal" id="share-modal" aria-hidden="true">
@@ -365,17 +369,13 @@
 		</div>
 	</div>
 
-<script>
-	const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-	const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
-	const mainEl = document.querySelector('main')
-	if (mainEl && document.querySelector('.plan-page')) {
-		mainEl.classList.add('has-action-bar')
-	}
-	const shareButton = document.querySelector('[data-share-url]')
-		const shareModal = document.querySelector('#share-modal')
-		const shareModalUrl = document.querySelector('#share-modal-url')
-		const shareCopyButton = document.querySelector('#share-copy-button')
+		<script>
+			const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+			const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
+			const shareButtons = Array.from(document.querySelectorAll('[data-share-url]'))
+			const shareModal = document.querySelector('#share-modal')
+			const shareModalUrl = document.querySelector('#share-modal-url')
+			const shareCopyButton = document.querySelector('#share-copy-button')
 		const shareCopyFeedback = document.querySelector('#share-copy-feedback')
 		const pcoModal = document.querySelector('#pco-modal')
 		const pageWrapper = document.querySelector('#page')
@@ -384,8 +384,15 @@
 		const pcoSyncIcon = document.querySelector('[data-pco-sync-icon]')
 		const saveStatusIndicator = document.querySelector('[data-save-status-indicator]')
 		const saveStatusIcon = document.querySelector('[data-save-status-icon]')
-		const saveStatusChip = document.querySelector('[data-save-status-chip]')
-		const pcoManageButtons = document.querySelectorAll('[data-pco-manage]')
+			const saveStatusChip = document.querySelector('[data-save-status-chip]')
+			const pcoManageButtons = document.querySelectorAll('[data-pco-manage]')
+			const serviceHeaderActionMenus = Array.from(document.querySelectorAll('.service-header-actions-menu'))
+
+			const closeServiceHeaderActionMenus = () => {
+				serviceHeaderActionMenus.forEach((menu) => {
+					menu.removeAttribute('open')
+				})
+			}
 
 		const openShareModal = (url) => {
 			if (!shareModal || !shareModalUrl) {
@@ -425,26 +432,32 @@
 			document.body.classList.remove('is-modal-open')
 		}
 
-		if (shareButton) {
-			shareButton.addEventListener('click', async () => {
-				const shareUrl = shareButton.getAttribute('data-share-url')
-				if (!shareUrl) {
-					return
-				}
-				try {
-					const response = await fetch(shareUrl, { method: 'POST', headers: csrfHeaders })
-					if (!response.ok) {
-						return
-					}
-					const data = await response.json()
-					if (data && data.share_url) {
-						openShareModal(data.share_url)
-					}
-				} catch (error) {
-					// Ignore share failures.
-				}
-			})
-		}
+			if (shareButtons.length) {
+				shareButtons.forEach((shareButton) => {
+					shareButton.addEventListener('click', async () => {
+						const shareUrl = shareButton.getAttribute('data-share-url')
+						if (!shareUrl) {
+							return
+						}
+						try {
+							const response = await fetch(shareUrl, { method: 'POST', headers: csrfHeaders })
+							if (!response.ok) {
+								return
+							}
+							const data = await response.json()
+							if (data && data.share_url) {
+								openShareModal(data.share_url)
+								const actionsMenu = shareButton.closest('.service-header-actions-menu')
+								if (actionsMenu) {
+									actionsMenu.removeAttribute('open')
+								}
+							}
+						} catch (error) {
+							// Ignore share failures.
+						}
+					})
+				})
+			}
 
 		if (shareModal) {
 			shareModal.addEventListener('click', (event) => {
@@ -462,13 +475,25 @@
 			})
 		}
 
-		if (pcoManageButtons.length) {
-			pcoManageButtons.forEach((button) => {
-				button.addEventListener('click', () => {
-					openPcoModal()
+			if (pcoManageButtons.length) {
+				pcoManageButtons.forEach((button) => {
+					button.addEventListener('click', () => {
+						openPcoModal()
+					})
 				})
+			}
+
+			document.addEventListener('click', (event) => {
+				if (!event.target.closest('.service-header-actions-menu')) {
+					closeServiceHeaderActionMenus()
+				}
 			})
-		}
+
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape') {
+					closeServiceHeaderActionMenus()
+				}
+			})
 
 		if (shareCopyButton && shareModalUrl) {
 			shareCopyButton.addEventListener('click', async () => {
@@ -623,9 +648,9 @@
 				if (data?.lesson_defaults) {
 					updateLessonDefaults(data.lesson_defaults)
 				}
-				if (shareButton) {
-					shareButton.style.display = data?.can_share ? '' : 'none'
-				}
+					shareButtons.forEach((button) => {
+						button.style.display = data?.can_share ? '' : 'none'
+					})
 				if (pageWrapper) {
 					if (data?.service_title !== undefined) {
 						pageWrapper.dataset.serviceTitle = data.service_title || ''
