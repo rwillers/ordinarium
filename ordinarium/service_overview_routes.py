@@ -44,6 +44,43 @@ def register_service_overview_routes(bp):
             "select id, title, season, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
             (g.user["id"],),
         ).fetchall()
+        pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
+        pco_connection = None
+        pco_service_types = []
+        pco_links = {}
+        if pco_enabled:
+            try:
+                pco_connection = get_valid_pco_connection(g.user["id"], db)
+            except Exception:
+                pco_connection = None
+            if pco_connection:
+                try:
+                    pco_service_types = list_service_types(
+                        current_app.config.get("PCO_API_BASE"),
+                        pco_connection["access_token"],
+                    )
+                except Exception:
+                    pco_service_types = []
+            if current_services:
+                current_ids = [row["id"] for row in current_services]
+                placeholders = ",".join(["?"] * len(current_ids))
+                rows = db.execute(
+                    f"""
+                    select
+                      service_id,
+                      pco_service_type_id,
+                      pco_service_type_name,
+                      pco_plan_id,
+                      pco_plan_title,
+                      last_synced_at,
+                      last_sync_status,
+                      last_sync_error
+                    from service_pco_links
+                    where service_id in ({placeholders})
+                    """,
+                    current_ids,
+                ).fetchall()
+                pco_links = {row["service_id"]: dict(row) for row in rows}
 
         return render_template(
             "services.html",
@@ -52,6 +89,10 @@ def register_service_overview_routes(bp):
             copy_services=format_services(copy_services),
             default_rite=DEFAULT_RITE,
             rite_options=load_rite_options(),
+            pco_enabled=pco_enabled,
+            pco_connected=bool(pco_connection) if pco_enabled else False,
+            pco_service_types=pco_service_types,
+            pco_links=pco_links,
         )
 
     def _create_service_from_request():

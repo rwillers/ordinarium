@@ -14,10 +14,23 @@
 		<div class="shared-table-bulk-actions">
 			<button class="plan-submit" type="button" id="service-add-toggle" aria-expanded="false" aria-controls="service-add-modal">Add</button>
 			{% if current_services %}
+			{% if pco_enabled %}
+			<button
+				class="plan-submit"
+				type="button"
+				id="services-pco-batch-toggle"
+				aria-expanded="false"
+				aria-controls="service-pco-batch-modal"
+				{% if pco_connected %}data-bulk-submit disabled{% else %}disabled title="Connect Planning Center in Integrations first."{% endif %}
+			>PCO sync</button>
+			{% endif %}
 			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
 			{% endif %}
 		</div>
 	</form>
+	{% if pco_enabled and not pco_connected %}
+	<p class="plan-meta">Connect Planning Center in Integrations to enable batch sync.</p>
+	{% endif %}
 	{% if current_services %}
 	<div class="shared-table-wrap">
 	<table class="shared-table" id="services-upcoming-table">
@@ -38,7 +51,18 @@
 		</thead>
 		<tbody>
 			{% for service in current_services %}
-				<tr>
+				{% set pco_link = pco_links.get(service.id) if pco_links else None %}
+				<tr
+					data-service-id="{{ service.id }}"
+					data-service-title="{{ service.title | e }}"
+					data-service-date="{{ service.service_date or '' }}"
+					data-service-season="{{ service.season or '' }}"
+					data-pco-linked="{{ '1' if pco_link else '0' }}"
+					data-pco-service-type-id="{{ pco_link.pco_service_type_id if pco_link else '' }}"
+					data-pco-service-type-name="{{ pco_link.pco_service_type_name if pco_link else '' }}"
+					data-pco-plan-id="{{ pco_link.pco_plan_id if pco_link else '' }}"
+					data-pco-plan-title="{{ pco_link.pco_plan_title if pco_link else '' }}"
+				>
 					<td class="shared-table-select">
 						<input type="checkbox" form="services-upcoming-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
 					</td>
@@ -242,6 +266,72 @@
 		</div>
 	</div>
 
+	{% if pco_enabled %}
+	<div class="share-modal" id="service-pco-batch-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-service-pco-batch-close></div>
+		<div class="share-modal-card service-pco-batch-card" role="dialog" aria-modal="true" aria-labelledby="service-pco-batch-title">
+			<h3 id="service-pco-batch-title">Batch Planning Center sync</h3>
+			<p>Choose how each selected upcoming service should sync to Planning Center.</p>
+			<p class="plan-field">
+				<label>
+					<span>Default time for newly created plans</span>
+					<input type="time" id="service-pco-default-time" value="10:00" required>
+				</label>
+			</p>
+			<p class="plan-error" id="service-pco-batch-error" style="display: none;"></p>
+			<div class="shared-table-wrap">
+				<table class="shared-table" id="service-pco-batch-table">
+					<thead>
+						<tr>
+							<th>Service</th>
+							<th>Mode</th>
+							<th>Service type</th>
+							<th>Plan</th>
+							<th>Status</th>
+						</tr>
+					</thead>
+					<tbody id="service-pco-batch-body"></tbody>
+				</table>
+			</div>
+			<template id="service-pco-batch-row-template">
+				<tr data-service-pco-batch-row>
+					<td>
+						<strong data-batch-title></strong>
+						<small data-batch-date></small>
+						<small data-batch-linked-summary></small>
+					</td>
+					<td>
+						<select data-batch-mode></select>
+					</td>
+					<td>
+						<select data-batch-service-type>
+							<option value="">Select a service type</option>
+							{% for service_type in pco_service_types %}
+								<option value="{{ service_type.id }}">{{ service_type.attributes.name }}</option>
+							{% endfor %}
+						</select>
+					</td>
+					<td>
+						<div class="pco-plan-row" data-batch-plan-row>
+							<select data-batch-plan>
+								<option value="">Select a plan</option>
+							</select>
+							<button class="plan-icon-button" type="button" data-batch-plan-refresh aria-label="Refresh plans">↻</button>
+						</div>
+						<small data-batch-plan-status></small>
+					</td>
+					<td><span class="service-pco-batch-status" data-batch-result-status>Pending</span></td>
+				</tr>
+			</template>
+			<div class="service-pco-batch-results" id="service-pco-batch-results" style="display: none;"></div>
+			<div class="plan-custom-actions">
+				<button class="plan-submit" type="button" data-service-pco-batch-close>Close</button>
+				<button class="plan-submit pco-sync-button" type="button" id="service-pco-batch-run">Sync selected<span class="pco-sync-spinner" aria-hidden="true"></span></button>
+			</div>
+		</div>
+	</div>
+	{% endif %}
+
 </div>
 
 <script>
@@ -270,9 +360,22 @@
 	const serviceMultiList = document.querySelector('#service-multi-list')
 	const serviceMultiBody = document.querySelector('#service-multi-body')
 	const serviceMultiRowTemplate = document.querySelector('#service-multi-row-template')
+	const upcomingTable = document.querySelector('#services-upcoming-table')
+	const pcoBatchToggle = document.querySelector('#services-pco-batch-toggle')
+	const pcoBatchModal = document.querySelector('#service-pco-batch-modal')
+	const pcoBatchCloseButtons = document.querySelectorAll('[data-service-pco-batch-close]')
+	const pcoBatchBody = document.querySelector('#service-pco-batch-body')
+	const pcoBatchRowTemplate = document.querySelector('#service-pco-batch-row-template')
+	const pcoBatchRunButton = document.querySelector('#service-pco-batch-run')
+	const pcoBatchError = document.querySelector('#service-pco-batch-error')
+	const pcoBatchDefaultTimeInput = document.querySelector('#service-pco-default-time')
+	const pcoBatchResults = document.querySelector('#service-pco-batch-results')
+	const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+	const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {}
 	const emptyObservanceLabel = 'No observance found'
 	const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 	const maxMultiServices = 10
+	const batchPlanCache = new Map()
 
 	const filterCopyOptions = () => {
 		if (!serviceCopySelect) {
@@ -661,6 +764,468 @@
 		}
 	}
 
+	const setPcoBatchError = (message) => {
+		if (!pcoBatchError) {
+			return
+		}
+		pcoBatchError.textContent = message || ''
+		pcoBatchError.style.display = message ? '' : 'none'
+	}
+
+	const setBatchResultStatus = (row, label, state) => {
+		const statusNode = row ? row.querySelector('[data-batch-result-status]') : null
+		if (!statusNode) {
+			return
+		}
+		statusNode.textContent = label || 'Pending'
+		statusNode.dataset.state = state || 'pending'
+	}
+
+	const updateBatchLinkedSummary = (row) => {
+		if (!row) {
+			return
+		}
+		const summaryNode = row.querySelector('[data-batch-linked-summary]')
+		if (!summaryNode) {
+			return
+		}
+		const linked = row.dataset.pcoLinked === '1'
+		if (!linked) {
+			summaryNode.textContent = 'Not currently linked.'
+			return
+		}
+		const planTitle = row.dataset.pcoPlanTitle || 'a plan'
+		const typeName = row.dataset.pcoServiceTypeName || ''
+		summaryNode.textContent = typeName ? `Linked to ${planTitle} in ${typeName}.` : `Linked to ${planTitle}.`
+	}
+
+	const getSelectedUpcomingRows = () => {
+		if (!upcomingTable) {
+			return []
+		}
+		const checked = Array.from(
+			upcomingTable.querySelectorAll('tbody input[type="checkbox"]:checked')
+		)
+		return checked
+			.map((checkbox) => checkbox.closest('tr[data-service-id]'))
+			.filter(Boolean)
+	}
+
+	const buildBatchModeOptions = (select, linked) => {
+		if (!select) {
+			return
+		}
+		select.innerHTML = ''
+		const options = linked
+			? [
+				{ value: 'sync_linked', label: 'Sync linked' },
+				{ value: 'link_existing', label: 'Override with existing' },
+				{ value: 'create_new', label: 'Override with new' },
+				{ value: 'skip', label: 'Skip' },
+			]
+			: [
+				{ value: 'link_existing', label: 'Link existing' },
+				{ value: 'create_new', label: 'Create new' },
+				{ value: 'skip', label: 'Skip' },
+			]
+		options.forEach((item) => {
+			const option = document.createElement('option')
+			option.value = item.value
+			option.textContent = item.label
+			select.appendChild(option)
+		})
+		select.value = linked ? 'sync_linked' : 'create_new'
+	}
+
+	const ensureSelectOption = (select, value, label) => {
+		if (!select || !value) {
+			return
+		}
+		const existing = Array.from(select.options).find((option) => option.value === value)
+		if (existing) {
+			return
+		}
+		const option = document.createElement('option')
+		option.value = value
+		option.textContent = label || value
+		select.appendChild(option)
+	}
+
+	const chooseDefaultServiceType = (select, preferredValue = '') => {
+		if (!select) {
+			return
+		}
+		if (preferredValue) {
+			ensureSelectOption(select, preferredValue, preferredValue)
+			select.value = preferredValue
+			return
+		}
+		if (select.value) {
+			return
+		}
+		const options = Array.from(select.options).filter((option) => option.value)
+		if (options.length === 1) {
+			select.value = options[0].value
+		}
+	}
+
+	const loadBatchPlansForRow = async (row, forceRefresh = false) => {
+		if (!row) {
+			return
+		}
+		const planSelect = row.querySelector('[data-batch-plan]')
+		const statusNode = row.querySelector('[data-batch-plan-status]')
+		const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+		const serviceId = row.dataset.serviceId
+		const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
+		if (!planSelect || !serviceId || !serviceTypeId) {
+			return
+		}
+		const cacheKey = `${serviceId}:${serviceTypeId}`
+		planSelect.innerHTML = '<option value="">Select a plan</option>'
+		if (statusNode) {
+			statusNode.textContent = 'Loading plans...'
+		}
+		try {
+			let plans = []
+			if (!forceRefresh && batchPlanCache.has(cacheKey)) {
+				plans = batchPlanCache.get(cacheKey)
+			} else {
+				const response = await fetch(`/service/${serviceId}/pco/plans?service_type_id=${encodeURIComponent(serviceTypeId)}`)
+				const payload = await response.json()
+				if (!response.ok || !payload.ok) {
+					throw new Error(payload?.error || 'Unable to load plans.')
+				}
+				plans = Array.isArray(payload.plans) ? payload.plans : []
+				batchPlanCache.set(cacheKey, plans)
+			}
+			if (!plans.length) {
+				if (statusNode) {
+					statusNode.textContent = 'No plans match this service date.'
+				}
+				return
+			}
+			plans.forEach((plan) => {
+				const option = document.createElement('option')
+				option.value = plan.id
+				option.textContent = plan.title || 'Untitled plan'
+				planSelect.appendChild(option)
+			})
+			if (row.dataset.pcoLinked === '1' && row.dataset.pcoPlanId) {
+				const hasExistingOption = Array.from(planSelect.options).some(
+					(option) => option.value === row.dataset.pcoPlanId
+				)
+				if (hasExistingOption) {
+					planSelect.value = row.dataset.pcoPlanId
+				}
+			}
+			if (statusNode) {
+				statusNode.textContent = ''
+			}
+		} catch (error) {
+			if (statusNode) {
+				statusNode.textContent = error?.message || 'Unable to load plans.'
+			}
+		}
+	}
+
+	const updateBatchRowControls = (row) => {
+		if (!row) {
+			return
+		}
+		const modeSelect = row.querySelector('[data-batch-mode]')
+		const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+		const planSelect = row.querySelector('[data-batch-plan]')
+		const planRow = row.querySelector('[data-batch-plan-row]')
+		const refreshButton = row.querySelector('[data-batch-plan-refresh]')
+		const statusNode = row.querySelector('[data-batch-plan-status]')
+		const linked = row.dataset.pcoLinked === '1'
+		const linkedServiceTypeId = row.dataset.pcoServiceTypeId || ''
+		const linkedServiceTypeName = row.dataset.pcoServiceTypeName || linkedServiceTypeId
+		const linkedPlanId = row.dataset.pcoPlanId || ''
+		const linkedPlanTitle = row.dataset.pcoPlanTitle || linkedPlanId || 'Linked plan'
+		const mode = modeSelect ? modeSelect.value : 'skip'
+		const usesServiceType = mode === 'link_existing' || mode === 'create_new'
+		const usesPlan = mode === 'link_existing'
+		if (linked && serviceTypeSelect && linkedServiceTypeId) {
+			ensureSelectOption(serviceTypeSelect, linkedServiceTypeId, linkedServiceTypeName)
+		}
+		if (serviceTypeSelect) {
+			serviceTypeSelect.disabled = !usesServiceType
+			if (mode === 'sync_linked' && linkedServiceTypeId) {
+				serviceTypeSelect.value = linkedServiceTypeId
+			}
+			if (usesServiceType) {
+				if (linked && !serviceTypeSelect.value && linkedServiceTypeId) {
+					serviceTypeSelect.value = linkedServiceTypeId
+				} else {
+					chooseDefaultServiceType(serviceTypeSelect)
+				}
+			}
+		}
+		if (planSelect) {
+			planSelect.disabled = !usesPlan
+			if (mode === 'sync_linked' && linked && linkedPlanId) {
+				planSelect.innerHTML = ''
+				ensureSelectOption(planSelect, linkedPlanId, linkedPlanTitle)
+				planSelect.value = linkedPlanId
+			} else if (!usesPlan) {
+				planSelect.innerHTML = '<option value="">Select a plan</option>'
+			}
+		}
+		if (planRow) {
+			planRow.style.display = mode === 'create_new' ? 'none' : ''
+		}
+		if (refreshButton) {
+			refreshButton.disabled = !usesPlan
+		}
+		if (!statusNode) {
+			return
+		}
+		if (mode === 'sync_linked') {
+			statusNode.textContent = ''
+			return
+		}
+		if (mode === 'create_new') {
+			statusNode.textContent = ''
+			return
+		}
+		if (mode === 'skip') {
+			statusNode.textContent = ''
+			return
+		}
+		statusNode.textContent = 'Choose a service type to load plans for this service date.'
+		if (serviceTypeSelect && serviceTypeSelect.value) {
+			loadBatchPlansForRow(row)
+		}
+	}
+
+	const formatBatchServiceDate = (value) => {
+		if (!value) {
+			return ''
+		}
+		const parts = value.split('-')
+		if (parts.length !== 3) {
+			return value
+		}
+		const year = Number(parts[0])
+		const month = Number(parts[1])
+		const day = Number(parts[2])
+		if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+			return value
+		}
+		return `${month}/${day}/${year}`
+	}
+
+	const buildBatchRows = () => {
+		if (!pcoBatchBody || !pcoBatchRowTemplate) {
+			return
+		}
+		pcoBatchBody.innerHTML = ''
+		const selectedRows = getSelectedUpcomingRows()
+		selectedRows.forEach((sourceRow) => {
+			const clone = pcoBatchRowTemplate.content.firstElementChild.cloneNode(true)
+			clone.dataset.serviceId = sourceRow.dataset.serviceId || ''
+			clone.dataset.pcoLinked = sourceRow.dataset.pcoLinked || '0'
+			clone.dataset.pcoServiceTypeId = sourceRow.dataset.pcoServiceTypeId || ''
+			clone.dataset.pcoServiceTypeName = sourceRow.dataset.pcoServiceTypeName || ''
+			clone.dataset.pcoPlanId = sourceRow.dataset.pcoPlanId || ''
+			clone.dataset.pcoPlanTitle = sourceRow.dataset.pcoPlanTitle || ''
+			const titleNode = clone.querySelector('[data-batch-title]')
+			if (titleNode) {
+				titleNode.textContent = sourceRow.dataset.serviceTitle || 'Untitled Service'
+			}
+			const dateNode = clone.querySelector('[data-batch-date]')
+			if (dateNode) {
+				dateNode.textContent = formatBatchServiceDate(sourceRow.dataset.serviceDate || '')
+			}
+			updateBatchLinkedSummary(clone)
+			const modeSelect = clone.querySelector('[data-batch-mode]')
+			buildBatchModeOptions(modeSelect, sourceRow.dataset.pcoLinked === '1')
+			modeSelect?.addEventListener('change', () => {
+				setBatchResultStatus(clone, 'Pending', 'pending')
+				updateBatchRowControls(clone)
+			})
+			const serviceTypeSelect = clone.querySelector('[data-batch-service-type]')
+			if (sourceRow.dataset.pcoLinked === '1') {
+				ensureSelectOption(
+					serviceTypeSelect,
+					clone.dataset.pcoServiceTypeId || '',
+					clone.dataset.pcoServiceTypeName || clone.dataset.pcoServiceTypeId || ''
+				)
+				chooseDefaultServiceType(serviceTypeSelect, clone.dataset.pcoServiceTypeId || '')
+			} else {
+				chooseDefaultServiceType(serviceTypeSelect)
+			}
+			serviceTypeSelect?.addEventListener('change', () => {
+				setBatchResultStatus(clone, 'Pending', 'pending')
+				if (modeSelect && modeSelect.value === 'link_existing') {
+					loadBatchPlansForRow(clone, true)
+				}
+			})
+			const refreshButton = clone.querySelector('[data-batch-plan-refresh]')
+			refreshButton?.addEventListener('click', () => loadBatchPlansForRow(clone, true))
+			updateBatchRowControls(clone)
+			pcoBatchBody.appendChild(clone)
+		})
+	}
+
+	const collectBatchRowsForRequest = () => {
+		if (!pcoBatchBody) {
+			return { rows: [], error: 'No rows selected.' }
+		}
+		const rows = Array.from(pcoBatchBody.querySelectorAll('[data-service-pco-batch-row]'))
+		const payloadRows = []
+		for (const row of rows) {
+			const serviceId = Number.parseInt(row.dataset.serviceId || '', 10)
+			const modeSelect = row.querySelector('[data-batch-mode]')
+			const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+			const planSelect = row.querySelector('[data-batch-plan]')
+			const mode = modeSelect ? modeSelect.value : 'skip'
+			const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
+			const serviceTypeName = serviceTypeSelect && serviceTypeSelect.selectedOptions[0]
+				? serviceTypeSelect.selectedOptions[0].textContent.trim()
+				: ''
+			const planId = planSelect ? planSelect.value : ''
+			if (!serviceId || !mode) {
+				return { rows: [], error: 'Each row must include a valid service and mode.' }
+			}
+			if ((mode === 'link_existing' || mode === 'create_new') && !serviceTypeId) {
+				return { rows: [], error: 'Choose a service type for each row that links or creates a plan.' }
+			}
+			if (mode === 'link_existing' && !planId) {
+				return { rows: [], error: 'Choose a plan for each row in link existing mode.' }
+			}
+			payloadRows.push({
+				service_id: serviceId,
+				mode,
+				pco_service_type_id: serviceTypeId,
+				pco_service_type_name: serviceTypeName,
+				pco_plan_id: planId,
+			})
+		}
+		return { rows: payloadRows, error: '' }
+	}
+
+	const renderBatchResults = (payload) => {
+		if (!pcoBatchResults) {
+			return
+		}
+		pcoBatchResults.innerHTML = ''
+		const summary = payload?.summary || {}
+		const results = Array.isArray(payload?.results) ? payload.results : []
+		const summaryNode = document.createElement('p')
+		summaryNode.textContent = `Complete: ${summary.success || 0} succeeded, ${summary.failed || 0} failed, ${summary.skipped || 0} skipped.`
+		pcoBatchResults.appendChild(summaryNode)
+		if (!results.length) {
+			pcoBatchResults.style.display = ''
+			return
+		}
+		const wrap = document.createElement('div')
+		wrap.className = 'shared-table-wrap'
+		const table = document.createElement('table')
+		table.className = 'shared-table'
+		const thead = document.createElement('thead')
+		thead.innerHTML = '<tr><th>Service</th><th>Result</th><th>Details</th></tr>'
+		table.appendChild(thead)
+		const tbody = document.createElement('tbody')
+		results.forEach((row) => {
+			const tr = document.createElement('tr')
+			const titleCell = document.createElement('td')
+			const resultCell = document.createElement('td')
+			const detailsCell = document.createElement('td')
+			titleCell.textContent = row.service_title || `Service ${row.service_id || ''}`
+			const resultLabel = row.status === 'success'
+				? 'Success'
+				: row.status === 'skipped'
+					? 'Skipped'
+					: 'Failed'
+			resultCell.textContent = resultLabel
+			if (row.status === 'success') {
+				const planText = row.pco_plan_title || row.pco_plan_id || 'Plan updated'
+				detailsCell.textContent = planText
+			} else {
+				detailsCell.textContent = row.error || ''
+			}
+			tr.appendChild(titleCell)
+			tr.appendChild(resultCell)
+			tr.appendChild(detailsCell)
+			tbody.appendChild(tr)
+		})
+		table.appendChild(tbody)
+		wrap.appendChild(table)
+		pcoBatchResults.appendChild(wrap)
+		pcoBatchResults.style.display = ''
+	}
+
+	const applySuccessfulBatchLinksToTable = (results) => {
+		if (!upcomingTable || !Array.isArray(results)) {
+			return
+		}
+		results.forEach((rowResult) => {
+			if (rowResult?.status !== 'success' || !rowResult?.service_id) {
+				return
+			}
+			const tableRow = upcomingTable.querySelector(`tr[data-service-id="${rowResult.service_id}"]`)
+			if (!tableRow) {
+				return
+			}
+			tableRow.dataset.pcoLinked = rowResult.pco_plan_id ? '1' : tableRow.dataset.pcoLinked
+			if (rowResult.pco_service_type_id) {
+				tableRow.dataset.pcoServiceTypeId = rowResult.pco_service_type_id
+			}
+			if (rowResult.pco_service_type_name) {
+				tableRow.dataset.pcoServiceTypeName = rowResult.pco_service_type_name
+			}
+			if (rowResult.pco_plan_id) {
+				tableRow.dataset.pcoPlanId = rowResult.pco_plan_id
+			}
+			if (rowResult.pco_plan_title) {
+				tableRow.dataset.pcoPlanTitle = rowResult.pco_plan_title
+			}
+			const modalRow = pcoBatchBody?.querySelector(
+				`[data-service-pco-batch-row][data-service-id="${rowResult.service_id}"]`
+			)
+			if (modalRow) {
+				modalRow.dataset.pcoLinked = tableRow.dataset.pcoLinked
+				modalRow.dataset.pcoServiceTypeId = tableRow.dataset.pcoServiceTypeId
+				modalRow.dataset.pcoServiceTypeName = tableRow.dataset.pcoServiceTypeName
+				modalRow.dataset.pcoPlanId = tableRow.dataset.pcoPlanId
+				modalRow.dataset.pcoPlanTitle = tableRow.dataset.pcoPlanTitle
+				updateBatchLinkedSummary(modalRow)
+			}
+		})
+	}
+
+	const openPcoBatchModal = () => {
+		if (!pcoBatchModal) {
+			return
+		}
+		const selectedRows = getSelectedUpcomingRows()
+		if (!selectedRows.length) {
+			window.alert('Select at least one upcoming service.')
+			return
+		}
+		setPcoBatchError('')
+		if (pcoBatchResults) {
+			pcoBatchResults.style.display = 'none'
+			pcoBatchResults.innerHTML = ''
+		}
+		buildBatchRows()
+		pcoBatchModal.setAttribute('aria-hidden', 'false')
+		pcoBatchToggle?.setAttribute('aria-expanded', 'true')
+		document.body.classList.add('is-modal-open')
+	}
+
+	const closePcoBatchModal = () => {
+		if (!pcoBatchModal) {
+			return
+		}
+		pcoBatchModal.setAttribute('aria-hidden', 'true')
+		pcoBatchToggle?.setAttribute('aria-expanded', 'false')
+		document.body.classList.remove('is-modal-open')
+	}
+
 
 	if (serviceAddToggle && serviceAddModal) {
 		serviceAddToggle.addEventListener('click', () => {
@@ -713,6 +1278,90 @@
 
 	if (serviceMultiGenerate) {
 		serviceMultiGenerate.addEventListener('click', generateMultiList)
+	}
+
+	if (pcoBatchToggle) {
+		pcoBatchToggle.addEventListener('click', openPcoBatchModal)
+	}
+
+	pcoBatchCloseButtons.forEach((button) => {
+		button.addEventListener('click', closePcoBatchModal)
+	})
+
+	if (pcoBatchModal) {
+		pcoBatchModal.addEventListener('click', (event) => {
+			if (event.target && event.target.matches('[data-service-pco-batch-close]')) {
+				closePcoBatchModal()
+			}
+		})
+	}
+
+	if (pcoBatchRunButton) {
+		pcoBatchRunButton.addEventListener('click', async () => {
+			setPcoBatchError('')
+			const { rows, error } = collectBatchRowsForRequest()
+			if (error) {
+				setPcoBatchError(error)
+				return
+			}
+			if (!rows.length) {
+				setPcoBatchError('Select at least one upcoming service.')
+				return
+			}
+			const confirmed = window.confirm(
+				'This will replace all plan items in Planning Center for each selected service. Continue?'
+			)
+			if (!confirmed) {
+				return
+			}
+			pcoBatchRunButton.disabled = true
+			pcoBatchRunButton.classList.add('is-loading')
+			try {
+				const response = await fetch('/services/pco/batch-sync', {
+					method: 'POST',
+					headers: {
+						Accept: 'application/json',
+						'Content-Type': 'application/json',
+						...csrfHeaders,
+					},
+					body: JSON.stringify({
+						rows,
+						pco_plan_time: pcoBatchDefaultTimeInput?.value || '10:00',
+						pco_plan_tz_offset: String(new Date().getTimezoneOffset()),
+					}),
+				})
+				const payload = await response.json().catch(() => ({}))
+				if (!response.ok || !payload.ok) {
+					setPcoBatchError(payload?.error || 'Batch sync failed.')
+					return
+				}
+				renderBatchResults(payload)
+				const results = Array.isArray(payload.results) ? payload.results : []
+				results.forEach((rowResult) => {
+					const rowNode = pcoBatchBody?.querySelector(
+						`[data-service-pco-batch-row][data-service-id="${rowResult.service_id}"]`
+					)
+					if (!rowNode) {
+						return
+					}
+					if (rowResult.status === 'success') {
+						setBatchResultStatus(rowNode, 'Success', 'success')
+						return
+					}
+					if (rowResult.status === 'skipped') {
+						setBatchResultStatus(rowNode, 'Skipped', 'skipped')
+						return
+					}
+					setBatchResultStatus(rowNode, 'Failed', 'failed')
+				})
+				applySuccessfulBatchLinksToTable(results)
+			} catch (error) {
+				setPcoBatchError('Batch sync failed.')
+			} finally {
+				pcoBatchRunButton.disabled = false
+				pcoBatchRunButton.classList.remove('is-loading')
+			}
+		})
 	}
 
 </script>

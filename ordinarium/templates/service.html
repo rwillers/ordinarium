@@ -11,9 +11,6 @@
 						<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
 						<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
 					</div>
-					<div class="plan-header-status">
-						<span class="plan-save-status" id="plan-save-status" aria-live="polite"></span>
-					</div>
 				</div>
 			</div>
 		</div>
@@ -24,28 +21,6 @@
 		</div>
 	</div>
 {% if pco_connected %}
-	<aside class="pco-sync-panel{% if not service.service_date %} is-hidden{% endif %}" data-pco-sync-panel data-pco-sync-state="{{ pco_sync_state or '' }}">
-		<div class="pco-sync-label">PCO sync</div>
-		<div class="pco-sync-body">
-			{% if pco_link %}
-			<p class="pco-sync-status" data-pco-sync-status data-state="{{ pco_sync_state or '' }}">
-				{% if pco_sync_state == 'failed' %}
-					Sync failed{% if pco_sync_at %} <span data-sync-datetime="{{ pco_sync_at }}"></span>{% endif %}
-				{% elif pco_sync_state == 'synced' %}
-					Synced{% if pco_sync_at %} <span data-sync-datetime="{{ pco_sync_at }}"></span>{% endif %}
-				{% else %}
-					Unsynced changes
-				{% endif %}
-			</p>
-			<div class="pco-sync-actions">
-				<button class="plan-submit" type="button" data-pco-manage>Manage link</button>
-				<button class="plan-submit pco-sync-button" type="button" data-pco-sync-now>Sync now<span class="pco-sync-spinner" aria-hidden="true"></span></button>
-			</div>
-			{% else %}
-			<button class="plan-submit" type="button" data-pco-manage>Link service</button>
-			{% endif %}
-		</div>
-	</aside>
 	{% endif %}
 	<div class="share-modal" id="share-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-share-close></div>
@@ -156,7 +131,7 @@
 			{% set display_date = service.service_date %}
 		{% endif %}
 	{% endif %}
-	<h3 id="plan-observance-row">
+	<h3 id="plan-observance-row" class="plan-observance-row">
 		<span id="plan-observance-display">
 			{% if observance_title %}
 				{{ observance_title }}
@@ -169,6 +144,34 @@
 				({{ display_date }})
 			{% endif %}
 		</span>
+		<span class="pco-sync-indicator save-status-indicator is-hidden" data-save-status-indicator>
+			<button class="pco-sync-icon-button save-status-chip" type="button" data-save-status-chip>
+				<span class="pco-sync-icon-label">Changes</span>
+				<span class="pco-sync-icon" data-save-status-icon aria-hidden="true"></span>
+			</button>
+			<div class="pco-sync-tooltip" role="status">
+				<div class="pco-sync-label">Changes</div>
+				<p class="pco-sync-status" id="plan-save-status" aria-live="polite"></p>
+			</div>
+		</span>
+		{% if pco_connected %}
+		<span
+			class="pco-sync-indicator{% if not service.service_date %} is-hidden{% endif %}"
+			data-pco-sync-indicator
+			data-pco-linked="{{ '1' if pco_link else '0' }}"
+			data-pco-sync-state="{{ pco_sync_state or '' }}"
+			data-pco-sync-at="{{ pco_sync_at or '' }}"
+		>
+			<button class="pco-sync-icon-button" type="button" data-pco-manage aria-label="Planning Center sync status">
+				<span class="pco-sync-icon-label">PCO sync</span>
+				<span class="pco-sync-icon" data-pco-sync-icon aria-hidden="true"></span>
+			</button>
+			<div class="pco-sync-tooltip" role="status">
+				<div class="pco-sync-label">PCO sync</div>
+				<p class="pco-sync-status" data-pco-sync-status></p>
+			</div>
+		</span>
+		{% endif %}
 	</h3>
 	<p id="plan-season-row" class="plan-meta">
 		Season: <span id="plan-season-display">{{ service.season or 'Auto-detect' }}</span>
@@ -376,9 +379,12 @@
 		const shareCopyFeedback = document.querySelector('#share-copy-feedback')
 		const pcoModal = document.querySelector('#pco-modal')
 		const pageWrapper = document.querySelector('#page')
-		const pcoSyncPanel = document.querySelector('[data-pco-sync-panel]')
+		const pcoSyncIndicator = document.querySelector('[data-pco-sync-indicator]')
 		const pcoSyncStatus = document.querySelector('[data-pco-sync-status]')
-		const pcoSyncButton = document.querySelector('[data-pco-sync-now]')
+		const pcoSyncIcon = document.querySelector('[data-pco-sync-icon]')
+		const saveStatusIndicator = document.querySelector('[data-save-status-indicator]')
+		const saveStatusIcon = document.querySelector('[data-save-status-icon]')
+		const saveStatusChip = document.querySelector('[data-save-status-chip]')
 		const pcoManageButtons = document.querySelectorAll('[data-pco-manage]')
 
 		const openShareModal = (url) => {
@@ -528,8 +534,23 @@
 				return
 			}
 			planSaveStatus.textContent = message
-			planSaveStatus.style.display = message ? 'inline-flex' : 'none'
-			planSaveStatus.dataset.status = variant
+			const state = variant === 'saving'
+				? 'saving'
+				: variant === 'error'
+					? 'error'
+					: variant === 'saved'
+						? 'saved'
+						: ''
+			planSaveStatus.dataset.state = state
+			if (saveStatusIcon) {
+				saveStatusIcon.dataset.state = state
+			}
+			if (saveStatusChip) {
+				saveStatusChip.setAttribute('aria-label', message || 'Changes status')
+			}
+			if (saveStatusIndicator) {
+				saveStatusIndicator.classList.toggle('is-hidden', !message)
+			}
 		}
 
 		const setSaveError = (message) => {
@@ -879,47 +900,66 @@
 		})
 
 		const renderSyncStatus = (state, syncedAt) => {
-			if (!pcoSyncStatus) {
+			if (!pcoSyncStatus || !pcoSyncIndicator) {
 				return
 			}
-			pcoSyncStatus.textContent = ''
-			if (pcoSyncPanel) {
-				pcoSyncPanel.dataset.pcoSyncState = state || ''
+			const linked = pcoSyncIndicator.dataset.pcoLinked === '1'
+			let effectiveState = state || ''
+			if (!linked) {
+				effectiveState = 'unlinked'
+			} else if (effectiveState !== 'synced' && effectiveState !== 'failed') {
+				effectiveState = 'unsynced'
 			}
-			pcoSyncStatus.dataset.state = state || ''
-			if (state === 'failed') {
-				pcoSyncStatus.appendChild(document.createTextNode('Sync failed'))
-			} else if (state === 'synced') {
-				pcoSyncStatus.appendChild(document.createTextNode('Synced'))
-			} else {
-				pcoSyncStatus.appendChild(document.createTextNode('Unsynced changes'))
-				return
+			const iconState = effectiveState === 'synced'
+				? 'synced'
+				: effectiveState === 'unlinked'
+					? 'unlinked'
+					: 'unsynced'
+			pcoSyncIndicator.dataset.pcoSyncState = effectiveState
+			pcoSyncIndicator.dataset.pcoSyncAt = syncedAt || ''
+			pcoSyncStatus.dataset.state = effectiveState
+			if (pcoSyncIcon) {
+				pcoSyncIcon.dataset.state = iconState
+			}
+			let message = 'Not linked'
+			if (effectiveState === 'failed') {
+				message = 'Sync failed'
+			} else if (effectiveState === 'synced') {
+				message = 'Synced'
+			} else if (effectiveState === 'unsynced') {
+				message = 'Unsynced changes'
 			}
 			if (syncedAt) {
-				pcoSyncStatus.appendChild(document.createTextNode(' '))
-				const dateSpan = document.createElement('span')
-				dateSpan.setAttribute('data-sync-datetime', syncedAt)
-				dateSpan.textContent = formatSyncDate(syncedAt)
-				pcoSyncStatus.appendChild(dateSpan)
+				const formatted = formatSyncDate(syncedAt)
+				if (formatted) {
+					message = effectiveState === 'unsynced'
+						? `${message} (last sync ${formatted})`
+						: `${message} ${formatted}`
+				}
 			}
+			pcoSyncStatus.textContent = message
 		}
 
 		const markPcoUnsynced = () => {
-			if (!pcoSyncPanel || !pcoSyncStatus) {
+			if (!pcoSyncIndicator || !pcoSyncStatus) {
 				return
 			}
-			const currentState = pcoSyncPanel.dataset.pcoSyncState || ''
-			if (currentState && currentState !== 'failed') {
-				renderSyncStatus('unsynced')
+			const linked = pcoSyncIndicator.dataset.pcoLinked === '1'
+			if (!linked) {
+				return
+			}
+			const currentState = pcoSyncIndicator.dataset.pcoSyncState || ''
+			if (currentState !== 'failed') {
+				renderSyncStatus('unsynced', pcoSyncIndicator.dataset.pcoSyncAt || '')
 			}
 		}
 
 		const setPcoPanelVisibility = () => {
-			if (!pcoSyncPanel) {
+			if (!pcoSyncIndicator) {
 				return
 			}
 			const hasDate = Boolean(planServiceDate?.value)
-			pcoSyncPanel.classList.toggle('is-hidden', !hasDate)
+			pcoSyncIndicator.classList.toggle('is-hidden', !hasDate)
 		}
 
 		const updatePcoPlanDefaults = () => {
@@ -953,37 +993,12 @@
 			}
 		}
 
-		if (pcoSyncButton && serviceId) {
-			pcoSyncButton.addEventListener('click', async () => {
-				const confirmSync = window.confirm('This will replace all plan items in Planning Center for this service. Team member assignments will be preserved. Continue?')
-				if (!confirmSync) {
-					return
-				}
-				pcoSyncButton.disabled = true
-				pcoSyncButton.classList.add('is-loading')
-				try {
-					const response = await fetch(`/service/${serviceId}/pco/sync`, {
-						method: 'POST',
-						headers: {
-							Accept: 'application/json',
-							...csrfHeaders
-						}
-					})
-					const payload = await response.json().catch(() => ({}))
-					if (!response.ok) {
-						renderSyncStatus(payload?.sync_status || 'failed', payload?.synced_at)
-						return
-					}
-					renderSyncStatus('synced', payload?.synced_at)
-				} catch (error) {
-					renderSyncStatus('failed', new Date().toISOString())
-				} finally {
-					pcoSyncButton.disabled = false
-					pcoSyncButton.classList.remove('is-loading')
-				}
-			})
+		if (pcoSyncIndicator) {
+			renderSyncStatus(
+				pcoSyncIndicator.dataset.pcoSyncState || '',
+				pcoSyncIndicator.dataset.pcoSyncAt || ''
+			)
 		}
-
 		setPcoPanelVisibility()
 
 		const closeRowMenus = (exceptMenu = null) => {

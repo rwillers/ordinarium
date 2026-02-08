@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from flask import current_app, flash, g, jsonify, redirect, request, url_for
 
@@ -21,6 +21,116 @@ from .pco_sync import (
     list_plans_for_date,
     sync_service_plan,
 )
+
+BATCH_SYNC_LIMIT = 25
+BATCH_SYNC_MODES = {"sync_linked", "link_existing", "create_new", "skip"}
+
+
+def _to_text(value):
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _parse_service_id(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _load_batch_services(db, user_id, service_ids):
+    if not service_ids:
+        return {}
+    placeholders = ",".join(["?"] * len(service_ids))
+    today = date.today().isoformat()
+    rows = db.execute(
+        f"""
+        select id, title, season, service_date
+        from services
+        where user_id=?
+          and id in ({placeholders})
+          and service_date is not null
+          and service_date >= ?
+        """,
+        [user_id, *service_ids, today],
+    ).fetchall()
+    return {row["id"]: dict(row) for row in rows}
+
+
+def _load_batch_links(db, service_ids):
+    if not service_ids:
+        return {}
+    placeholders = ",".join(["?"] * len(service_ids))
+    rows = db.execute(
+        f"""
+        select
+          service_id,
+          pco_service_type_id,
+          pco_service_type_name,
+          pco_plan_id,
+          pco_plan_title,
+          last_synced_at,
+          last_sync_status,
+          last_sync_error
+        from service_pco_links
+        where service_id in ({placeholders})
+        """,
+        service_ids,
+    ).fetchall()
+    return {row["service_id"]: dict(row) for row in rows}
+
+
+def _run_service_sync(
+    service_id,
+    user_id,
+    access_token,
+    base_url,
+    service_type_id,
+    plan_id,
+    db,
+):
+    try:
+        result = sync_service_plan(
+            service_id,
+            user_id,
+            access_token,
+            base_url,
+            service_type_id,
+            plan_id,
+        )
+    except Exception as exc:
+        failed_at = datetime.utcnow().isoformat()
+        update_service_pco_sync_status(
+            service_id,
+            "failed",
+            error=str(exc),
+            synced_at=failed_at,
+            db=db,
+        )
+        return False, {"synced_at": failed_at, "error": str(exc)}
+    synced_at = result.get("synced_at")
+    update_service_pco_sync_status(
+        service_id,
+        "success",
+        error=None,
+        synced_at=synced_at,
+        db=db,
+    )
+    return True, {"synced_at": synced_at, "item_count": result.get("item_count", 0)}
+
+
+def _summarize_batch_results(results):
+    summary = {"total": len(results), "success": 0, "failed": 0, "skipped": 0}
+    for row in results:
+        status = row.get("status")
+        if status == "success":
+            summary["success"] += 1
+        elif status == "failed":
+            summary["failed"] += 1
+        elif status == "skipped":
+            summary["skipped"] += 1
+    return summary
 
 
 def register_service_pco_routes(bp):
@@ -305,3 +415,339 @@ def register_service_pco_routes(bp):
             )
         flash("Planning Center sync complete.", "success")
         return redirect(url_for("main.service", service_id=service_id))
+
+    @bp.route("/services/pco/batch-sync", methods=["POST"])
+    @login_required
+    def services_pco_batch_sync():
+        if not _pco_feature_enabled():
+            return jsonify({"ok": False, "error": "Not found."}), 404
+        db = get_db()
+        try:
+            connection = get_valid_pco_connection(g.user["id"], db)
+        except PcoAuthError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        if not connection:
+            return (
+                jsonify({"ok": False, "error": "Planning Center is not connected."}),
+                400,
+            )
+        payload = request.get_json(silent=True) or {}
+        raw_rows = payload.get("rows")
+        if not isinstance(raw_rows, list) or not raw_rows:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": "Select at least one upcoming service for PCO sync.",
+                    }
+                ),
+                400,
+            )
+        if len(raw_rows) > BATCH_SYNC_LIMIT:
+            return (
+                jsonify(
+                    {
+                        "ok": False,
+                        "error": f"Select up to {BATCH_SYNC_LIMIT} services at a time.",
+                    }
+                ),
+                400,
+            )
+        default_plan_time = _to_text(payload.get("pco_plan_time")) or "10:00"
+        tz_offset = _to_text(payload.get("pco_plan_tz_offset"))
+        if not tz_offset:
+            return (
+                jsonify({"ok": False, "error": "Timezone offset is required."}),
+                400,
+            )
+        try:
+            int(tz_offset)
+        except ValueError:
+            return (
+                jsonify({"ok": False, "error": "Timezone offset must be an integer."}),
+                400,
+            )
+        prepared = []
+        results_by_index = {}
+        for index, raw in enumerate(raw_rows):
+            if not isinstance(raw, dict):
+                results_by_index[index] = {
+                    "service_id": None,
+                    "mode": "",
+                    "status": "failed",
+                    "error": "Invalid row payload.",
+                }
+                continue
+            service_id = _parse_service_id(raw.get("service_id"))
+            mode = _to_text(raw.get("mode"))
+            prepared_row = {
+                "index": index,
+                "service_id": service_id,
+                "mode": mode,
+                "pco_service_type_id": _to_text(raw.get("pco_service_type_id")),
+                "pco_service_type_name": _to_text(raw.get("pco_service_type_name")),
+                "pco_plan_id": _to_text(raw.get("pco_plan_id")),
+            }
+            if not service_id:
+                results_by_index[index] = {
+                    "service_id": None,
+                    "mode": mode,
+                    "status": "failed",
+                    "error": "Service ID is required.",
+                }
+                continue
+            if mode not in BATCH_SYNC_MODES:
+                results_by_index[index] = {
+                    "service_id": service_id,
+                    "mode": mode,
+                    "status": "failed",
+                    "error": "Invalid batch mode.",
+                }
+                continue
+            prepared.append(prepared_row)
+        service_ids = []
+        seen_ids = set()
+        for row in prepared:
+            service_id = row["service_id"]
+            if service_id in seen_ids:
+                continue
+            seen_ids.add(service_id)
+            service_ids.append(service_id)
+        services_by_id = _load_batch_services(db, g.user["id"], service_ids)
+        links_by_id = _load_batch_links(db, service_ids)
+        target_map = {}
+        duplicate_indexes = set()
+        for row in prepared:
+            index = row["index"]
+            if index in results_by_index:
+                continue
+            mode = row["mode"]
+            if mode == "skip":
+                continue
+            service = services_by_id.get(row["service_id"])
+            if not service:
+                continue
+            target = None
+            if mode == "sync_linked":
+                link = links_by_id.get(row["service_id"])
+                if link:
+                    target = (link["pco_service_type_id"], link["pco_plan_id"])
+            elif mode == "link_existing":
+                service_type_id = row["pco_service_type_id"]
+                plan_id = row["pco_plan_id"]
+                if service_type_id and plan_id:
+                    target = (service_type_id, plan_id)
+            if not target:
+                continue
+            target_map.setdefault(target, []).append(index)
+        for indexes in target_map.values():
+            if len(indexes) < 2:
+                continue
+            duplicate_indexes.update(indexes)
+        base_url = current_app.config.get("PCO_API_BASE")
+        for row in prepared:
+            index = row["index"]
+            if index in results_by_index:
+                continue
+            service_id = row["service_id"]
+            mode = row["mode"]
+            service = services_by_id.get(service_id)
+            service_title = ""
+            service_date = ""
+            if service:
+                service_title = (
+                    _to_text(service.get("title"))
+                    or f"Service {service['service_date']}"
+                )
+                service_date = _to_text(service.get("service_date"))
+            result = {
+                "service_id": service_id,
+                "service_title": service_title,
+                "service_date": service_date,
+                "mode": mode,
+            }
+            if mode == "skip":
+                result["status"] = "skipped"
+                results_by_index[index] = result
+                continue
+            if not service:
+                result["status"] = "failed"
+                result["error"] = "Service not found or is not upcoming."
+                results_by_index[index] = result
+                continue
+            if index in duplicate_indexes:
+                result["status"] = "failed"
+                result["error"] = (
+                    "Multiple rows target the same Planning Center plan in this batch."
+                )
+                results_by_index[index] = result
+                continue
+            if mode == "sync_linked":
+                link = links_by_id.get(service_id)
+                if not link:
+                    result["status"] = "failed"
+                    result["error"] = "Planning Center plan not linked."
+                    results_by_index[index] = result
+                    continue
+                ok, sync_data = _run_service_sync(
+                    service_id,
+                    g.user["id"],
+                    connection["access_token"],
+                    base_url,
+                    link["pco_service_type_id"],
+                    link["pco_plan_id"],
+                    db,
+                )
+                db.commit()
+                result.update(
+                    {
+                        "pco_service_type_id": link["pco_service_type_id"],
+                        "pco_service_type_name": link.get("pco_service_type_name"),
+                        "pco_plan_id": link["pco_plan_id"],
+                        "pco_plan_title": link.get("pco_plan_title"),
+                        "synced_at": sync_data.get("synced_at"),
+                    }
+                )
+                if ok:
+                    result["status"] = "success"
+                    results_by_index[index] = result
+                    continue
+                result["status"] = "failed"
+                result["error"] = sync_data.get("error") or "PCO sync failed."
+                results_by_index[index] = result
+                continue
+            service_type_id = row["pco_service_type_id"]
+            if not service_type_id:
+                result["status"] = "failed"
+                result["error"] = "PCO service type is required."
+                results_by_index[index] = result
+                continue
+            service_type_name = row["pco_service_type_name"] or None
+            plan_id = None
+            plan_title = None
+            if mode == "link_existing":
+                plan_id = row["pco_plan_id"]
+                if not plan_id:
+                    result["status"] = "failed"
+                    result["error"] = "PCO plan is required for link existing mode."
+                    results_by_index[index] = result
+                    continue
+                try:
+                    plan = fetch_plan(
+                        base_url,
+                        connection["access_token"],
+                        service_type_id,
+                        plan_id,
+                    )
+                except PcoApiError as exc:
+                    result["status"] = "failed"
+                    result["error"] = str(exc)
+                    results_by_index[index] = result
+                    continue
+                plan_data = plan.get("data") if plan else None
+                if not plan_data:
+                    result["status"] = "failed"
+                    result["error"] = "PCO plan not found."
+                    results_by_index[index] = result
+                    continue
+                plan_title = (plan_data.get("attributes") or {}).get("title")
+            if mode == "create_new":
+                create_title = service_title or f"Service {service['service_date']}"
+                create_date = service["service_date"]
+                series_title = _to_text(service.get("season")) or None
+                try:
+                    created = create_plan(
+                        base_url,
+                        connection["access_token"],
+                        service_type_id,
+                        create_title,
+                        create_date,
+                        series_title,
+                    )
+                except PcoApiError as exc:
+                    result["status"] = "failed"
+                    result["error"] = str(exc)
+                    results_by_index[index] = result
+                    continue
+                plan_data = created.get("data") if created else None
+                if not plan_data:
+                    result["status"] = "failed"
+                    result["error"] = "PCO plan creation failed."
+                    results_by_index[index] = result
+                    continue
+                plan_id = _to_text(plan_data.get("id"))
+                plan_title = (plan_data.get("attributes") or {}).get("title")
+                if not plan_id:
+                    result["status"] = "failed"
+                    result["error"] = "PCO plan creation failed."
+                    results_by_index[index] = result
+                    continue
+                try:
+                    create_plan_time(
+                        base_url,
+                        connection["access_token"],
+                        service_type_id,
+                        plan_id,
+                        create_date,
+                        default_plan_time,
+                        tz_offset,
+                    )
+                except (PcoApiError, PcoSyncError) as exc:
+                    result["status"] = "failed"
+                    result["error"] = str(exc)
+                    results_by_index[index] = result
+                    continue
+            upsert_service_pco_link(
+                service_id,
+                service_type_id,
+                plan_id,
+                pco_service_type_name=service_type_name,
+                pco_plan_title=plan_title,
+                db=db,
+            )
+            links_by_id[service_id] = {
+                "service_id": service_id,
+                "pco_service_type_id": service_type_id,
+                "pco_service_type_name": service_type_name,
+                "pco_plan_id": plan_id,
+                "pco_plan_title": plan_title,
+            }
+            ok, sync_data = _run_service_sync(
+                service_id,
+                g.user["id"],
+                connection["access_token"],
+                base_url,
+                service_type_id,
+                plan_id,
+                db,
+            )
+            db.commit()
+            result.update(
+                {
+                    "pco_service_type_id": service_type_id,
+                    "pco_service_type_name": service_type_name,
+                    "pco_plan_id": plan_id,
+                    "pco_plan_title": plan_title,
+                    "synced_at": sync_data.get("synced_at"),
+                }
+            )
+            if ok:
+                result["status"] = "success"
+                results_by_index[index] = result
+                continue
+            result["status"] = "failed"
+            result["error"] = sync_data.get("error") or "PCO sync failed."
+            results_by_index[index] = result
+        ordered_results = []
+        for index in range(len(raw_rows)):
+            row_result = results_by_index.get(index)
+            if not row_result:
+                row_result = {
+                    "service_id": None,
+                    "mode": "",
+                    "status": "failed",
+                    "error": "Unable to process row.",
+                }
+            ordered_results.append(row_result)
+        summary = _summarize_batch_results(ordered_results)
+        return jsonify({"ok": True, "summary": summary, "results": ordered_results})
