@@ -576,6 +576,46 @@ def test_text_export_dependency_error_returns_503(
     assert b"python-docx" in response.data
 
 
+def test_text_export_pdf_runtime_error_returns_503(
+    auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=117,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+
+    def raise_pdf_runtime_error(_html_text, base_url=None):
+        raise RuntimeError("PDF export failed in WeasyPrint runtime.")
+
+    monkeypatch.setattr(text_routes, "render_pdf_bytes", raise_pdf_runtime_error)
+    response = client.get(f"/service/{service_id}/export.pdf")
+    assert response.status_code == 503
+    assert b"WeasyPrint runtime" in response.data
+
+
+def test_text_export_pdf_unexpected_error_returns_503(
+    auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=118,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+
+    def raise_pdf_unknown_error(_html_text, base_url=None):
+        raise ValueError("unexpected")
+
+    monkeypatch.setattr(text_routes, "render_pdf_bytes", raise_pdf_unknown_error)
+    response = client.get(f"/service/{service_id}/export.pdf")
+    assert response.status_code == 503
+    assert b"Unable to generate PDF" in response.data
+
+
 def test_lesson_override_updates_service(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(

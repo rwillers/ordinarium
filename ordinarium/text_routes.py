@@ -49,17 +49,25 @@ def register_text_routes(bp):
     @bp.route("/service/<int:service_id>/export.pdf")
     @login_required
     def service_export_pdf(service_id):
-        saved_service, saved_data = load_service_for_text(service_id, g.user["id"])
-        context = build_text_export_context(
-            service_id, saved_service, saved_data, user_id=g.user["id"]
-        )
-        if not context:
-            return render_error("Service ID required to generate text.", 400)
-        html_text = render_text_export_html(context)
         try:
+            saved_service, saved_data = load_service_for_text(service_id, g.user["id"])
+            context = build_text_export_context(
+                service_id, saved_service, saved_data, user_id=g.user["id"]
+            )
+            if not context:
+                return render_error("Service ID required to generate text.", 400)
+            html_text = render_text_export_html(context)
             pdf_bytes = render_pdf_bytes(html_text, base_url=current_app.root_path)
         except RuntimeError as exc:
+            current_app.logger.exception(
+                "PDF export runtime error for service %s", service_id
+            )
             return render_error(str(exc), 503)
+        except Exception:
+            current_app.logger.exception(
+                "PDF export unexpected error for service %s", service_id
+            )
+            return render_error("Unable to generate PDF at this time.", 503)
         filename = build_export_filename(context, "pdf")
         return send_file(
             BytesIO(pdf_bytes),
