@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import date, timedelta
 
 from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_observance, resolve_season
@@ -197,6 +197,37 @@ def test_services_multi_add_creates_services(app, auth_client):
             assert row["season"] == resolve_season(parsed_date)
             assert row["observance_handle"] == expected_handle
             assert row["title"] == expected_title
+
+
+def test_services_tables_include_shared_pagination_config(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    today = date.today()
+    service_factory(
+        user_id=user_id,
+        service_id=300,
+        service_date=(today + timedelta(days=1)).isoformat(),
+        title="Upcoming service",
+    )
+    service_factory(
+        user_id=user_id,
+        service_id=301,
+        service_date=(today - timedelta(days=1)).isoformat(),
+        title="Past service",
+    )
+
+    response = client.get("/services")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert (
+        'id="services-upcoming-table" data-pagination="true" '
+        'data-page-size="25" data-page-size-options="10,25,50,100"'
+    ) in html
+    assert (
+        'id="services-past-table" data-pagination="true" '
+        'data-page-size="25" data-page-size-options="10,25,50,100"'
+    ) in html
 
 
 def test_service_missing_id_returns_error(auth_client):

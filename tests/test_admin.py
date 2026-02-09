@@ -27,6 +27,25 @@ def test_admin_allows_with_flag(app, auth_client):
     assert b"Users" in response.data
 
 
+def test_admin_table_uses_shared_pagination_config(app, auth_client):
+    client, user_id = auth_client
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set feature_flags=? where id=?",
+            ('{"admin": true}', user_id),
+        )
+        db.commit()
+
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert (
+        'id="admin-users-table" data-pagination="true" '
+        'data-page-size="25" data-page-size-options="10,25,50,100"'
+    ) in html
+
+
 def test_admin_user_delete_soft_deletes_user(app, auth_client, user_factory):
     client, admin_id = auth_client
     user_id = user_factory(email="delete-me@example.com")

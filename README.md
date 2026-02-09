@@ -68,9 +68,12 @@ The app uses a shared table pattern for tabular data. New table-like views shoul
   - Action: `th.shared-table-actions` (often blank) with dropdown menu.
   - Handle: `td.shared-table-actions` with `.shared-table-handle` if you need reordering.
   - Details: free-form content (often combined “Title and text”).
+- Optional footer:
+  - Add `data-pagination="true"` to enable the shared footer with record counts and paging controls.
+  - Configure page size with `data-page-size="25"` and choices via `data-page-size-options="10,25,50,100"`.
 
 **Behavior**
-- Sorting, menu toggles, focus trapping, and ESC-to-close are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
+- Sorting, menu toggles, focus trapping, ESC-to-close, and optional client-side pagination are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
 
 ### Turnstile (Cloudflare)
 Turnstile is disabled by default in local/dev. It is enabled when both keys are set and
