@@ -1,6 +1,7 @@
 import json
 from datetime import date, timedelta
 
+import ordinarium.text_routes as text_routes
 from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_observance, resolve_season
 
@@ -199,9 +200,7 @@ def test_services_multi_add_creates_services(app, auth_client):
             assert row["title"] == expected_title
 
 
-def test_services_tables_include_shared_pagination_config(
-    auth_client, service_factory
-):
+def test_services_tables_include_shared_pagination_config(auth_client, service_factory):
     client, user_id = auth_client
     today = date.today()
     service_factory(
@@ -514,6 +513,67 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
     response = client.get("/service/14/view")
     assert response.status_code == 200
     assert b"Holy Eucharist" in response.data
+
+
+def test_text_export_docx_returns_attachment(auth_client, service_factory, monkeypatch):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=114,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    monkeypatch.setattr(
+        text_routes, "render_docx_bytes", lambda context: b"PK\x03\x04docx"
+    )
+    response = client.get(f"/service/{service_id}/export.docx")
+    assert response.status_code == 200
+    assert (
+        response.mimetype
+        == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert response.data.startswith(b"PK\x03\x04")
+
+
+def test_text_export_pdf_returns_attachment(auth_client, service_factory, monkeypatch):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=115,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    monkeypatch.setattr(
+        text_routes,
+        "render_pdf_bytes",
+        lambda html_text, base_url=None: b"%PDF-1.7\nfake\n",
+    )
+    response = client.get(f"/service/{service_id}/export.pdf")
+    assert response.status_code == 200
+    assert response.mimetype == "application/pdf"
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert response.data.startswith(b"%PDF-1.7")
+
+
+def test_text_export_dependency_error_returns_503(
+    auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=116,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+
+    def raise_missing_dependency(_context):
+        raise RuntimeError("DOCX export requires python-docx to be installed.")
+
+    monkeypatch.setattr(text_routes, "render_docx_bytes", raise_missing_dependency)
+    response = client.get(f"/service/{service_id}/export.docx")
+    assert response.status_code == 503
+    assert b"python-docx" in response.data
 
 
 def test_lesson_override_updates_service(app, auth_client, service_factory):

@@ -7,21 +7,21 @@
 			<h2 class="plan-title">Plan a service</h2>
 			<div class="plan-header-actions plan-header-actions-spaced">
 				<div class="service-header-actions-inline">
-					<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
-					<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
-					<a class="button" href="{{ url_for('main.services') }}">Back to services</a>
-				</div>
-				<details class="service-header-actions-menu">
-					<summary class="button service-header-actions-toggle">
-						<span>Actions</span>
-						<span class="menu-trigger-icon" aria-hidden="true"></span>
-					</summary>
-					<div class="service-header-actions-panel">
-						<a class="button service-header-actions-item" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
-						<button class="plan-submit service-header-actions-item" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
-						<a class="button service-header-actions-item" href="{{ url_for('main.services') }}">Back to services</a>
+					<div class="service-header-actions-menu" data-service-header-menu>
+						<button class="button service-header-actions-toggle" type="button" data-service-header-menu-toggle aria-expanded="false" aria-haspopup="true">
+							<span>Actions</span>
+							<span class="menu-trigger-icon" aria-hidden="true"></span>
+						</button>
+						<div class="service-header-actions-panel" role="menu">
+							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service_id) }}">View liturgy</a>
+							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_export_pdf', service_id=service_id) }}">Export to PDF</a>
+							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_export_docx', service_id=service_id) }}">Export to Word</a>
+							<button class="service-header-actions-item" role="menuitem" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share service link</button>
+							<a class="service-header-actions-item service-header-actions-item-mobile-only" role="menuitem" href="{{ url_for('main.services') }}">Back to services</a>
+						</div>
 					</div>
-				</details>
+					<a class="button service-header-back-desktop" href="{{ url_for('main.services') }}">Back to services</a>
+				</div>
 			</div>
 		</div>
 {% if pco_connected %}
@@ -381,16 +381,49 @@
 		const pageWrapper = document.querySelector('#page')
 		const pcoSyncIndicator = document.querySelector('[data-pco-sync-indicator]')
 		const pcoSyncStatus = document.querySelector('[data-pco-sync-status]')
-		const pcoSyncIcon = document.querySelector('[data-pco-sync-icon]')
-		const saveStatusIndicator = document.querySelector('[data-save-status-indicator]')
-		const saveStatusIcon = document.querySelector('[data-save-status-icon]')
+			const pcoSyncIcon = document.querySelector('[data-pco-sync-icon]')
+			const saveStatusIndicator = document.querySelector('[data-save-status-indicator]')
+			const saveStatusIcon = document.querySelector('[data-save-status-icon]')
 			const saveStatusChip = document.querySelector('[data-save-status-chip]')
 			const pcoManageButtons = document.querySelectorAll('[data-pco-manage]')
-			const serviceHeaderActionMenus = Array.from(document.querySelectorAll('.service-header-actions-menu'))
+			const serviceHeaderActionMenus = Array.from(document.querySelectorAll('[data-service-header-menu]'))
+			const serviceHeaderActionMenuToggles = Array.from(document.querySelectorAll('[data-service-header-menu-toggle]'))
 
 			const closeServiceHeaderActionMenus = () => {
 				serviceHeaderActionMenus.forEach((menu) => {
-					menu.removeAttribute('open')
+					menu.classList.remove('is-open')
+					const toggle = menu.querySelector('[data-service-header-menu-toggle]')
+					if (toggle) {
+						toggle.setAttribute('aria-expanded', 'false')
+					}
+				})
+			}
+
+			const openServiceHeaderActionMenu = (menu) => {
+				closeServiceHeaderActionMenus()
+				menu.classList.add('is-open')
+				const toggle = menu.querySelector('[data-service-header-menu-toggle]')
+				if (toggle) {
+					toggle.setAttribute('aria-expanded', 'true')
+				}
+			}
+
+			if (serviceHeaderActionMenuToggles.length) {
+				serviceHeaderActionMenuToggles.forEach((toggle) => {
+					toggle.addEventListener('click', (event) => {
+						event.preventDefault()
+						event.stopPropagation()
+						const menu = toggle.closest('[data-service-header-menu]')
+						if (!menu) {
+							return
+						}
+						const willOpen = !menu.classList.contains('is-open')
+						if (!willOpen) {
+							closeServiceHeaderActionMenus()
+							return
+						}
+						openServiceHeaderActionMenu(menu)
+					})
 				})
 			}
 
@@ -447,9 +480,9 @@
 							const data = await response.json()
 							if (data && data.share_url) {
 								openShareModal(data.share_url)
-								const actionsMenu = shareButton.closest('.service-header-actions-menu')
+								const actionsMenu = shareButton.closest('[data-service-header-menu]')
 								if (actionsMenu) {
-									actionsMenu.removeAttribute('open')
+									closeServiceHeaderActionMenus()
 								}
 							}
 						} catch (error) {
@@ -483,17 +516,18 @@
 				})
 			}
 
-			document.addEventListener('click', (event) => {
-				if (!event.target.closest('.service-header-actions-menu')) {
+			document.addEventListener('pointerdown', (event) => {
+				const target = event.target instanceof Element ? event.target : null
+				if (!target || !target.closest('[data-service-header-menu]')) {
 					closeServiceHeaderActionMenus()
 				}
-			})
+			}, true)
 
 			document.addEventListener('keydown', (event) => {
 				if (event.key === 'Escape') {
 					closeServiceHeaderActionMenus()
 				}
-			})
+			}, true)
 
 		if (shareCopyButton && shareModalUrl) {
 			shareCopyButton.addEventListener('click', async () => {

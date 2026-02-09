@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>{{ title }}{% if service_title %} - {{ service_title }}{% endif %}</title>
+		<style>{{ export_css }}</style>
+	</head>
+	<body>
+		<div id="text">
+			<h1>
+				{{ title }}<br>
+				<small><em>{{ rite }}</em></small>
+			</h1>
+			{% if service_title %}
+				<h2>{{ service_title }}</h2>
+			{% endif %}
+
+			{% for ordinary in ordinaries %}
+				<div class="text-element{% if ordinary.type == 'custom' %} text-element-custom{% endif %}">
+					{% if ordinary.show_title and ordinary.title_inline_html %}
+						<h3>{{ ordinary.title_inline_html | safe }}</h3>
+					{% endif %}
+					{{ ordinary.body_html | safe }}
+				</div>
+			{% endfor %}
+			<p class="text-footer">
+				{{ title }} - {{ rite }}
+				{% if service_title %}<br>{{ service_title }}{% endif %}
+				{% if service_date_display %}({{ service_date_display }}){% endif %}
+				<br>Generated as of {{ generated_at_display }}
+			</p>
+		</div>
+	</body>
+</html>

@@ -176,6 +176,8 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
     )
     return render_template(
         "text.html",
+        service_id=service_id,
+        allow_export=bool(user_id),
         title=title,
         rite=rite_name,
         service_title=service_title,
@@ -186,7 +188,9 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
     )
 
 
-def build_rendered_ordinaries(service_id, saved_service, saved_data, user_id=None):
+def build_rendered_ordinaries(
+    service_id, saved_service, saved_data, user_id=None, include_metadata=False
+):
     if not saved_service:
         return None
     if not isinstance(saved_service, dict):
@@ -377,4 +381,14 @@ def build_rendered_ordinaries(service_id, saved_service, saved_data, user_id=Non
                 "type": item.get("type"),
             }
         )
+    if include_metadata:
+        return {
+            "title": title,
+            "rite": rite_name,
+            "service_title": service_title,
+            "service_date_display": service_date_display,
+            "service_date": saved_service.get("service_date"),
+            "generated_at_display": generated_at_display,
+            "ordinaries": rendered,
+        }
     return rendered
