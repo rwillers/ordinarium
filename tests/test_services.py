@@ -614,6 +614,7 @@ def test_text_export_pdf_unexpected_error_returns_503(
     response = client.get(f"/service/{service_id}/export.pdf")
     assert response.status_code == 503
     assert b"Unable to generate PDF" in response.data
+    assert b"ValueError" in response.data
 
 
 def test_lesson_override_updates_service(app, auth_client, service_factory):
