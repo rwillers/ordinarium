@@ -3,26 +3,33 @@
 		<h1><a href="{{ url_for('main.index') }}">Ordinarium</a></h1>
 		<h2>A liturgy planning workspace</h2>
 		{% if user %}
-		<div class="user-menu">
-			<button class="user-toggle" type="button">
-				<span class="user-name">{{ user.first_name }}</span>
-				<span class="user-caret">▼</span>
-			</button>
-			<div class="user-dropdown" style="opacity: 0; pointer-events: none; transform: translateY(-4px);">
-				<a href="{{ url_for('main.services') }}">Services</a>
-				<a href="{{ url_for('main.templates') }}">Templates</a>
-				{% if user.has_feature('pco_sync') %}
-				<a href="{{ url_for('main.integrations') }}">Integrations</a>
-				{% endif %}
-				{% if user.has_feature('admin') %}
-				<a href="{{ url_for('main.admin_index') }}">Admin</a>
-				{% endif %}
-				<a href="{{ url_for('main.account') }}">Account</a>
-				<a href="{{ url_for('main.logout') }}">Log out</a>
-			</div>
+		<div class="header-actions">
+			<a class="account-link account-link-user" href="{{ url_for('main.account') }}">
+				<span class="account-link-name">{{ user.first_name }}</span>
+			</a>
+			<details class="nav-menu">
+				<summary class="nav-toggle" aria-label="Open navigation menu">
+					<span class="nav-toggle-label">Menu</span>
+					<span class="nav-toggle-icon" aria-hidden="true"></span>
+				</summary>
+				<nav class="nav-dropdown" aria-label="Primary">
+					<a href="{{ url_for('main.services') }}">Services</a>
+					<a href="{{ url_for('main.templates') }}">Templates</a>
+					{% if user.has_feature('pco_sync') %}
+					<a href="{{ url_for('main.integrations') }}">Integrations</a>
+					{% endif %}
+					{% if user.has_feature('admin') %}
+					<a href="{{ url_for('main.admin_index') }}">Admin</a>
+					{% endif %}
+					<a href="{{ url_for('main.account') }}">Account</a>
+					<a href="{{ url_for('main.logout') }}">Log out</a>
+				</nav>
+			</details>
 		</div>
 		{% else %}
-		<a class="account-link" href="{{ url_for('main.login') }}">Account</a>
+		<a class="account-link" href="{{ url_for('main.login') }}">
+			<span class="account-link-name">Log in</span>
+		</a>
 		{% endif %}
 	</div>
 </header>

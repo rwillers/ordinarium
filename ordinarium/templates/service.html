@@ -10,19 +10,19 @@
 					<a class="button" id="plan-view-link" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
 					<button class="plan-submit" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
 					<a class="button" href="{{ url_for('main.services') }}">Back to services</a>
-					</div>
-					<details class="service-header-actions-menu">
-						<summary class="button service-header-actions-toggle">
-							<span>Actions</span>
-							<span class="service-header-actions-caret" aria-hidden="true">▼</span>
-						</summary>
-						<div class="service-header-actions-panel">
-							<a class="button service-header-actions-item" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
-							<button class="plan-submit service-header-actions-item" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
-							<a class="button service-header-actions-item" href="{{ url_for('main.services') }}">Back to services</a>
-						</div>
-					</details>
 				</div>
+				<details class="service-header-actions-menu">
+					<summary class="button service-header-actions-toggle">
+						<span>Actions</span>
+						<span class="menu-trigger-icon" aria-hidden="true"></span>
+					</summary>
+					<div class="service-header-actions-panel">
+						<a class="button service-header-actions-item" href="{{ url_for('main.service_view', service_id=service_id) }}">View</a>
+						<button class="plan-submit service-header-actions-item" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share</button>
+						<a class="button service-header-actions-item" href="{{ url_for('main.services') }}">Back to services</a>
+					</div>
+				</details>
+			</div>
 		</div>
 {% if pco_connected %}
 	{% endif %}
@@ -232,7 +232,7 @@
 			</td>
 			<td class="shared-table-actions">
 				<div class="shared-table-menu plan-row-menu" data-row-menu>
-					<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Row actions">▾</button>
+					<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Row actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
 					<div class="plan-row-menu-panel" role="menu">
 						{% if ordinary.type == 'custom' %}
 						<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
@@ -252,7 +252,7 @@
 				</div>
 			</td>
 			<td class="shared-table-actions">
-				<span class="plan-handle shared-table-handle" aria-hidden="true">⠿</span>
+				<span class="plan-handle shared-table-handle" aria-hidden="true">↕</span>
 			</td>
 		</tr>
 	{% endfor %}
@@ -706,14 +706,9 @@
 				draggedRow = row
 				event.dataTransfer.effectAllowed = 'move'
 				event.dataTransfer.setData('text/plain', '')
-				row.classList.add('is-dragging')
 			})
 
 			planList.addEventListener('dragend', (event) => {
-				const row = event.target.closest('.plan-row')
-				if (row) {
-					row.classList.remove('is-dragging')
-				}
 				draggedRow = null
 				scheduleAutosave()
 			})
@@ -1515,7 +1510,7 @@
 			const handle = document.createElement('span')
 			handle.className = 'plan-handle'
 			handle.setAttribute('aria-hidden', 'true')
-			handle.textContent = '⠿'
+			handle.textContent = '↕'
 
 			main.appendChild(label)
 			main.appendChild(handle)
@@ -1532,7 +1527,7 @@
 			toggle.setAttribute('aria-expanded', 'false')
 			toggle.setAttribute('aria-haspopup', 'true')
 			toggle.setAttribute('aria-label', 'Row actions')
-			toggle.textContent = '▾'
+			toggle.innerHTML = '<span class="menu-trigger-icon" aria-hidden="true"></span>'
 
 			const panel = document.createElement('div')
 			panel.className = 'plan-row-menu-panel'

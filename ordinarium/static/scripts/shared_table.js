@@ -13,6 +13,43 @@ const sharedTableMenus = () => {
 		}
 		return Array.from(menu.querySelectorAll('.plan-row-menu-panel a, .plan-row-menu-panel button'))
 	}
+	const clearMenuPosition = (menu) => {
+		if (!menu) {
+			return
+		}
+		const panel = menu.querySelector('.plan-row-menu-panel')
+		if (!panel) {
+			return
+		}
+		panel.classList.remove('is-layered')
+		panel.style.removeProperty('left')
+		panel.style.removeProperty('top')
+	}
+	const positionMenu = (menu, toggle) => {
+		if (!menu || !toggle) {
+			return
+		}
+		const panel = menu.querySelector('.plan-row-menu-panel')
+		if (!panel) {
+			return
+		}
+		clearMenuPosition(menu)
+		panel.classList.add('is-layered')
+		const toggleRect = toggle.getBoundingClientRect()
+		const panelWidth = panel.offsetWidth || 184
+		const panelHeight = panel.offsetHeight || 160
+		const viewportPadding = 8
+		const openOffset = 4
+		let top = toggleRect.bottom + openOffset
+		const canOpenUp = toggleRect.top - panelHeight - openOffset >= viewportPadding
+		if (top + panelHeight + viewportPadding > window.innerHeight && canOpenUp) {
+			top = toggleRect.top - panelHeight - openOffset
+		}
+		let left = toggleRect.right - panelWidth
+		left = Math.max(viewportPadding, Math.min(left, window.innerWidth - panelWidth - viewportPadding))
+		panel.style.left = `${Math.round(left)}px`
+		panel.style.top = `${Math.round(top)}px`
+	}
 
 	const closeMenus = (exceptMenu = null, restoreFocus = false) => {
 		menuRoots.forEach((menu) => {
@@ -20,6 +57,7 @@ const sharedTableMenus = () => {
 				return
 			}
 			menu.classList.remove('is-open')
+			clearMenuPosition(menu)
 			const toggle = menu.querySelector('[data-row-menu-toggle]')
 			if (toggle) {
 				toggle.setAttribute('aria-expanded', 'false')
@@ -44,6 +82,11 @@ const sharedTableMenus = () => {
 			const isOpen = !menu.classList.contains('is-open')
 			closeMenus(menu)
 			menu.classList.toggle('is-open', isOpen)
+			if (isOpen) {
+				positionMenu(menu, toggle)
+			} else {
+				clearMenuPosition(menu)
+			}
 			toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
 			if (isOpen) {
 				activeMenu = menu
@@ -72,6 +115,12 @@ const sharedTableMenus = () => {
 			closeMenus()
 		}
 	})
+	window.addEventListener('resize', () => {
+		closeMenus()
+	})
+	window.addEventListener('scroll', () => {
+		closeMenus()
+	}, true)
 
 	document.addEventListener('keydown', (event) => {
 		if (!activeMenu) {

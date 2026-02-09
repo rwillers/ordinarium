@@ -3,8 +3,6 @@
 Remaining work and follow-ups.
 
 - Application UI enhancements:
-  - Reconsider header menu organization and icons (hamburger menu separate from user name?).
-  - Reconsider down chevrons/arrows for action drop downs.
   - Add shared table standard footer with flexible record counts, limits, and pagination options.
 - PCO integration enhancements:
   - Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).

@@ -60,7 +60,7 @@
 					<td data-sort-value="{{ last_login_date }}">{{ last_login_date or '—' }}</td>
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
-							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="User actions">▾</button>
+							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="User actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
 							<div class="plan-row-menu-panel" role="menu">
 								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.admin_user_edit', user_id=user.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
 								<form action="{{ url_for('main.admin_user_delete', user_id=user.id) }}" method="post" onsubmit="return confirm('Delete this user? This cannot be undone.')">

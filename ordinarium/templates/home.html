@@ -40,7 +40,7 @@ Ordinarium is a liturgy planning workspace supporting the assembly, ordering, an
 					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
-							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions">▾</button>
+							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
 							<div class="plan-row-menu-panel" role="menu">
 								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
 								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
