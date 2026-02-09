@@ -62,15 +62,12 @@ def register_text_routes(bp):
             current_app.logger.exception(
                 "PDF export runtime error for service %s", service_id
             )
-            return render_error(str(exc), 503)
+            return render_error("Unable to generate PDF at this time.", 503)
         except Exception as exc:
             current_app.logger.exception(
                 "PDF export unexpected error for service %s", service_id
             )
-            return render_error(
-                f"Unable to generate PDF at this time. {type(exc).__name__}: {exc}",
-                503,
-            )
+            return render_error("Unable to generate PDF at this time.", 503)
         filename = build_export_filename(context, "pdf")
         return send_file(
             BytesIO(pdf_bytes),

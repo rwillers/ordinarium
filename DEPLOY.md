@@ -6,7 +6,9 @@ This guide assumes Ubuntu, a `deploy` user, and the domain `ordinarium.com`.
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv python3-pip apache2 certbot python3-certbot-apache git
+sudo apt install -y \
+  python3 python3-venv python3-pip apache2 certbot python3-certbot-apache git \
+  libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu-core
 
 sudo adduser deploy
 sudo usermod -aG www-data deploy
