@@ -2,8 +2,6 @@
 
 Remaining work and follow-ups.
 
-- Application UI enhancements:
-  - Add shared table standard footer with flexible record counts, limits, and pagination options.
 - PCO integration enhancements:
   - Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
   - Investigate ability to delta update PCO services.
