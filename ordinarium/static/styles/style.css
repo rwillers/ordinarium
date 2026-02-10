@@ -838,6 +838,100 @@ div#page {
 	.shared-table-title {
 		font-weight: 600;
 	}
+	.home-upcoming-grid {
+		display: grid;
+		gap: 0.85em;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		margin: 0.8em 0 1.4em 0;
+	}
+	.home-service-well {
+		background: #f6f6f6;
+		border: 1px solid var(--line-color);
+		border-radius: var(--radius-sm);
+		padding: 0.85em;
+		text-decoration: none;
+		color: inherit;
+	}
+	.home-service-date {
+		margin: 0;
+		font-family: var(--header-font-family);
+		font-size: 0.7em;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--rubric-color);
+	}
+	.home-service-title {
+		margin: 0.35em 0 0 0;
+		font-family: var(--header-font-family);
+		font-size: 1em;
+		font-weight: 600;
+		line-height: 1.35;
+	}
+	.home-service-title a,
+	.home-service-title a:visited {
+		color: var(--body-color);
+		text-decoration: none;
+	}
+	.home-service-title a:hover {
+		color: var(--rubric-color);
+		text-decoration: underline;
+	}
+	.home-service-season {
+		margin: 0.5em 0 0 0;
+		font-size: 0.86em;
+		font-family: var(--header-font-family);
+	}
+	.home-service-actions {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.45em;
+		margin-top: 0.7em;
+	}
+	.home-service-actions .button {
+		display: block;
+		width: 100%;
+		box-sizing: border-box;
+		text-align: center;
+		padding: 0.45em 0.65em;
+		font-size: 0.8em;
+	}
+	.home-service-pco {
+		margin: 0.75em 0 0 0;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45em;
+	}
+	.home-service-pco .pco-sync-icon-label {
+		font-size: 0.65em;
+	}
+	.home-service-pco-status {
+		font-size: 0.8em;
+		font-family: var(--header-font-family);
+	}
+	.home-service-view-all {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		border-style: dashed;
+		background: rgba(255, 255, 255, 0.62);
+	}
+	.home-service-view-all:hover {
+		background: #fff;
+	}
+	.home-service-view-all-label {
+		font-family: var(--header-font-family);
+		font-size: 0.86em;
+		font-weight: 600;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--rubric-color);
+	}
+	.home-service-view-all-copy {
+		margin-top: 0.45em;
+		font-size: 0.85em;
+		line-height: 1.35;
+		font-family: var(--header-font-family);
+	}
 	.shared-table-details {
 		display: block;
 		font-size: 0.85em;

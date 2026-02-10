@@ -14,49 +14,36 @@ Ordinarium is a liturgy planning workspace supporting the assembly, ordering, an
 	{% if user %}
 	<h3>Upcoming services</h3>
 	{% if upcoming_services %}
-	<div class="shared-table-wrap">
-	<table class="shared-table">
-		<thead>
-			<tr>
-				<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="asc" aria-sort="ascending">
-					<button class="shared-table-sort" type="button">Date</button>
-				</th>
-				<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Title</button>
-				</th>
-				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Season</button>
-				</th>
-				<th class="shared-table-actions"></th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for service in upcoming_services %}
-				<tr>
-					<td data-sort-value="{{ service.service_date }}">{{ service.display_date }}</td>
-					<td class="shared-table-title" data-sort-value="{{ service.title | lower }}">
-						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
-					</td>
-					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
-					<td class="shared-table-actions">
-						<div class="shared-table-menu plan-row-menu" data-row-menu>
-							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
-							<div class="plan-row-menu-panel" role="menu">
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
-							</div>
-						</div>
-					</td>
-				</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+	<div class="home-upcoming-grid">
+		{% for service in upcoming_services %}
+		<article class="home-service-well">
+			<p class="home-service-date">{{ service.display_date }}</p>
+			<h4 class="home-service-title"><a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a></h4>
+			<p class="home-service-season">Season: {{ service.season or '—' }}</p>
+			<div class="home-service-actions">
+				<a class="button" href="{{ url_for('main.service', service_id=service.id) }}">Edit</a>
+				<a class="button" href="{{ url_for('main.service_view', service_id=service.id) }}">View liturgy</a>
+				<a class="button" href="{{ url_for('main.service_export_pdf', service_id=service.id) }}">PDF</a>
+				<a class="button" href="{{ url_for('main.service_export_docx', service_id=service.id) }}">Word</a>
+			</div>
+			{% if pco_enabled and service.pco_status %}
+			<p class="home-service-pco">
+				<span class="pco-sync-icon-label">PCO sync</span>
+				<span class="pco-sync-icon" data-state="{{ service.pco_status.icon_state }}" aria-hidden="true"></span>
+				<span class="home-service-pco-status">{{ service.pco_status.label }}</span>
+			</p>
+			{% endif %}
+		</article>
+		{% endfor %}
+		<a class="home-service-well home-service-view-all" href="{{ url_for('main.services') }}">
+			<span class="home-service-view-all-label">View all services</span>
+			<span class="home-service-view-all-copy">Open the full service list and management tools.</span>
+		</a>
 	</div>
 	{% else %}
 	<p>No upcoming services.</p>
+	<p><a class="button" href="{{ url_for('main.services') }}">View all services</a></p>
 	{% endif %}
-
-	<p><a href="{{ url_for('main.services') }}">View all services</a></p>
 	{% else %}
 	<p>
 		<a class="button" href="{{ url_for('main.signup') }}">Sign up</a>

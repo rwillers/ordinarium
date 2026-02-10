@@ -3,12 +3,11 @@
 Remaining work and follow-ups.
 
 - Move all drop downs in the app to common view/controller code for consistency.
-- Rethink home page contents. (Simple view of next 5 with links to edit only, no action drop down? Or perhaps custom views for next 2-3 services with season, title, and direct links to common actions like edit, view liturgy, PDF, Word, share link, PCO sync status?)
 - PCO integration enhancements:
   - Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
   - Investigate ability to delta update PCO services.
-- Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
-- Implement additional export formats and integrations: ProPresenter, etc.
 - Add team accounts
   - Support for shared services and element libraries.
   - Collaboration features: comments, approvals, version history.
+- Add additional liturgy templates (Morning Prayer, Compline, funerals, weddings; other prayer books/sacramentaries/missals).
+- Implement additional export formats and integrations: ProPresenter, etc.

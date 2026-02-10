@@ -6,6 +6,9 @@ from .liturgical_calendar import resolve_observance
 def format_services(services):
     formatted = []
     for service in services:
+        updated_at = None
+        if hasattr(service, "keys") and "updated_at" in service.keys():
+            updated_at = service["updated_at"]
         display_date = service["service_date"]
         parsed_date = None
         try:
@@ -32,6 +35,7 @@ def format_services(services):
                 "display_date": display_date,
                 "season": service["season"],
                 "rite": service["rite"],
+                "updated_at": updated_at,
             }
         )
     return formatted

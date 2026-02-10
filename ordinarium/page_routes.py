@@ -4,11 +4,14 @@ from flask import current_app, g, jsonify, render_template, request, send_from_d
 
 from .db import get_db
 from .error_pages import render_error
+from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .liturgical_calendar import (
     resolve_observance,
     resolve_observance_options,
     resolve_season,
 )
+from .pco_auth import get_valid_pco_connection
+from .pco_sync_status import resolve_pco_sync_state
 from .service_planning import (
     _build_lesson_readings,
     _format_lesson_reference,
@@ -37,15 +40,74 @@ def register_page_routes(bp):
     @bp.route("/")
     def index():
         upcoming_services = []
+        pco_enabled = False
         if g.user:
             db = get_db()
             today = date.today().isoformat()
             rows = db.execute(
-                "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 5",
+                "select id, title, season, service_date, rite, observance_handle, updated_at from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 3",
                 (g.user["id"], today),
             ).fetchall()
             upcoming_services = format_services(rows)
-        return render_template("home.html", upcoming_services=upcoming_services)
+            pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
+            if pco_enabled:
+                try:
+                    pco_connected = bool(get_valid_pco_connection(g.user["id"], db))
+                except Exception:
+                    pco_connected = False
+                pco_links = {}
+                if pco_connected and upcoming_services:
+                    service_ids = [service["id"] for service in upcoming_services]
+                    placeholders = ",".join(["?"] * len(service_ids))
+                    link_rows = db.execute(
+                        f"""
+                        select
+                          service_id,
+                          last_synced_at,
+                          last_sync_status
+                        from service_pco_links
+                        where service_id in ({placeholders})
+                        """,
+                        service_ids,
+                    ).fetchall()
+                    pco_links = {row["service_id"]: dict(row) for row in link_rows}
+                for service in upcoming_services:
+                    if not pco_connected:
+                        service["pco_status"] = {
+                            "state": "disconnected",
+                            "icon_state": "unlinked",
+                            "label": "Not connected",
+                        }
+                        continue
+                    pco_link = pco_links.get(service["id"])
+                    if not pco_link:
+                        service["pco_status"] = {
+                            "state": "unlinked",
+                            "icon_state": "unlinked",
+                            "label": "Not linked",
+                        }
+                        continue
+                    sync_state = resolve_pco_sync_state(
+                        service.get("updated_at"),
+                        pco_link.get("last_synced_at"),
+                        pco_link.get("last_sync_status"),
+                    )
+                    status_label = "Synced"
+                    status_icon = "synced"
+                    if sync_state == "failed":
+                        status_label = "Last sync failed"
+                        status_icon = "unsynced"
+                    elif sync_state == "unsynced":
+                        status_label = "Unsynced changes"
+                        status_icon = "unsynced"
+                    service["pco_status"] = {
+                        "state": sync_state,
+                        "icon_state": status_icon,
+                        "label": status_label,
+                    }
+        return render_template(
+            "home.html", upcoming_services=upcoming_services, pco_enabled=pco_enabled
+        )
 
     @bp.route("/about")
     def about():

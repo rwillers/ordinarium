@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime
+from datetime import date
 
 from flask import current_app, g, redirect, render_template, request, url_for
 
@@ -14,19 +14,12 @@ from .service_options import load_rite_options
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .service_store import blank_service_payload, create_service, update_service_columns
 from .pco_auth import get_valid_pco_connection
+from .pco_sync_status import resolve_pco_sync_state
 from .pco_store import get_service_pco_link
 from .pco_sync import list_service_types
 
 
 def register_service_overview_routes(bp):
-    def parse_timestamp(value):
-        if not value:
-            return None
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-
     @bp.route("/services")
     @login_required
     def services():
@@ -304,19 +297,12 @@ def register_service_overview_routes(bp):
         pco_sync_at = None
         if pco_link:
             pco_sync_at = pco_link["last_synced_at"]
-            if pco_link["last_sync_status"] == "failed":
-                pco_sync_state = "failed"
-            else:
-                if not pco_link["last_synced_at"]:
-                    pco_sync_state = "unsynced"
-                else:
-                    service_updated_at = context.get("service", {}).get("updated_at")
-                    service_dt = parse_timestamp(service_updated_at)
-                    sync_dt = parse_timestamp(pco_link["last_synced_at"])
-                    if service_dt and sync_dt and service_dt > sync_dt:
-                        pco_sync_state = "unsynced"
-                    else:
-                        pco_sync_state = "synced"
+            service_updated_at = context.get("service", {}).get("updated_at")
+            pco_sync_state = resolve_pco_sync_state(
+                service_updated_at,
+                pco_link["last_synced_at"],
+                pco_link["last_sync_status"],
+            )
         context.update(
             {
                 "pco_connected": bool(pco_connection) if pco_enabled else False,
