@@ -58,6 +58,12 @@
 					<p class="plan-error">Last sync error: {{ pco_link.last_sync_error }}</p>
 				{% endif %}
 				<div class="auth-actions">
+					{% if pco_sync_state == 'unsynced' %}
+					<form action="{{ url_for('main.service_pco_sync', service_id=service_id) }}" method="post">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<button class="plan-submit" type="submit">Sync service</button>
+					</form>
+					{% endif %}
 					<form action="{{ url_for('main.service_pco_unlink', service_id=service_id) }}" method="post" onsubmit="return confirm('Remove the Planning Center link for this service?');">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="plan-submit" type="submit">Remove link</button>

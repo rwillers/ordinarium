@@ -908,6 +908,12 @@ div#page {
 		font-size: 0.8em;
 		font-family: var(--header-font-family);
 	}
+	.services-pco-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45em;
+		white-space: nowrap;
+	}
 	.home-service-view-all {
 		display: flex;
 		flex-direction: column;

@@ -46,6 +46,11 @@
 				<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
 					<button class="shared-table-sort" type="button">Season</button>
 				</th>
+				{% if pco_enabled %}
+				<th class="shared-table-sortable" data-sort-key="pco_sync" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">PCO sync</button>
+				</th>
+				{% endif %}
 				<th class="shared-table-actions"></th>
 			</tr>
 		</thead>
@@ -62,6 +67,8 @@
 					data-pco-service-type-name="{{ pco_link.pco_service_type_name if pco_link else '' }}"
 					data-pco-plan-id="{{ pco_link.pco_plan_id if pco_link else '' }}"
 					data-pco-plan-title="{{ pco_link.pco_plan_title if pco_link else '' }}"
+					data-pco-sync-state="{{ service.pco_status.state if service.pco_status else '' }}"
+					data-pco-sync-label="{{ service.pco_status.label if service.pco_status else '' }}"
 				>
 					<td class="shared-table-select">
 						<input type="checkbox" form="services-upcoming-bulk" name="service_ids" value="{{ service.id }}" aria-label="Select service {{ service.title }}">
@@ -71,6 +78,18 @@
 						<a href="{{ url_for('main.service', service_id=service.id) }}">{{ service.title }}</a>
 					</td>
 					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
+					{% if pco_enabled %}
+						<td data-pco-sync-cell data-sort-value="{{ service.pco_status.state if service.pco_status else '' }} {{ service.pco_status.label | lower if service.pco_status else '' }}">
+							{% if service.pco_status %}
+							<span class="services-pco-status" aria-label="PCO sync: {{ service.pco_status.label }}">
+								<span class="pco-sync-icon" data-pco-sync-icon data-state="{{ service.pco_status.icon_state }}" aria-hidden="true"></span>
+								<span class="home-service-pco-status" data-pco-sync-label>{{ service.pco_status.label }}</span>
+							</span>
+							{% else %}
+							—
+							{% endif %}
+					</td>
+					{% endif %}
 					<td class="shared-table-actions">
 						<div class="shared-table-menu plan-row-menu" data-row-menu>
 							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
@@ -799,6 +818,61 @@
 		summaryNode.textContent = typeName ? `Linked to ${planTitle} in ${typeName}.` : `Linked to ${planTitle}.`
 	}
 
+	const resolvePcoStatusPresentation = (state) => {
+		if (state === 'synced') {
+			return { state: 'synced', iconState: 'synced', label: 'Synced' }
+		}
+		if (state === 'failed') {
+			return { state: 'failed', iconState: 'unsynced', label: 'Last sync failed' }
+		}
+		if (state === 'unsynced') {
+			return { state: 'unsynced', iconState: 'unsynced', label: 'Unsynced changes' }
+		}
+		if (state === 'disconnected') {
+			return { state: 'disconnected', iconState: 'unlinked', label: 'Not connected' }
+		}
+		return { state: 'unlinked', iconState: 'unlinked', label: 'Not linked' }
+	}
+
+	const updateUpcomingTablePcoStatus = (tableRow, state) => {
+		if (!tableRow) {
+			return
+		}
+		const syncCell = tableRow.querySelector('[data-pco-sync-cell]')
+		if (!syncCell) {
+			return
+		}
+		const presentation = resolvePcoStatusPresentation(state)
+		tableRow.dataset.pcoSyncState = presentation.state
+		tableRow.dataset.pcoSyncLabel = presentation.label
+		syncCell.dataset.sortValue = `${presentation.state} ${presentation.label.toLowerCase()}`
+		let statusWrap = syncCell.querySelector('.services-pco-status')
+		if (!statusWrap) {
+			syncCell.textContent = ''
+			statusWrap = document.createElement('span')
+			statusWrap.className = 'services-pco-status'
+			syncCell.appendChild(statusWrap)
+		}
+		statusWrap.setAttribute('aria-label', `PCO sync: ${presentation.label}`)
+		let iconNode = statusWrap.querySelector('[data-pco-sync-icon]')
+		if (!iconNode) {
+			iconNode = document.createElement('span')
+			iconNode.className = 'pco-sync-icon'
+			iconNode.setAttribute('data-pco-sync-icon', '')
+			iconNode.setAttribute('aria-hidden', 'true')
+			statusWrap.appendChild(iconNode)
+		}
+		iconNode.dataset.state = presentation.iconState
+		let labelNode = statusWrap.querySelector('[data-pco-sync-label]')
+		if (!labelNode) {
+			labelNode = document.createElement('span')
+			labelNode.className = 'home-service-pco-status'
+			labelNode.setAttribute('data-pco-sync-label', '')
+			statusWrap.appendChild(labelNode)
+		}
+		labelNode.textContent = presentation.label
+	}
+
 	const getSelectedUpcomingRows = () => {
 		if (!upcomingTable) {
 			return []
@@ -1163,11 +1237,19 @@
 			return
 		}
 		results.forEach((rowResult) => {
-			if (rowResult?.status !== 'success' || !rowResult?.service_id) {
+			if (!rowResult?.service_id) {
 				return
 			}
 			const tableRow = upcomingTable.querySelector(`tr[data-service-id="${rowResult.service_id}"]`)
 			if (!tableRow) {
+				return
+			}
+			if (rowResult.status === 'success') {
+				updateUpcomingTablePcoStatus(tableRow, 'synced')
+			} else if (rowResult.status === 'failed' && rowResult.synced_at) {
+				updateUpcomingTablePcoStatus(tableRow, 'failed')
+			}
+			if (rowResult.status !== 'success') {
 				return
 			}
 			tableRow.dataset.pcoLinked = rowResult.pco_plan_id ? '1' : tableRow.dataset.pcoLinked

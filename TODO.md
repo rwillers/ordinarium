@@ -2,7 +2,7 @@
 
 Remaining work and follow-ups.
 
-- Move all drop downs in the app to common view/controller code for consistency.
+- Move all drop down menus in the app to common view/controller code for consistency.
 - PCO integration enhancements:
   - Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
   - Investigate ability to delta update PCO services.

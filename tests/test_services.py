@@ -6,6 +6,16 @@ from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_observance, resolve_season
 
 
+def _enable_pco_feature(app, user_id):
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set feature_flags=? where id=?",
+            ('{"pco_sync": true}', user_id),
+        )
+        db.commit()
+
+
 def test_services_new_redirects_to_next_id(auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=10)
@@ -242,6 +252,90 @@ def test_service_denies_other_user(auth_client, service_factory, user_factory):
     response = client.get("/service/22")
     assert response.status_code == 404
     assert b"Service not found" in response.data
+
+
+def test_service_pco_modal_shows_sync_button_when_unsynced(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=230,
+        service_date="2026-01-04",
+        title="PCO service",
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.execute(
+            "update services set updated_at=? where id=?",
+            ("2025-01-03T00:00:00", service_id),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id,
+              last_synced_at,
+              last_sync_status
+            ) values (?, ?, ?, ?, ?)
+            """,
+            (service_id, "type-1", "plan-1", "2025-01-02T00:00:00", "success"),
+        )
+        db.commit()
+
+    response = client.get(f"/service/{service_id}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Sync service" in html
+    assert "Remove link" in html
+
+
+def test_service_pco_modal_hides_sync_button_when_synced(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=231,
+        service_date="2026-01-11",
+        title="PCO synced service",
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.execute(
+            "update services set updated_at=? where id=?",
+            ("2025-01-01T00:00:00", service_id),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id,
+              last_synced_at,
+              last_sync_status
+            ) values (?, ?, ?, ?, ?)
+            """,
+            (service_id, "type-1", "plan-1", "2025-01-02T00:00:00", "success"),
+        )
+        db.commit()
+
+    response = client.get(f"/service/{service_id}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Sync service" not in html
+    assert "Remove link" in html
 
 
 def test_service_delete_removes_related_rows(app, auth_client, service_factory):

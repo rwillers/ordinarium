@@ -26,7 +26,7 @@ def register_service_overview_routes(bp):
         db = get_db()
         today = date.today().isoformat()
         current_services = db.execute(
-            "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
+            "select id, title, season, service_date, rite, observance_handle, updated_at from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
             (g.user["id"], today),
         ).fetchall()
         past_services = db.execute(
@@ -37,6 +37,7 @@ def register_service_overview_routes(bp):
             "select id, title, season, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
             (g.user["id"],),
         ).fetchall()
+        formatted_current_services = format_services(current_services)
         pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         pco_connection = None
         pco_service_types = []
@@ -54,8 +55,8 @@ def register_service_overview_routes(bp):
                     )
                 except Exception:
                     pco_service_types = []
-            if current_services:
-                current_ids = [row["id"] for row in current_services]
+            if formatted_current_services:
+                current_ids = [row["id"] for row in formatted_current_services]
                 placeholders = ",".join(["?"] * len(current_ids))
                 rows = db.execute(
                     f"""
@@ -74,10 +75,44 @@ def register_service_overview_routes(bp):
                     current_ids,
                 ).fetchall()
                 pco_links = {row["service_id"]: dict(row) for row in rows}
+            for service in formatted_current_services:
+                if not pco_connection:
+                    service["pco_status"] = {
+                        "state": "disconnected",
+                        "icon_state": "unlinked",
+                        "label": "Not connected",
+                    }
+                    continue
+                pco_link = pco_links.get(service["id"])
+                if not pco_link:
+                    service["pco_status"] = {
+                        "state": "unlinked",
+                        "icon_state": "unlinked",
+                        "label": "Not linked",
+                    }
+                    continue
+                sync_state = resolve_pco_sync_state(
+                    service.get("updated_at"),
+                    pco_link.get("last_synced_at"),
+                    pco_link.get("last_sync_status"),
+                )
+                status_label = "Synced"
+                status_icon = "synced"
+                if sync_state == "failed":
+                    status_label = "Last sync failed"
+                    status_icon = "unsynced"
+                elif sync_state == "unsynced":
+                    status_label = "Unsynced changes"
+                    status_icon = "unsynced"
+                service["pco_status"] = {
+                    "state": sync_state,
+                    "icon_state": status_icon,
+                    "label": status_label,
+                }
 
         return render_template(
             "services.html",
-            current_services=format_services(current_services),
+            current_services=formatted_current_services,
             past_services=format_services(past_services),
             copy_services=format_services(copy_services),
             default_rite=DEFAULT_RITE,
