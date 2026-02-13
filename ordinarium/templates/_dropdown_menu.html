@@ -4,6 +4,7 @@
 	toggle_text_class='',
 	toggle_aria_label='',
 	toggle_icon_class='menu-trigger-icon',
+	show_toggle_icon=true,
 	regular_toggle_base_class='button',
 	menu_classes='',
 	toggle_classes='',
@@ -21,7 +22,9 @@
 				<span class="menu-trigger-icon" aria-hidden="true"></span>
 			{% else %}
 				<span{% if toggle_text_class %} class="{{ toggle_text_class }}"{% endif %}>{{ toggle_text }}</span>
-				<span class="{{ toggle_icon_class }}" aria-hidden="true"></span>
+				{% if show_toggle_icon %}
+					<span class="{{ toggle_icon_class }}" aria-hidden="true"></span>
+				{% endif %}
 			{% endif %}
 		</button>
 		<div class="dropdown-menu-panel{% if panel_classes %} {{ panel_classes }}{% endif %}" role="menu" data-dropdown-panel{% if panel_attrs %} {{ panel_attrs | safe }}{% endif %}>

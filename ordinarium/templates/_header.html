@@ -5,9 +5,20 @@
 		<h2>A liturgy planning workspace</h2>
 		{% if user %}
 		<div class="header-actions">
-			<a class="account-link account-link-user" href="{{ url_for('main.account') }}">
-				<span class="account-link-name">{{ user.first_name }}</span>
-			</a>
+			{% call dropdown_menu(
+				variant='regular',
+				toggle_text=user.first_name,
+				toggle_text_class='account-link-name',
+				toggle_aria_label='Open account menu',
+				show_toggle_icon=false,
+				regular_toggle_base_class='',
+				menu_classes='account-menu',
+				toggle_classes='account-link account-link-user',
+				group='header-nav'
+			) %}
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.account') }}">Account</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.logout') }}">Log out</a>
+			{% endcall %}
 			{% call dropdown_menu(
 				variant='regular',
 				toggle_text='Menu',
@@ -28,8 +39,6 @@
 					{% if user.has_feature('admin') %}
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.admin_index') }}">Admin</a>
 					{% endif %}
-					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.account') }}">Account</a>
-					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.logout') }}">Log out</a>
 			{% endcall %}
 		</div>
 		{% else %}
