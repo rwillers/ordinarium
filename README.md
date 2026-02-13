@@ -76,6 +76,13 @@ The app uses a shared table pattern for tabular data. New table-like views shoul
 - Sorting and optional client-side pagination are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
 - Dropdown toggles, positioning, focus trapping, and ESC-to-close are handled by `ordinarium/static/scripts/dropdown_menu.js`.
 
+## UI patterns: shared dropdown menus
+
+- Use the shared Jinja macro in `ordinarium/templates/_dropdown_menu.html`.
+- Use the `icon` variant for row/action menus that include icons.
+- Use the `regular` variant for text-led menus (for example, the header "Menu" dropdown and service-page "Actions" dropdown).
+- The app-wide dropdown controller is `ordinarium/static/scripts/dropdown_menu.js`.
+
 ### Turnstile (Cloudflare)
 Turnstile is disabled by default in local/dev. It is enabled when both keys are set and
 `TURNSTILE_ENABLED` is true (defaults to false in dev, true otherwise).

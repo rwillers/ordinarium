@@ -1,3 +1,4 @@
+{% from '_dropdown_menu.html' import dropdown_menu %}
 <header>
 	<div class="inner">
 		<h1><a href="{{ url_for('main.index') }}">Ordinarium</a></h1>
@@ -7,24 +8,29 @@
 			<a class="account-link account-link-user" href="{{ url_for('main.account') }}">
 				<span class="account-link-name">{{ user.first_name }}</span>
 			</a>
-			<details class="nav-menu">
-				<summary class="nav-toggle" aria-label="Open navigation menu">
-					<span class="nav-toggle-label">Menu</span>
-					<span class="nav-toggle-icon" aria-hidden="true"></span>
-				</summary>
-				<nav class="nav-dropdown" aria-label="Primary">
-					<a href="{{ url_for('main.services') }}">Services</a>
-					<a href="{{ url_for('main.templates') }}">Templates</a>
+			{% call dropdown_menu(
+				variant='regular',
+				toggle_text='Menu',
+				toggle_text_class='nav-toggle-label',
+				toggle_icon_class='nav-toggle-icon',
+				toggle_aria_label='Open navigation menu',
+				regular_toggle_base_class='',
+				menu_classes='nav-menu',
+				toggle_classes='nav-toggle',
+				panel_attrs='aria-label="Primary"',
+				group='header-nav'
+			) %}
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.services') }}">Services</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.templates') }}">Templates</a>
 					{% if user.has_feature('pco_sync') %}
-					<a href="{{ url_for('main.integrations') }}">Integrations</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.integrations') }}">Integrations</a>
 					{% endif %}
 					{% if user.has_feature('admin') %}
-					<a href="{{ url_for('main.admin_index') }}">Admin</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.admin_index') }}">Admin</a>
 					{% endif %}
-					<a href="{{ url_for('main.account') }}">Account</a>
-					<a href="{{ url_for('main.logout') }}">Log out</a>
-				</nav>
-			</details>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.account') }}">Account</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.logout') }}">Log out</a>
+			{% endcall %}
 		</div>
 		{% else %}
 		<a class="account-link" href="{{ url_for('main.login') }}">

@@ -1,7 +1,10 @@
 {% macro dropdown_menu(
 	variant='regular',
 	toggle_text='Actions',
+	toggle_text_class='',
 	toggle_aria_label='',
+	toggle_icon_class='menu-trigger-icon',
+	regular_toggle_base_class='button',
 	menu_classes='',
 	toggle_classes='',
 	panel_classes='',
@@ -13,12 +16,12 @@
 ) -%}
 	{%- set is_icon = variant == 'icon' -%}
 	<div class="dropdown-menu dropdown-menu-{{ variant }}{% if menu_classes %} {{ menu_classes }}{% endif %}" data-dropdown-menu data-dropdown-variant="{{ variant }}"{% if group %} data-dropdown-group="{{ group }}"{% endif %}{% if layered %} data-dropdown-layered="true"{% endif %}{% if menu_attrs %} {{ menu_attrs | safe }}{% endif %}>
-		<button class="dropdown-menu-toggle{% if is_icon %} plan-icon-button{% else %} button{% endif %}{% if toggle_classes %} {{ toggle_classes }}{% endif %}" type="button" data-dropdown-toggle aria-expanded="false" aria-haspopup="true"{% if toggle_aria_label %} aria-label="{{ toggle_aria_label }}"{% endif %}{% if toggle_attrs %} {{ toggle_attrs | safe }}{% endif %}>
+		<button class="dropdown-menu-toggle{% if is_icon %} plan-icon-button{% elif regular_toggle_base_class %} {{ regular_toggle_base_class }}{% endif %}{% if toggle_classes %} {{ toggle_classes }}{% endif %}" type="button" data-dropdown-toggle aria-expanded="false" aria-haspopup="true"{% if toggle_aria_label %} aria-label="{{ toggle_aria_label }}"{% endif %}{% if toggle_attrs %} {{ toggle_attrs | safe }}{% endif %}>
 			{% if is_icon %}
 				<span class="menu-trigger-icon" aria-hidden="true"></span>
 			{% else %}
-				<span>{{ toggle_text }}</span>
-				<span class="menu-trigger-icon" aria-hidden="true"></span>
+				<span{% if toggle_text_class %} class="{{ toggle_text_class }}"{% endif %}>{{ toggle_text }}</span>
+				<span class="{{ toggle_icon_class }}" aria-hidden="true"></span>
 			{% endif %}
 		</button>
 		<div class="dropdown-menu-panel{% if panel_classes %} {{ panel_classes }}{% endif %}" role="menu" data-dropdown-panel{% if panel_attrs %} {{ panel_attrs | safe }}{% endif %}>
