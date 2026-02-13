@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_dropdown_menu.html' import dropdown_menu, dropdown_item_icon %}
 
 {% block content %}
 
@@ -7,19 +8,20 @@
 			<h2 class="plan-title">Plan a service</h2>
 			<div class="plan-header-actions plan-header-actions-spaced">
 				<div class="service-header-actions-inline">
-					<div class="service-header-actions-menu" data-service-header-menu>
-						<button class="button service-header-actions-toggle" type="button" data-service-header-menu-toggle aria-expanded="false" aria-haspopup="true">
-							<span>Actions</span>
-							<span class="menu-trigger-icon" aria-hidden="true"></span>
-						</button>
-						<div class="service-header-actions-panel" role="menu">
-							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service_id) }}">View liturgy</a>
-							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_export_pdf', service_id=service_id) }}">Export to PDF</a>
-							<a class="service-header-actions-item" role="menuitem" href="{{ url_for('main.service_export_docx', service_id=service_id) }}">Export to Word</a>
-							<button class="service-header-actions-item" role="menuitem" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share service link</button>
-							<a class="service-header-actions-item service-header-actions-item-mobile-only" role="menuitem" href="{{ url_for('main.services') }}">Back to services</a>
-						</div>
-					</div>
+					{% call dropdown_menu(
+						variant='regular',
+						toggle_text='Actions',
+						toggle_aria_label='Service actions',
+						menu_classes='service-header-actions-menu',
+						toggle_classes='service-header-actions-toggle',
+						group='service-page'
+					) %}
+						<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service_id) }}">View liturgy</a>
+						<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_export_pdf', service_id=service_id) }}">Export to PDF</a>
+						<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_export_docx', service_id=service_id) }}">Export to Word</a>
+						<button class="dropdown-menu-item" role="menuitem" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share service link</button>
+						<a class="dropdown-menu-item service-header-actions-item-mobile-only" role="menuitem" href="{{ url_for('main.services') }}">Back to services</a>
+					{% endcall %}
 					<a class="button service-header-back-desktop" href="{{ url_for('main.services') }}">Back to services</a>
 				</div>
 			</div>
@@ -237,25 +239,29 @@
 				</label>
 			</td>
 			<td class="shared-table-actions">
-				<div class="shared-table-menu plan-row-menu" data-row-menu>
-					<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Row actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
-					<div class="plan-row-menu-panel" role="menu">
+				{% call dropdown_menu(
+					variant='icon',
+					toggle_aria_label='Row actions',
+					menu_classes='shared-table-menu',
+					toggle_classes='plan-menu-toggle',
+					group='service-page',
+					layered=true
+				) %}
 						{% if ordinary.type == 'custom' %}
-						<button class="plan-row-menu-item" type="button" data-custom-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</button>
+						<button class="dropdown-menu-item" type="button" data-custom-edit role="menuitem">{{ dropdown_item_icon('✎') }}Edit</button>
 						<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
 							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-							<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
+							<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
 						</form>
 						{% endif %}
 						{% if lesson_kind %}
-						<button class="plan-row-menu-item" type="button" data-lesson-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">⇄</span>Override passage</button>
+						<button class="dropdown-menu-item" type="button" data-lesson-edit role="menuitem">{{ dropdown_item_icon('⇄') }}Override passage</button>
 						{% endif %}
 						{% if is_offertory %}
-						<button class="plan-row-menu-item" type="button" data-offertory-edit role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✓</span>Select sentence</button>
+						<button class="dropdown-menu-item" type="button" data-offertory-edit role="menuitem">{{ dropdown_item_icon('✓') }}Select sentence</button>
 						{% endif %}
-						<button class="plan-row-menu-item" type="button" data-custom-add role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new</button>
-					</div>
-				</div>
+						<button class="dropdown-menu-item" type="button" data-custom-add role="menuitem">{{ dropdown_item_icon('＋') }}Add new</button>
+				{% endcall %}
 			</td>
 			<td class="shared-table-actions">
 				<span class="plan-handle shared-table-handle" aria-hidden="true">↕</span>
@@ -392,45 +398,9 @@
 			const saveStatusIcon = document.querySelector('[data-save-status-icon]')
 			const saveStatusChip = document.querySelector('[data-save-status-chip]')
 			const pcoManageButtons = document.querySelectorAll('[data-pco-manage]')
-			const serviceHeaderActionMenus = Array.from(document.querySelectorAll('[data-service-header-menu]'))
-			const serviceHeaderActionMenuToggles = Array.from(document.querySelectorAll('[data-service-header-menu-toggle]'))
-
-			const closeServiceHeaderActionMenus = () => {
-				serviceHeaderActionMenus.forEach((menu) => {
-					menu.classList.remove('is-open')
-					const toggle = menu.querySelector('[data-service-header-menu-toggle]')
-					if (toggle) {
-						toggle.setAttribute('aria-expanded', 'false')
-					}
-				})
-			}
-
-			const openServiceHeaderActionMenu = (menu) => {
-				closeServiceHeaderActionMenus()
-				menu.classList.add('is-open')
-				const toggle = menu.querySelector('[data-service-header-menu-toggle]')
-				if (toggle) {
-					toggle.setAttribute('aria-expanded', 'true')
-				}
-			}
-
-			if (serviceHeaderActionMenuToggles.length) {
-				serviceHeaderActionMenuToggles.forEach((toggle) => {
-					toggle.addEventListener('click', (event) => {
-						event.preventDefault()
-						event.stopPropagation()
-						const menu = toggle.closest('[data-service-header-menu]')
-						if (!menu) {
-							return
-						}
-						const willOpen = !menu.classList.contains('is-open')
-						if (!willOpen) {
-							closeServiceHeaderActionMenus()
-							return
-						}
-						openServiceHeaderActionMenu(menu)
-					})
-				})
+			const dropdownGroup = 'service-page'
+			const closeServiceDropdownMenus = () => {
+				window.dropdownMenus?.closeGroup(dropdownGroup)
 			}
 
 		const openShareModal = (url) => {
@@ -486,10 +456,7 @@
 							const data = await response.json()
 							if (data && data.share_url) {
 								openShareModal(data.share_url)
-								const actionsMenu = shareButton.closest('[data-service-header-menu]')
-								if (actionsMenu) {
-									closeServiceHeaderActionMenus()
-								}
+								window.dropdownMenus?.closeGroup(dropdownGroup)
 							}
 						} catch (error) {
 							// Ignore share failures.
@@ -521,19 +488,6 @@
 					})
 				})
 			}
-
-			document.addEventListener('pointerdown', (event) => {
-				const target = event.target instanceof Element ? event.target : null
-				if (!target || !target.closest('[data-service-header-menu]')) {
-					closeServiceHeaderActionMenus()
-				}
-			}, true)
-
-			document.addEventListener('keydown', (event) => {
-				if (event.key === 'Escape') {
-					closeServiceHeaderActionMenus()
-				}
-			}, true)
 
 		if (shareCopyButton && shareModalUrl) {
 			shareCopyButton.addEventListener('click', async () => {
@@ -1061,24 +1015,6 @@
 		}
 		setPcoPanelVisibility()
 
-		const closeRowMenus = (exceptMenu = null) => {
-			const menus = document.querySelectorAll('[data-row-menu]')
-			menus.forEach((menu) => {
-				if (menu === exceptMenu) {
-					return
-				}
-				menu.classList.remove('is-open')
-				const toggle = menu.querySelector('[data-row-menu-toggle]')
-				if (toggle) {
-					toggle.setAttribute('aria-expanded', 'false')
-				}
-				const row = menu.closest('.plan-row')
-				if (row) {
-					row.classList.remove('is-menu-open')
-				}
-			})
-		}
-
 		const openCustomModal = (mode) => {
 			if (!customModal) {
 				return
@@ -1158,30 +1094,13 @@
 		}
 
 		document.addEventListener('click', (event) => {
-			const rowMenuToggle = event.target.closest('[data-row-menu-toggle]')
-			if (rowMenuToggle) {
-				event.stopPropagation()
-				const menu = rowMenuToggle.closest('[data-row-menu]')
-				if (!menu) {
-					return
-				}
-				const isOpen = !menu.classList.contains('is-open')
-				closeRowMenus(menu)
-				menu.classList.toggle('is-open', isOpen)
-				rowMenuToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
-				const row = menu.closest('.plan-row')
-				if (row) {
-					row.classList.toggle('is-menu-open', isOpen)
-				}
-				return
-			}
 			const customEditButton = event.target.closest('[data-custom-edit]')
 			if (customEditButton) {
 				const row = customEditButton.closest('.plan-row')
 				if (!row) {
 					return
 				}
-				closeRowMenus()
+				closeServiceDropdownMenus()
 				openCustomModal({
 					type: 'edit',
 					id: row.getAttribute('data-custom-id'),
@@ -1196,7 +1115,7 @@
 				if (!row) {
 					return
 				}
-				closeRowMenus()
+				closeServiceDropdownMenus()
 				openCustomModal({
 					type: 'add',
 					insertAfter: row.getAttribute('data-plan-token')
@@ -1209,7 +1128,7 @@
 				if (!row) {
 					return
 				}
-				closeRowMenus()
+				closeServiceDropdownMenus()
 				openLessonModal(row)
 				return
 			}
@@ -1219,12 +1138,9 @@
 				if (!row) {
 					return
 				}
-				closeRowMenus()
+				closeServiceDropdownMenus()
 				openOffertoryModal(row)
 				return
-			}
-			if (!event.target.closest('[data-row-menu]')) {
-				closeRowMenus()
 			}
 		})
 
@@ -1557,28 +1473,32 @@
 			row.appendChild(main)
 
 			const menu = document.createElement('div')
-			menu.className = 'plan-row-menu'
-			menu.setAttribute('data-row-menu', '')
+			menu.className = 'shared-table-menu dropdown-menu dropdown-menu-icon'
+			menu.setAttribute('data-dropdown-menu', '')
+			menu.setAttribute('data-dropdown-variant', 'icon')
+			menu.setAttribute('data-dropdown-group', dropdownGroup)
+			menu.setAttribute('data-dropdown-layered', 'true')
 
 			const toggle = document.createElement('button')
-			toggle.className = 'plan-icon-button plan-menu-toggle'
+			toggle.className = 'plan-icon-button dropdown-menu-toggle plan-menu-toggle'
 			toggle.type = 'button'
-			toggle.setAttribute('data-row-menu-toggle', '')
+			toggle.setAttribute('data-dropdown-toggle', '')
 			toggle.setAttribute('aria-expanded', 'false')
 			toggle.setAttribute('aria-haspopup', 'true')
 			toggle.setAttribute('aria-label', 'Row actions')
 			toggle.innerHTML = '<span class="menu-trigger-icon" aria-hidden="true"></span>'
 
 			const panel = document.createElement('div')
-			panel.className = 'plan-row-menu-panel'
+			panel.className = 'dropdown-menu-panel'
 			panel.setAttribute('role', 'menu')
+			panel.setAttribute('data-dropdown-panel', '')
 
 			const editButton = document.createElement('button')
-			editButton.className = 'plan-row-menu-item'
+			editButton.className = 'dropdown-menu-item'
 			editButton.type = 'button'
 			editButton.setAttribute('data-custom-edit', '')
 			editButton.setAttribute('role', 'menuitem')
-			editButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit'
+			editButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">✎</span>Edit'
 
 			const deleteForm = document.createElement('form')
 			deleteForm.action = serviceId
@@ -1598,19 +1518,19 @@
 			}
 
 			const deleteButton = document.createElement('button')
-			deleteButton.className = 'plan-row-menu-item plan-row-menu-delete'
+			deleteButton.className = 'dropdown-menu-item dropdown-menu-delete'
 			deleteButton.type = 'submit'
 			deleteButton.setAttribute('role', 'menuitem')
-			deleteButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete'
+			deleteButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">✕</span>Delete'
 
 			deleteForm.appendChild(deleteButton)
 
 			const addButton = document.createElement('button')
-			addButton.className = 'plan-row-menu-item'
+			addButton.className = 'dropdown-menu-item'
 			addButton.type = 'button'
 			addButton.setAttribute('data-custom-add', '')
 			addButton.setAttribute('role', 'menuitem')
-			addButton.innerHTML = '<span class="plan-row-menu-icon" aria-hidden="true">＋</span>Add new'
+			addButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">＋</span>Add new'
 
 			panel.appendChild(editButton)
 			panel.appendChild(deleteForm)
@@ -1848,7 +1768,7 @@
 				if (row) {
 					row.remove()
 				}
-				closeRowMenus()
+				closeServiceDropdownMenus()
 				updatePlanInputs()
 				setSaveError('')
 				setSaveStatus('Saved', 'saved')
@@ -1886,11 +1806,6 @@
 			}
 		})
 
-		document.addEventListener('keydown', (event) => {
-			if (event.key === 'Escape') {
-				closeRowMenus()
-			}
-		})
 	</script>
 
 </div>

@@ -464,11 +464,37 @@ div#page {
 		position: relative;
 	}
 	.service-header-actions-toggle {
-		display: inline-flex;
-		align-items: center;
 		gap: 0.4em;
 	}
-	.service-header-actions-panel {
+	.dropdown-menu {
+		--dropdown-panel-min-width: 11.5em;
+		--dropdown-item-font-size: 0.9em;
+		position: relative;
+		display: inline-block;
+	}
+	.dropdown-menu-regular {
+		--dropdown-panel-min-width: 12.5em;
+		--dropdown-item-font-size: 0.9em;
+	}
+	.dropdown-menu-icon {
+		--dropdown-item-font-size: 0.9em;
+	}
+	.dropdown-menu-toggle {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.dropdown-menu-regular .dropdown-menu-toggle {
+		gap: 0.4em;
+	}
+	.dropdown-menu-icon .dropdown-menu-toggle {
+		width: 2em;
+		height: 2em;
+		border-radius: var(--radius-sm);
+		font-size: 1em;
+		line-height: 1;
+	}
+	.dropdown-menu-panel {
 		position: absolute;
 		right: 0;
 		top: calc(100% + 0.35em);
@@ -476,26 +502,29 @@ div#page {
 		border: 1px solid rgba(27, 27, 27, 0.15);
 		border-radius: var(--radius-sm);
 		box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-		min-width: 12.5em;
+		min-width: var(--dropdown-panel-min-width);
 		max-width: min(14.5em, calc(100vw - 40px));
 		padding: 0.4em;
+		display: flex;
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0.2em;
 		box-sizing: border-box;
-		display: flex;
 		opacity: 0;
 		pointer-events: none;
 		transform: translateY(-6px);
 		transition: opacity 0.15s ease, transform 0.15s ease;
 		z-index: 120;
 	}
-	.service-header-actions-menu.is-open .service-header-actions-panel {
+	.dropdown-menu.is-open .dropdown-menu-panel {
 		opacity: 1;
 		pointer-events: auto;
 		transform: translateY(0);
 	}
-	.service-header-actions-panel .service-header-actions-item {
+	.dropdown-menu-panel form {
+		margin: 0;
+	}
+	.dropdown-menu-item {
 		background: transparent;
 		border: none;
 		width: 100%;
@@ -506,21 +535,36 @@ div#page {
 		white-space: nowrap;
 		border-radius: var(--radius-sm);
 		font-family: var(--header-font-family);
-		font-size: 0.9em;
+		font-size: var(--dropdown-item-font-size);
 		color: var(--body-color) !important;
 		text-decoration: none;
 		cursor: pointer;
 		display: inline-flex;
 		align-items: center;
+		gap: 0.5em;
 		justify-content: flex-start;
 	}
-	.service-header-actions-panel .service-header-actions-item:hover,
-	.service-header-actions-panel .service-header-actions-item:focus-visible {
+	.dropdown-menu-item:hover,
+	.dropdown-menu-item:focus-visible {
 		background: rgba(118, 50, 63, 0.08);
 		color: var(--body-color);
 	}
-	.service-header-actions-panel .service-header-actions-item:focus-visible {
+	.dropdown-menu-item:focus-visible {
 		outline: none;
+	}
+	.dropdown-menu-delete {
+		color: var(--body-color);
+	}
+	.dropdown-menu-item.is-disabled {
+		color: rgba(27, 27, 27, 0.35);
+		cursor: not-allowed;
+	}
+	.dropdown-menu-item-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.1em;
+		color: inherit;
 	}
 	.service-header-actions-item-mobile-only {
 		display: none;
@@ -1074,28 +1118,34 @@ div#page {
 		align-items: center;
 		justify-content: flex-end;
 	}
-	.shared-table-menu .plan-row-menu-panel {
+	.shared-table-menu .plan-row-menu-panel,
+	.shared-table-menu .dropdown-menu-panel {
 		right: 0;
 	}
-	.shared-table .plan-menu-toggle {
+	.shared-table .plan-menu-toggle,
+	.shared-table .dropdown-menu-icon .dropdown-menu-toggle {
 		margin: -0.45em;
 		transform: translateY(-2px);
 	}
-	.shared-table .plan-row-menu {
+	.shared-table .plan-row-menu,
+	.shared-table .dropdown-menu {
 		position: relative;
 		right: auto;
 		top: auto;
 		transform: none;
 		z-index: 1;
 	}
-	.shared-table .plan-row-menu.is-open {
+	.shared-table .plan-row-menu.is-open,
+	.shared-table .dropdown-menu.is-open {
 		z-index: 1301;
 	}
-	.shared-table .plan-row-menu-panel {
+	.shared-table .plan-row-menu-panel,
+	.shared-table .dropdown-menu-panel {
 		top: calc(100% + 0.25em);
 		z-index: 1200;
 	}
-	.shared-table .plan-row-menu-panel.is-layered {
+	.shared-table .plan-row-menu-panel.is-layered,
+	.shared-table .dropdown-menu-panel.is-layered {
 		position: fixed;
 		right: auto;
 		z-index: 2100;

@@ -62,7 +62,7 @@ The app uses a shared table pattern for tabular data. New table-like views shoul
 - Wrap each shared table in `<div class="shared-table-wrap">...</div>` to keep horizontal scrolling inside the rounded table border on small screens.
 - Use the `shared-table` class on a `table` element.
 - `th[data-sort-key]` with a `.shared-table-sort` button enables click-to-sort and chevrons.
-- Action menus use the existing plan row menu markup (`.plan-row-menu`, `.plan-menu-toggle`, `.plan-row-menu-panel`) inside a `.shared-table-actions` cell.
+- Action menus use the shared dropdown macro (`_dropdown_menu.html`) with the `icon` variant inside a `.shared-table-actions` cell.
 - Optional columns:
   - Selection: `th.shared-table-select` and `td.shared-table-select` with row checkboxes.
   - Action: `th.shared-table-actions` (often blank) with dropdown menu.
@@ -73,7 +73,8 @@ The app uses a shared table pattern for tabular data. New table-like views shoul
   - Configure page size with `data-page-size="25"` and choices via `data-page-size-options="10,25,50,100"`.
 
 **Behavior**
-- Sorting, menu toggles, focus trapping, ESC-to-close, and optional client-side pagination are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
+- Sorting and optional client-side pagination are handled by `ordinarium/static/scripts/shared_table.js` for any `.shared-table` on the page.
+- Dropdown toggles, positioning, focus trapping, and ESC-to-close are handled by `ordinarium/static/scripts/dropdown_menu.js`.
 
 ### Turnstile (Cloudflare)
 Turnstile is disabled by default in local/dev. It is enabled when both keys are set and

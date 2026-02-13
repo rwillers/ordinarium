@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% from '_dropdown_menu.html' import dropdown_menu, dropdown_item_icon %}
 
 {% block content %}
 
@@ -91,17 +92,20 @@
 					</td>
 					{% endif %}
 					<td class="shared-table-actions">
-						<div class="shared-table-menu plan-row-menu" data-row-menu>
-							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
-							<div class="plan-row-menu-panel" role="menu">
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
-								<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
-									<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-									<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
-								</form>
-							</div>
-						</div>
+						{% call dropdown_menu(
+							variant='icon',
+							toggle_aria_label='Service actions',
+							menu_classes='shared-table-menu',
+							toggle_classes='plan-menu-toggle',
+							layered=true
+						) %}
+							<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}">{{ dropdown_item_icon('✎') }}Edit</a>
+							<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}">{{ dropdown_item_icon('▤') }}View</a>
+							<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+								<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+								<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
+							</form>
+						{% endcall %}
 					</td>
 				</tr>
 			{% endfor %}
@@ -149,17 +153,20 @@
 					</td>
 					<td data-sort-value="{{ service.season | lower }}">{{ service.season or '—' }}</td>
 					<td class="shared-table-actions">
-						<div class="shared-table-menu plan-row-menu" data-row-menu>
-							<button class="plan-icon-button plan-menu-toggle" type="button" data-row-menu-toggle aria-expanded="false" aria-haspopup="true" aria-label="Service actions"><span class="menu-trigger-icon" aria-hidden="true"></span></button>
-							<div class="plan-row-menu-panel" role="menu">
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">✎</span>Edit</a>
-								<a class="plan-row-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}"><span class="plan-row-menu-icon" aria-hidden="true">▤</span>View</a>
-								<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
-									<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-									<button class="plan-row-menu-item plan-row-menu-delete" type="submit" role="menuitem"><span class="plan-row-menu-icon" aria-hidden="true">✕</span>Delete</button>
-								</form>
-							</div>
-						</div>
+						{% call dropdown_menu(
+							variant='icon',
+							toggle_aria_label='Service actions',
+							menu_classes='shared-table-menu',
+							toggle_classes='plan-menu-toggle',
+							layered=true
+						) %}
+							<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service', service_id=service.id) }}">{{ dropdown_item_icon('✎') }}Edit</a>
+							<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_view', service_id=service.id) }}">{{ dropdown_item_icon('▤') }}View</a>
+							<form action="{{ url_for('main.service_delete', service_id=service.id) }}" method="post" onsubmit="return confirm('Delete this service? This cannot be undone.')">
+								<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+								<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
+							</form>
+						{% endcall %}
 					</td>
 				</tr>
 			{% endfor %}
