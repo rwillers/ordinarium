@@ -216,8 +216,21 @@
 			{% endif %}
 		{% endif %}
 		{% set is_offertory = ordinary.title == 'The Offertory' %}
+		{% set proper_key = '' %}
+		{% set proper_selected_id = '' %}
+		{% if ordinary.title == 'The Collect of the Day' %}
+			{% set proper_key = 'collect_of_the_day' %}
+			{% if collect_override_id %}
+				{% set proper_selected_id = collect_override_id %}
+			{% endif %}
+		{% elif ordinary.title == 'The Sursum Corda' %}
+			{% set proper_key = 'proper_preface' %}
+			{% if proper_preface_override_id %}
+				{% set proper_selected_id = proper_preface_override_id %}
+			{% endif %}
+		{% endif %}
 		{% set checkbox_id = 'include-' ~ loop.index0 %}
-		<tr class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
+		<tr class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
 			<td class="shared-table-select">
 				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 			</td>
@@ -227,6 +240,9 @@
 						{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}
 						{% if lesson_kind %}
 						<span class="plan-lesson-override"{% if not lesson_overrides.get(lesson_kind) %} hidden{% endif %} data-lesson-indicator>Passage overridden</span>
+						{% endif %}
+						{% if proper_key %}
+						<span class="plan-lesson-override"{% if not proper_selected_id %} hidden{% endif %} data-proper-indicator>Proper overridden</span>
 						{% endif %}
 					</span>
 					{% if ordinary.text %}
@@ -256,6 +272,9 @@
 						{% endif %}
 						{% if lesson_kind %}
 						<button class="dropdown-menu-item" type="button" data-lesson-edit role="menuitem">{{ dropdown_item_icon('⇄') }}Override passage</button>
+						{% endif %}
+						{% if proper_key %}
+						<button class="dropdown-menu-item" type="button" data-proper-edit role="menuitem">{{ dropdown_item_icon('⇄') }}Override proper</button>
 						{% endif %}
 						{% if is_offertory %}
 						<button class="dropdown-menu-item" type="button" data-offertory-edit role="menuitem">{{ dropdown_item_icon('✓') }}Select sentence</button>
@@ -375,6 +394,42 @@
 				</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-offertory-sentence-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="share-modal" id="proper-override-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-proper-override-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="proper-override-title">
+			<h3 id="proper-override-title">Override proper</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.service_proper_override', service_id=service_id) }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<input type="hidden" name="proper_key" value="">
+				<p class="plan-save-error" id="proper-override-error" aria-live="polite"></p>
+				<p>
+					<label class="plan-field">
+						<span>Proper</span>
+						<div class="plan-radio-group">
+							<label class="plan-radio-option">
+								<input type="radio" name="proper_mode" value="default">
+								<span>Use default proper</span>
+							</label>
+							<label class="plan-radio-option">
+								<input type="radio" name="proper_mode" value="custom">
+								<span>Use selected proper</span>
+							</label>
+						</div>
+					</label>
+				</p>
+				<p data-proper-custom-field>
+					<label class="plan-field">
+						<span>Proper text</span>
+						<select name="proper_text_id" id="proper-text-select"></select>
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-proper-override-close>Cancel</button>
 					<button class="plan-submit" type="submit">Save</button>
 				</div>
 			</form>
@@ -735,10 +790,12 @@
 		const customModal = document.querySelector('#custom-element-modal')
 		const lessonModal = document.querySelector('#lesson-passage-modal')
 		const offertoryModal = document.querySelector('#offertory-sentence-modal')
+		const properModal = document.querySelector('#proper-override-modal')
 		const templateSelect = document.querySelector('#custom-template-select')
 		const customForm = customModal?.querySelector('form')
 		const lessonForm = lessonModal?.querySelector('form')
 		const offertoryForm = offertoryModal?.querySelector('form')
+		const properForm = properModal?.querySelector('form')
 		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
 		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
 		const lessonCustomInput = lessonModal?.querySelector('input[name="custom_passage"]')
@@ -747,8 +804,18 @@
 		const lessonCustomField = lessonModal?.querySelector('[data-lesson-custom-field]')
 		const offertorySelect = offertoryModal?.querySelector('#offertory-sentence-select')
 		const offertoryError = offertoryModal?.querySelector('#offertory-sentence-error')
+		const properKeyInput = properForm?.querySelector('input[name="proper_key"]')
+		const properModeInputs = properModal?.querySelectorAll('input[name="proper_mode"]')
+		const properTextSelect = properModal?.querySelector('#proper-text-select')
+		const properError = properModal?.querySelector('#proper-override-error')
+		const properCustomField = properModal?.querySelector('[data-proper-custom-field]')
+		const properOptionMap = {
+			collect_of_the_day: {{ proper_collect_options | tojson }},
+			proper_preface: {{ proper_preface_options | tojson }}
+		}
 		let activeLessonRow = null
 		let activeOffertoryRow = null
+		let activeProperRow = null
 	const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
 
 	const pcoServiceTypeSelects = document.querySelectorAll('[data-pco-service-type]')
@@ -1132,6 +1199,16 @@
 				openLessonModal(row)
 				return
 			}
+			const properEditButton = event.target.closest('[data-proper-edit]')
+			if (properEditButton) {
+				const row = properEditButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				closeServiceDropdownMenus()
+				openProperModal(row)
+				return
+			}
 			const offertoryEditButton = event.target.closest('[data-offertory-edit]')
 			if (offertoryEditButton) {
 				const row = offertoryEditButton.closest('.plan-row')
@@ -1226,10 +1303,82 @@
 			activeOffertoryRow = null
 		}
 
+		const setProperMode = (mode) => {
+			if (!properModeInputs || !properModeInputs.length) {
+				return
+			}
+			properModeInputs.forEach((input) => {
+				input.checked = input.value === mode
+			})
+			if (properTextSelect) {
+				properTextSelect.disabled = mode !== 'custom'
+			}
+			if (properCustomField) {
+				properCustomField.hidden = mode !== 'custom'
+			}
+		}
+
+		const renderProperOptions = (properKey, selectedId) => {
+			if (!properTextSelect) {
+				return
+			}
+			const options = Array.isArray(properOptionMap[properKey]) ? properOptionMap[properKey] : []
+			properTextSelect.innerHTML = '<option value="">Select a proper text</option>'
+			options.forEach((option) => {
+				const element = document.createElement('option')
+				element.value = String(option.id)
+				element.textContent = option.label || String(option.id)
+				properTextSelect.appendChild(element)
+			})
+			if (selectedId) {
+				properTextSelect.value = String(selectedId)
+			}
+		}
+
+		const openProperModal = (row) => {
+			if (!properModal || !row) {
+				return
+			}
+			activeProperRow = row
+			const properKey = row.getAttribute('data-proper-key') || ''
+			const selectedId = row.getAttribute('data-proper-selected-id') || ''
+			if (properKeyInput) {
+				properKeyInput.value = properKey
+			}
+			renderProperOptions(properKey, selectedId)
+			if (properError) {
+				properError.textContent = ''
+				properError.style.display = 'none'
+			}
+			setProperMode(selectedId ? 'custom' : 'default')
+			properModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (selectedId && properTextSelect) {
+				properTextSelect.focus()
+			}
+		}
+
+		const closeProperModal = () => {
+			if (!properModal) {
+				return
+			}
+			properModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			activeProperRow = null
+		}
+
 		if (lessonModeInputs && lessonModeInputs.length) {
 			lessonModeInputs.forEach((input) => {
 				input.addEventListener('change', () => {
 					setLessonMode(input.value)
+				})
+			})
+		}
+
+		if (properModeInputs && properModeInputs.length) {
+			properModeInputs.forEach((input) => {
+				input.addEventListener('change', () => {
+					setProperMode(input.value)
 				})
 			})
 		}
@@ -1339,6 +1488,59 @@
 			})
 		}
 
+		if (properForm) {
+			properForm.addEventListener('submit', async (event) => {
+				event.preventDefault()
+				if (!properForm.action) {
+					return
+				}
+				if (properError) {
+					properError.textContent = ''
+					properError.style.display = 'none'
+				}
+				const formData = new FormData(properForm)
+				try {
+					const response = await fetch(properForm.action, {
+						method: 'POST',
+						body: formData,
+						headers: {
+							Accept: 'application/json',
+							...csrfHeaders
+						}
+					})
+					if (!response.ok) {
+						const data = await response.json().catch(() => null)
+						const message = data?.error || 'Unable to save proper override.'
+						if (properError) {
+							properError.textContent = message
+							properError.style.display = 'block'
+						}
+						return
+					}
+					const data = await response.json().catch(() => null)
+					const selectedId = data?.proper_text_id
+					const properKey = data?.proper_key
+					if (activeProperRow && properKey && activeProperRow.getAttribute('data-proper-key') === properKey) {
+						activeProperRow.setAttribute(
+							'data-proper-selected-id',
+							selectedId ? String(selectedId) : ''
+						)
+						const indicator = activeProperRow.querySelector('[data-proper-indicator]')
+						if (indicator) {
+							indicator.hidden = !selectedId
+						}
+					}
+					markPcoUnsynced()
+					closeProperModal()
+				} catch (error) {
+					if (properError) {
+						properError.textContent = 'Unable to save proper override.'
+						properError.style.display = 'block'
+					}
+				}
+			})
+		}
+
 
 		if (customModal) {
 			customModal.addEventListener('click', (event) => {
@@ -1395,6 +1597,14 @@
 			offertoryModal.addEventListener('click', (event) => {
 				if (event.target && event.target.matches('[data-offertory-sentence-close]')) {
 					closeOffertoryModal()
+				}
+			})
+		}
+
+		if (properModal) {
+			properModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-proper-override-close]')) {
+					closeProperModal()
 				}
 			})
 		}

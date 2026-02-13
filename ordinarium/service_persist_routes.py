@@ -55,6 +55,7 @@ def register_service_persist_routes(bp):
                 return jsonify({"ok": False, "error": "Service not found."}), 404
             return render_error("Service not found.", 404)
         lesson_overrides = existing_data.get("lesson_overrides") or {}
+        proper_overrides = existing_data.get("proper_overrides") or {}
         payload = {
             "user_id": g.user["id"],
             "title": existing_data.get("title"),
@@ -64,6 +65,7 @@ def register_service_persist_routes(bp):
             "observance_handle": existing_data.get("observance_handle"),
             "lesson_overrides": lesson_overrides,
             "offertory_sentence_id": existing_data.get("offertory_sentence_id"),
+            "proper_overrides": proper_overrides,
         }
         payload.update(
             {

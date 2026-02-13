@@ -17,6 +17,7 @@ def blank_service_payload(user_id, rite=DEFAULT_RITE):
         "observance_handle": None,
         "lesson_overrides": {},
         "offertory_sentence_id": None,
+        "proper_overrides": {},
     }
 
 
@@ -34,8 +35,9 @@ def create_service(db, payload):
           service_date,
           observance_handle,
           lesson_overrides,
-          offertory_sentence_id
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          offertory_sentence_id,
+          proper_overrides
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             serialized["user_id"],
@@ -48,6 +50,7 @@ def create_service(db, payload):
             serialized["observance_handle"],
             serialized["lesson_overrides"],
             serialized["offertory_sentence_id"],
+            serialized["proper_overrides"],
         ),
     )
     return cursor.lastrowid
@@ -65,6 +68,7 @@ def serialize_service_payload(payload):
         "observance_handle": payload.get("observance_handle"),
         "lesson_overrides": dump_json_value(payload.get("lesson_overrides")),
         "offertory_sentence_id": payload.get("offertory_sentence_id"),
+        "proper_overrides": dump_json_value(payload.get("proper_overrides")),
     }
 
 
@@ -82,7 +86,8 @@ def load_service_payload(db, service_id, user_id=None):
           service_date,
           observance_handle,
           lesson_overrides,
-          offertory_sentence_id
+          offertory_sentence_id,
+          proper_overrides
         from services where id=? {user_filter} limit 1
         """
     params = [service_id]
@@ -95,6 +100,7 @@ def load_service_payload(db, service_id, user_id=None):
         return None
     payload = dict(row)
     payload["lesson_overrides"] = _parse_json_object(payload.get("lesson_overrides"))
+    payload["proper_overrides"] = _parse_json_object(payload.get("proper_overrides"))
     return payload
 
 
@@ -112,6 +118,7 @@ def update_service_columns(db, service_id, payload):
           observance_handle=?,
           lesson_overrides=?,
           offertory_sentence_id=?,
+          proper_overrides=?,
           updated_at=CURRENT_TIMESTAMP
         where id=?
         """,
@@ -125,6 +132,7 @@ def update_service_columns(db, service_id, payload):
             serialized["observance_handle"],
             serialized["lesson_overrides"],
             serialized["offertory_sentence_id"],
+            serialized["proper_overrides"],
             service_id,
         ),
     )
@@ -153,7 +161,8 @@ def load_service_for_text(service_id, user_id=None):
               service_date,
               observance_handle,
               lesson_overrides,
-              offertory_sentence_id
+              offertory_sentence_id,
+              proper_overrides
             from services where id=? and user_id=? limit 1
             """,
             (service_id, user_id),
@@ -169,7 +178,8 @@ def load_service_for_text(service_id, user_id=None):
               service_date,
               observance_handle,
               lesson_overrides,
-              offertory_sentence_id
+              offertory_sentence_id,
+              proper_overrides
             from services where id=? limit 1
             """,
             (service_id,),
@@ -180,5 +190,6 @@ def load_service_for_text(service_id, user_id=None):
         "observance_handle": saved_service["observance_handle"],
         "lesson_overrides": _parse_json_object(saved_service["lesson_overrides"]),
         "offertory_sentence_id": saved_service["offertory_sentence_id"],
+        "proper_overrides": _parse_json_object(saved_service["proper_overrides"]),
     }
     return saved_service, saved_data

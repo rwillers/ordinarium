@@ -4,6 +4,35 @@ from datetime import date, timedelta
 import ordinarium.text_routes as text_routes
 from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_observance, resolve_season
+from ordinarium.plan_propers import _load_collect_options
+
+
+def _service_proper_override_rows(db):
+    collect = db.execute(
+        "select id, text from texts where type=? and filter_type=? order by id limit 1",
+        ("collect", "proper"),
+    ).fetchone()
+    preface = db.execute(
+        "select id, text from texts where type=? order by id limit 1",
+        ("proper_preface",),
+    ).fetchone()
+    assert collect is not None
+    assert preface is not None
+    return collect, preface
+
+
+def _first_content_excerpt(text, limit=40):
+    if not text:
+        return ""
+    for line in text.splitlines():
+        candidate = line.strip()
+        if not candidate or candidate.startswith("######"):
+            continue
+        candidate = candidate.replace("*", "").strip()
+        if len(candidate) > limit:
+            return candidate[:limit]
+        return candidate
+    return ""
 
 
 def _enable_pco_feature(app, user_id):
@@ -36,6 +65,7 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
     )
     with app.app_context():
         db = get_db()
+        collect_row, preface_row = _service_proper_override_rows(db)
         db.execute(
             "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
             (source_id, user_id, "Custom Blessing", "Custom text"),
@@ -45,10 +75,16 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
             (source_id, user_id),
         ).fetchone()
         db.execute(
-            "update services set text_order=?, text_disabled=? where id=?",
+            "update services set text_order=?, text_disabled=?, proper_overrides=? where id=?",
             (
                 json.dumps(["text:68", f"custom:{element['id']}", "text:69"]),
                 json.dumps([f"custom:{element['id']}"]),
+                json.dumps(
+                    {
+                        "collect_of_the_day": collect_row["id"],
+                        "proper_preface": preface_row["id"],
+                    }
+                ),
                 source_id,
             ),
         )
@@ -77,7 +113,7 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
         copied = db.execute(
             """
             select user_id, service_date, season, observance_handle, title, rite,
-                   text_order, text_disabled
+                   text_order, text_disabled, proper_overrides
             from services where id=? limit 1
             """,
             (21,),
@@ -88,6 +124,10 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
         assert copied["observance_handle"] == expected_handle
         assert copied["title"] == expected_title
         assert copied["rite"] == "Renewed Ancient Text"
+        assert json.loads(copied["proper_overrides"] or "{}") == {
+            "collect_of_the_day": collect_row["id"],
+            "proper_preface": preface_row["id"],
+        }
         order_tokens = json.loads(copied["text_order"])
         disabled_tokens = json.loads(copied["text_disabled"])
         custom_elements = db.execute(
@@ -776,6 +816,154 @@ def test_text_uses_lesson_override(app, auth_client, service_factory):
     response = client.get(f"/service/{service_id}/view")
     assert response.status_code == 200
     assert b"Mark 1:1-8" in response.data
+
+
+def test_proper_override_updates_service(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=27,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        collect_row, preface_row = _service_proper_override_rows(db)
+    response = client.post(
+        f"/service/{service_id}/proper-override",
+        data={
+            "proper_key": "collect_of_the_day",
+            "proper_mode": "custom",
+            "proper_text_id": str(collect_row["id"]),
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["proper_key"] == "collect_of_the_day"
+    assert payload["proper_text_id"] == collect_row["id"]
+
+    response = client.post(
+        f"/service/{service_id}/proper-override",
+        data={
+            "proper_key": "proper_preface",
+            "proper_mode": "custom",
+            "proper_text_id": str(preface_row["id"]),
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["proper_key"] == "proper_preface"
+    assert payload["proper_text_id"] == preface_row["id"]
+
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select proper_overrides from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        saved = json.loads(service["proper_overrides"] or "{}")
+        assert saved == {
+            "collect_of_the_day": collect_row["id"],
+            "proper_preface": preface_row["id"],
+        }
+
+    response = client.post(
+        f"/service/{service_id}/proper-override",
+        data={"proper_key": "proper_preface", "proper_mode": "default"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["proper_text_id"] is None
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select proper_overrides from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        saved = json.loads(service["proper_overrides"] or "{}")
+        assert saved == {"collect_of_the_day": collect_row["id"]}
+
+
+def test_text_uses_proper_overrides(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=28,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        collect_row, preface_row = _service_proper_override_rows(db)
+        db.execute(
+            "update services set proper_overrides=? where id=?",
+            (
+                json.dumps(
+                    {
+                        "collect_of_the_day": collect_row["id"],
+                        "proper_preface": preface_row["id"],
+                    }
+                ),
+                service_id,
+            ),
+        )
+        db.commit()
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    collect_excerpt = _first_content_excerpt(collect_row["text"])
+    preface_excerpt = _first_content_excerpt(preface_row["text"])
+    assert collect_excerpt
+    assert preface_excerpt
+    assert collect_excerpt in html
+    assert preface_excerpt in html
+
+
+def test_collect_override_labels_use_friendly_names(app):
+    with app.app_context():
+        db = get_db()
+        advent_collect = db.execute(
+            "select id from texts where type=? and filter_type=? and filter_content=? limit 1",
+            ("collect", "proper", "AdventI"),
+        ).fetchone()
+        options = _load_collect_options(db)
+    by_id = {option["id"]: option["label"] for option in options}
+    assert advent_collect is not None
+    assert by_id[advent_collect["id"]].startswith("The First Sunday in Advent:")
+    assert any(option["label"].startswith("Proper 1:") for option in options)
+    assert any(
+        option["label"].startswith("Missionary Evangelist:") for option in options
+    )
+
+
+def test_collect_override_labels_sort_in_church_year_and_natural_order(app):
+    with app.app_context():
+        db = get_db()
+        options = _load_collect_options(db)
+
+    labels = [option["label"] for option in options]
+
+    def index_of(prefix):
+        for idx, label in enumerate(labels):
+            if label.startswith(prefix):
+                return idx
+        raise AssertionError(f"Missing collect option with prefix: {prefix}")
+
+    advent_i = index_of("The First Sunday in Advent:")
+    epiphany_i = index_of("The First Sunday of Epiphany:")
+    proper_1 = index_of("Proper 1:")
+    proper_2 = index_of("Proper 2:")
+    proper_10 = index_of("Proper 10:")
+    proper_19 = index_of("Proper 19:")
+
+    assert advent_i < epiphany_i
+    assert proper_1 < proper_2 < proper_10 < proper_19
 
 
 def test_custom_element_added_to_service_plan_and_text(

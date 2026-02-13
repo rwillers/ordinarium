@@ -13,6 +13,11 @@ from .plan_offertory import (
     _resolve_offertory_sentence,
 )
 from .plan_propers import _resolve_collect_text, _resolve_seasonal_text
+from .plan_propers import (
+    _load_collect_options,
+    _load_proper_preface_options,
+    _resolve_proper_override,
+)
 from .plan_tokens import normalize_plan_token, parse_plan_tokens, parse_json_object
 
 
@@ -31,6 +36,9 @@ __all__ = [
     "_resolve_lesson_references",
     "_resolve_seasonal_text",
     "_resolve_collect_text",
+    "_resolve_proper_override",
+    "_load_collect_options",
+    "_load_proper_preface_options",
     "_offertory_default_row",
     "_format_offertory_label",
     "_load_offertory_sentences",

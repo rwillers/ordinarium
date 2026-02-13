@@ -8,6 +8,12 @@ from .error_pages import render_error
 from .service_store import load_service_payload, update_service_columns
 
 
+PROPER_OVERRIDE_TYPES = {
+    "collect_of_the_day": "collect",
+    "proper_preface": "proper_preface",
+}
+
+
 def register_service_share_routes(bp):
     @bp.route("/service/<int:service_id>/share", methods=["POST"])
     @login_required
@@ -91,6 +97,80 @@ def register_service_share_routes(bp):
                     "lesson_key": lesson_key,
                     "mode": mode,
                     "custom_passage": lesson_overrides.get(lesson_key),
+                }
+            )
+        return redirect(url_for("main.service", service_id=service_id))
+
+    @bp.route("/service/<int:service_id>/proper-override", methods=["POST"])
+    @login_required
+    def service_proper_override(service_id):
+        def normalize_value(value):
+            if value is None:
+                return None
+            value = value.strip()
+            return value or None
+
+        wants_json = "application/json" in request.headers.get("Accept", "")
+        proper_key = normalize_value(request.form.get("proper_key"))
+        mode = normalize_value(request.form.get("proper_mode")) or "default"
+        raw_text_id = normalize_value(request.form.get("proper_text_id"))
+
+        proper_type = PROPER_OVERRIDE_TYPES.get(proper_key)
+        if not proper_type:
+            if wants_json:
+                return jsonify({"ok": False, "error": "Invalid proper key."}), 400
+            return render_error("Invalid proper key.", 400)
+        if mode not in {"default", "custom"}:
+            if wants_json:
+                return jsonify({"ok": False, "error": "Invalid proper mode."}), 400
+            return render_error("Invalid proper mode.", 400)
+        proper_text_id = None
+        if mode == "custom":
+            try:
+                proper_text_id = int(raw_text_id)
+            except (TypeError, ValueError):
+                proper_text_id = None
+            if proper_text_id is None:
+                if wants_json:
+                    return jsonify({"ok": False, "error": "Select a proper text."}), 400
+                flash("Select a proper text.", "error")
+                return redirect(url_for("main.service", service_id=service_id))
+
+        db = get_db()
+        service_data = load_service_payload(db, service_id, g.user["id"])
+        if not service_data:
+            if wants_json:
+                return jsonify({"ok": False, "error": "Service not found."}), 404
+            return render_error("Service not found.", 404)
+        if proper_text_id is not None:
+            valid = db.execute(
+                "select id from texts where id=? and type=? limit 1",
+                (proper_text_id, proper_type),
+            ).fetchone()
+            if not valid:
+                if wants_json:
+                    return (
+                        jsonify({"ok": False, "error": "Proper text not found."}),
+                        404,
+                    )
+                flash("Proper text not found.", "error")
+                return redirect(url_for("main.service", service_id=service_id))
+
+        proper_overrides = service_data.get("proper_overrides") or {}
+        if mode == "custom":
+            proper_overrides[proper_key] = proper_text_id
+        else:
+            proper_overrides.pop(proper_key, None)
+        service_data["proper_overrides"] = proper_overrides
+        update_service_columns(db, service_id, service_data)
+        db.commit()
+        if wants_json:
+            return jsonify(
+                {
+                    "ok": True,
+                    "proper_key": proper_key,
+                    "mode": mode,
+                    "proper_text_id": proper_overrides.get(proper_key),
                 }
             )
         return redirect(url_for("main.service", service_id=service_id))

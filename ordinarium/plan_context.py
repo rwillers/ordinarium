@@ -9,6 +9,7 @@ from .plan_offertory import (
     _load_offertory_sentences,
     _offertory_default_row,
 )
+from .plan_propers import _load_collect_options, _load_proper_preface_options
 from .plan_tokens import parse_plan_tokens, parse_json_object
 
 
@@ -31,6 +32,7 @@ def build_plan_context(
           observance_handle,
           lesson_overrides,
           offertory_sentence_id,
+          proper_overrides,
           updated_at
         from services
         where id=? and user_id=? limit 1
@@ -75,6 +77,27 @@ def build_plan_context(
     lesson_overrides = parse_json_object(
         saved_plan["lesson_overrides"] if saved_plan else None
     )
+    proper_overrides = parse_json_object(
+        saved_plan["proper_overrides"] if saved_plan else None
+    )
+    proper_collect_options = _load_collect_options(db)
+    proper_preface_options = _load_proper_preface_options(db)
+    proper_collect_ids = {option["id"] for option in proper_collect_options}
+    proper_preface_ids = {option["id"] for option in proper_preface_options}
+    raw_collect_override_id = proper_overrides.get("collect_of_the_day")
+    raw_preface_override_id = proper_overrides.get("proper_preface")
+    try:
+        selected_collect_override_id = int(raw_collect_override_id)
+    except (TypeError, ValueError):
+        selected_collect_override_id = None
+    if selected_collect_override_id not in proper_collect_ids:
+        selected_collect_override_id = None
+    try:
+        selected_preface_override_id = int(raw_preface_override_id)
+    except (TypeError, ValueError):
+        selected_preface_override_id = None
+    if selected_preface_override_id not in proper_preface_ids:
+        selected_preface_override_id = None
     offertory_sentences = _load_offertory_sentences(db, offertory_default_prefix)
     offertory_default = _offertory_default_row(db, offertory_default_prefix)
     offertory_default_label = ""
@@ -103,6 +126,11 @@ def build_plan_context(
         "custom_templates": load_custom_templates(user_id),
         "lesson_overrides": lesson_overrides,
         "lesson_defaults": lesson_defaults,
+        "proper_overrides": proper_overrides,
+        "proper_collect_options": proper_collect_options,
+        "proper_preface_options": proper_preface_options,
+        "collect_override_id": selected_collect_override_id,
+        "proper_preface_override_id": selected_preface_override_id,
         "offertory_sentences": offertory_sentences,
         "offertory_sentence_id": selected_offertory_id,
         "offertory_default_label": offertory_default_label,

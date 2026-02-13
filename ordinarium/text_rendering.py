@@ -13,6 +13,7 @@ from .service_planning import (
     _build_lesson_readings,
     _format_lesson_reference,
     _resolve_offertory_sentence,
+    _resolve_proper_override,
 )
 
 
@@ -106,6 +107,15 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
             (propers_json, "collect", "proper"),
         ).fetchone()
+    proper_overrides = saved_data.get("proper_overrides")
+    collect_override = _resolve_proper_override(
+        db, proper_overrides, "collect_of_the_day"
+    )
+    if collect_override:
+        collect_text = collect_override
+    preface_override = _resolve_proper_override(db, proper_overrides, "proper_preface")
+    if preface_override:
+        proper_preface = preface_override
 
     subcycle = observance.subcycle if observance else None
     readings = _build_lesson_readings(propers_list, subcycle)
@@ -289,6 +299,15 @@ def build_rendered_ordinaries(
             "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
             (propers_json, "collect", "proper"),
         ).fetchone()
+    proper_overrides = saved_data.get("proper_overrides")
+    collect_override = _resolve_proper_override(
+        db, proper_overrides, "collect_of_the_day"
+    )
+    if collect_override:
+        collect_text = collect_override
+    preface_override = _resolve_proper_override(db, proper_overrides, "proper_preface")
+    if preface_override:
+        proper_preface = preface_override
 
     subcycle = observance.subcycle if observance else None
     readings = _build_lesson_readings(propers_list, subcycle)

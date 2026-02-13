@@ -59,6 +59,7 @@ TABLE_FIELDS = {
         "observance_handle",
         "lesson_overrides",
         "offertory_sentence_id",
+        "proper_overrides",
     ],
     "users": [
         "id",
@@ -105,6 +106,7 @@ JSON_FALLBACK_PATHS = {
         "observance_handle": "$.observance_handle",
         "lesson_overrides": "$.lesson_overrides",
         "offertory_sentence_id": "$.offertory_sentence_id",
+        "proper_overrides": "$.proper_overrides",
     },
     "users": {
         "first_name": "$.first_name",
@@ -133,7 +135,12 @@ JSON_FALLBACK_PATHS = {
 }
 
 JSON_FIELDS = {
-    "services": {"text_order", "text_disabled", "lesson_overrides"},
+    "services": {
+        "text_order",
+        "text_disabled",
+        "lesson_overrides",
+        "proper_overrides",
+    },
     "texts": {"subcycles"},
 }
 

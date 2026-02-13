@@ -117,8 +117,9 @@ def service_factory(app):
                   text_disabled,
                   observance_handle,
                   lesson_overrides,
-                  offertory_sentence_id
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  offertory_sentence_id,
+                  proper_overrides
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     service_id,
@@ -132,6 +133,7 @@ def service_factory(app):
                     observance_handle,
                     json.dumps({}),
                     None,
+                    json.dumps({}),
                 ),
             )
             db.commit()
