@@ -1050,6 +1050,204 @@ def test_service_option_route_updates_alleluia_mode_keys(
         }
 
 
+def test_service_option_route_updates_fraction_and_communion_form_keys(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=295,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "fraction.form",
+            "option_value": "passover_lamb_has_been_sacrificed",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "fraction.form"
+    assert payload["option_value"] == "passover_lamb_has_been_sacrificed"
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "communion.invitation.form", "option_value": "behold_lamb"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "communion.invitation.form"
+    assert payload["option_value"] == "behold_lamb"
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.invitation.appended_clause",
+            "option_value": "omit",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "communion.invitation.appended_clause"
+    assert payload["option_value"] == "omit"
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.distribution.body_clause",
+            "option_value": "include",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "communion.distribution.body_clause"
+    assert payload["option_value"] == "include"
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.distribution.blood_clause",
+            "option_value": "omit",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "communion.distribution.blood_clause"
+    assert payload["option_value"] == "omit"
+
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select service_option_values from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        assert json.loads(service["service_option_values"] or "{}") == {
+            "fraction.form": "passover_lamb_has_been_sacrificed",
+            "communion.invitation.form": "behold_lamb",
+            "communion.invitation.appended_clause": "omit",
+            "communion.distribution.body_clause": "include",
+            "communion.distribution.blood_clause": "omit",
+        }
+
+
+def test_service_option_route_updates_filioque_clause_key(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=300,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "creed.filioque_clause", "option_value": "omit"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "creed.filioque_clause"
+    assert payload["option_value"] == "omit"
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select service_option_values from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        assert json.loads(service["service_option_values"] or "{}") == {
+            "creed.filioque_clause": "omit"
+        }
+
+
+def test_service_option_route_updates_prayers_clause_keys(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=303,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    for option_key, option_value in (
+        ("prayers.adversity.especially_clause", "omit"),
+        ("prayers.departed.especially_clause", "include"),
+        ("prayers.public_service.especially_clause", "omit"),
+        ("prayers.public_service.especially_names", "our mayor and council"),
+        ("prayers.adversity.especially_names", "those in recovery"),
+        ("prayers.departed.especially_names", "N., N., and N."),
+    ):
+        response = client.post(
+            f"/service/{service_id}/service-option",
+            data={"option_key": option_key, "option_value": option_value},
+            headers={"Accept": "application/json"},
+        )
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["ok"] is True
+        assert payload["option_key"] == option_key
+        assert payload["option_value"] == option_value
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select service_option_values from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        assert json.loads(service["service_option_values"] or "{}") == {
+            "prayers.adversity.especially_clause": "omit",
+            "prayers.departed.especially_clause": "include",
+            "prayers.public_service.especially_clause": "omit",
+            "prayers.public_service.especially_names": "our mayor and council",
+            "prayers.adversity.especially_names": "those in recovery",
+            "prayers.departed.especially_names": "N., N., and N.",
+        }
+
+
+def test_service_option_route_updates_ast_prayers_named_person_key(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=307,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+    )
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "prayers.saints.named_person", "option_value": "St. Mary"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["option_key"] == "prayers.saints.named_person"
+    assert payload["option_value"] == "St. Mary"
+    with app.app_context():
+        db = get_db()
+        service = db.execute(
+            "select service_option_values from services where id=? limit 1",
+            (service_id,),
+        ).fetchone()
+        assert json.loads(service["service_option_values"] or "{}") == {
+            "prayers.saints.named_person": "St. Mary"
+        }
+
+
 def test_service_option_route_rejects_invalid_values(auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(
@@ -1071,6 +1269,127 @@ def test_service_option_route_rejects_invalid_values(auth_client, service_factor
     response = client.post(
         f"/service/{service_id}/service-option",
         data={"option_key": "fraction.alleluia_mode", "option_value": "maybe"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "creed.filioque_clause", "option_value": "invalid"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "prayers.adversity.especially_clause",
+            "option_value": "invalid",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "prayers.adversity.especially_names",
+            "option_value": "x" * 1000,
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "prayers.saints.named_insert",
+            "option_value": "omit",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "prayers.saints.named_person",
+            "option_value": "St. Mary",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "fraction.form", "option_value": "invalid"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={"option_key": "communion.invitation.form", "option_value": "invalid"},
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.invitation.appended_clause",
+            "option_value": "invalid",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.distribution.body_clause",
+            "option_value": "invalid",
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Invalid option value" in payload["error"]
+
+    response = client.post(
+        f"/service/{service_id}/service-option",
+        data={
+            "option_key": "communion.distribution.blood_clause",
+            "option_value": "invalid",
+        },
         headers={"Accept": "application/json"},
     )
     assert response.status_code == 400
@@ -1102,6 +1421,12 @@ def test_service_page_includes_service_option_action(auth_client, service_factor
     html = response.get_data(as_text=True)
     assert "Set option" in html
     assert "Set alleluia mode" in html
+    assert "Set invitation clause" in html
+    assert "Set departed clause" in html
+    assert "Set saints insert" in html
+    assert "Set adversity names" in html
+    assert "Set departed names" in html
+    assert "Set saint name" in html
     assert "/service/286/service-option" in html
 
 
@@ -1153,6 +1478,260 @@ def test_text_uses_dismissal_form_option(auth_client, service_factory):
     assert "Go in peace to love and serve the Lord." not in html
     assert (
         "Let us go forth into the world, rejoicing in the power of the Holy Spirit."
+        not in html
+    )
+
+
+def test_text_uses_fraction_form_option(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=296,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={"fraction.form": "passover_lamb_has_been_sacrificed"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert (
+        "Christ our Passover Lamb has been sacrificed, once for all upon the Cross."
+        in html
+    )
+    assert "Christ our Passover is sacrificed for us." not in html
+    assert "*or this*" not in html
+
+
+def test_text_uses_filioque_clause_omit_option(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=301,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={"creed.filioque_clause": "omit"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "who proceeds from the Father [and the Son]," not in html
+    assert "who proceeds from the Father and the Son," not in html
+    assert "who proceeds from the Father," in html
+
+
+def test_text_uses_filioque_clause_include_option(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=302,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={"creed.filioque_clause": "include"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "who proceeds from the Father [and the Son]," not in html
+    assert "who proceeds from the Father and the Son," in html
+
+
+def test_text_uses_rat_prayers_clause_omit_options(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=304,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={
+            "prayers.public_service.especially_clause": "omit",
+            "prayers.adversity.especially_clause": "omit",
+            "prayers.departed.especially_clause": "omit",
+        },
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "for all in public service [especially" not in html
+    assert "any other adversity [especially" not in html
+    assert "resurrection, [especially" not in html
+    assert "for all in public service." in html
+    assert "any other adversity." in html
+    assert "resurrection, in thanksgiving let us pray." in html
+
+
+def test_text_uses_prayers_named_fill_values(auth_client, service_factory):
+    client, user_id = auth_client
+    rat_service_id = service_factory(
+        user_id=user_id,
+        service_id=308,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={
+            "prayers.public_service.especially_names": "our mayor and city council",
+            "prayers.adversity.especially_names": "the sick and homebound",
+            "prayers.departed.especially_names": "Jane Doe",
+        },
+    )
+    rat_response = client.get(f"/service/{rat_service_id}/view")
+    assert rat_response.status_code == 200
+    rat_html = rat_response.get_data(as_text=True)
+    assert "public service especially our mayor and city council." in rat_html
+    assert "any other adversity especially the sick and homebound." in rat_html
+    assert "resurrection, especially Jane Doe, in thanksgiving let us pray." in rat_html
+
+    ast_service_id = service_factory(
+        user_id=user_id,
+        service_id=309,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+        service_option_values={
+            "prayers.adversity.especially_names": "those undergoing treatment",
+            "prayers.departed.especially_names": "Richard Roe",
+            "prayers.saints.named_person": "St. Mary",
+        },
+    )
+    ast_response = client.get(f"/service/{ast_service_id}/view")
+    assert ast_response.status_code == 200
+    ast_html = ast_response.get_data(as_text=True)
+    assert "any other adversity especially those undergoing treatment." in ast_html
+    assert (
+        "faith and fear, especially Richard Roe, that your will for them may be fulfilled;"
+        in ast_html
+    )
+    assert "good examples of St. Mary, and all your saints" in ast_html
+
+
+def test_text_uses_ast_prayers_clause_omit_and_include_options(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    omit_service_id = service_factory(
+        user_id=user_id,
+        service_id=305,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+        service_option_values={
+            "prayers.adversity.especially_clause": "omit",
+            "prayers.departed.especially_clause": "omit",
+            "prayers.saints.named_insert": "omit",
+        },
+    )
+    omit_response = client.get(f"/service/{omit_service_id}/view")
+    assert omit_response.status_code == 200
+    omit_html = omit_response.get_data(as_text=True)
+    assert "any other adversity [especially" not in omit_html
+    assert "faith and fear, [especially" not in omit_html
+    assert "good examples of [N., and] all your saints" not in omit_html
+    assert "any other adversity." in omit_html
+    assert "faith and fear, that your will for them may be fulfilled;" in omit_html
+    assert "good examples of all your saints" in omit_html
+
+    include_service_id = service_factory(
+        user_id=user_id,
+        service_id=306,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+        service_option_values={"prayers.saints.named_insert": "include"},
+    )
+    include_response = client.get(f"/service/{include_service_id}/view")
+    assert include_response.status_code == 200
+    include_html = include_response.get_data(as_text=True)
+    assert "good examples of [N., and] all your saints" not in include_html
+    assert "good examples of N., and all your saints" in include_html
+
+
+def test_text_uses_communion_invitation_form_option(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=297,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={"communion.invitation.form": "behold_lamb"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert (
+        "Behold the Lamb of God, behold him who takes away the sins of the world."
+        in html
+    )
+    assert "The gifts of God for the people of God." not in html
+    assert "*or this*" not in html
+
+
+def test_text_communion_clause_options_omit_bracketed_text(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=298,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={
+            "communion.invitation.form": "gifts_of_god",
+            "communion.invitation.appended_clause": "omit",
+            "communion.distribution.body_clause": "omit",
+            "communion.distribution.blood_clause": "omit",
+        },
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "The gifts of God for the people of God." in html
+    assert (
+        "Take them in remembrance that Christ died for you and feed on him in your hearts by faith, with thanksgiving."
+        not in html
+    )
+    assert (
+        "which was given for you, preserve your body and soul to everlasting life."
+        not in html
+    )
+    assert (
+        "which was shed for you, preserve your body and soul to everlasting life."
+        not in html
+    )
+
+
+def test_text_communion_clause_options_include_unbracketed_text(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=299,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        service_option_values={
+            "communion.invitation.form": "gifts_of_god",
+            "communion.invitation.appended_clause": "include",
+            "communion.distribution.body_clause": "include",
+            "communion.distribution.blood_clause": "include",
+        },
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert (
+        "The gifts of God for the people of God. Take them in remembrance that Christ died for you and feed on him in your hearts by faith, with thanksgiving."
+        in html
+    )
+    assert (
+        "The Body of our Lord Jesus Christ, which was given for you, preserve your body and soul to everlasting life. Take and eat this in remembrance that Christ died for you, and feed on him in your heart by faith, with thanksgiving."
+        in html
+    )
+    assert (
+        "The Blood of our Lord Jesus Christ, which was shed for you, preserve your body and soul to everlasting life. Drink this in remembrance that Christ’s Blood was shed for you, and be thankful."
+        in html
+    )
+    assert "[Take them in remembrance that Christ died for you" not in html
+    assert (
+        "[which was given for you, preserve your body and soul to everlasting life."
+        not in html
+    )
+    assert (
+        "[which was shed for you, preserve your body and soul to everlasting life."
         not in html
     )
 

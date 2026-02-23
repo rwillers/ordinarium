@@ -248,7 +248,9 @@ def register_service_share_routes(bp):
 
         wants_json = "application/json" in request.headers.get("Accept", "")
         option_key = normalize_value(request.form.get("option_key"))
-        option_value = normalize_service_option_value(request.form.get("option_value"))
+        option_value = normalize_service_option_value(
+            option_key, request.form.get("option_value")
+        )
 
         if not option_key:
             if wants_json:

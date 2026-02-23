@@ -29,31 +29,31 @@ Already supported in code:
 | Both | Lessons intro/outro | One or more lessons; citation may be added; post-reading response variants; silence may follow | `multi_toggle` + `single_select_block` | Partial | Lessons are separate rows and can be disabled; response/citation/silence choices are not modeled | Add lesson-level options object (citation on/off, response form, silence on/off, lesson-count mode) |
 | Both | Lectionary alternatives | Alternate appointed readings/options within a slot | `reading_catalog_select` | Partial | Custom passage override exists, but canonical alternate options (`texts.option_group`/`optional`) are not surfaced | Add slot-level reading picker backed by canonical lesson option sets before falling back to free-text override |
 | Both | Psalm slot | Psalm, hymn, or anthem may follow; Gloria Patri may be sung/said | `single_select_enum` + `toggle` | Not supported | Static rubric text only | Add options for `psalm_slot_content` and `gloria_patri_enabled` |
-| Both | Nicene Creed | Filioque optional: `[and the Son]` | `token_toggle` | Not supported | Bracketed token is static text | Represent bracketed clauses as optional tokens with explicit boolean setting |
+| Both | Nicene Creed | Filioque optional: `[and the Son]` | `token_toggle` | Supported | `creed.filioque_clause` include/omit toggle | Keep include/omit toggle; later add named local profile presets if needed |
 | Both | Peace | Ministers/People may greet one another | `row_toggle` | Supported | Include/exclude row | Keep row toggle; add display label “Exchange of the Peace” for clarity |
 | Both | Comfortable Words | Celebrant may say one **or more** of provided sentences | `multi_select_block` | Not supported | All four are always rendered together | Store selected sentence IDs array and render selected subset |
 | Both | Offertory sentence | Begin with one provided sentence | `catalog_select` | Supported | Offertory sentence picker + `offertory_sentence_id` | Keep as-is; expand labeling/filtering by season/day for usability |
 | Both | Offertory rites | Offertory music may be sung; offertory presentation sentence may be said | `toggle` | Partial | Music/presentation optionality is only rubric text | Add optional toggles with planner hints; allow optional inserted text slot |
 | Both | Sursum Corda | Dialog may be sung or said | `single_select_enum` | Not supported | Static rubric text | Add `delivery_mode` enum for chant/spoken where useful |
 | Both | Prayer of Consecration | People stand or kneel; manual acts options; break may happen here or later | `single_select_enum` + `toggle` | Partial | Can disable whole row only; manual-act timing not represented | Add ceremonial options group (posture/manual acts/fraction timing) |
-| Both | Lord’s Prayer | Traditional-language form **or** contemporary-language form | `single_select_block` | Not supported | Both forms always rendered as bullet alternatives | Add explicit `lords_prayer_form` enum and render one choice |
-| Both | Fraction | Two alternative invitations; optional `[Alleluia.]`; seasonal rule for omission/addition | `single_select_block` + `token_toggle` + `rule_driven` | Not supported | Alternatives and bracket token rendered statically | Add `fraction_form`, `alleluia_mode` (`auto/on/off`), with seasonal default engine |
+| Both | Lord’s Prayer | Traditional-language form **or** contemporary-language form | `single_select_block` | Supported | `lords_prayer.form` selector | Keep as implemented |
+| Both | Fraction | Two alternative invitations; optional `[Alleluia.]`; seasonal rule for omission/addition | `single_select_block` + `token_toggle` + `rule_driven` | Supported | `fraction.form` + `fraction.alleluia_mode` | Keep as implemented; consider adding rubric-aware defaults at service creation |
 | Both | Prayer of Humble Access | May be said | `row_toggle` | Supported | Include/exclude row | Keep as-is |
 | Both | Agnus Dei | Use provided text **or** other suitable anthem; sung/said | `single_select_block` + `custom_text_ref` | Partial | Row can be disabled; no structured alternative anthem selection | Add anthem selection mode: default/custom reference/custom text |
-| Both | Ministration invitation | Invitation form A **or** B; bracketed optional add-on clauses | `single_select_block` + `token_toggle` | Not supported | Both alternatives rendered; bracketed text static | Add `communion_invitation_form` plus toggles for optional appended clauses |
-| Both | Distribution formulae | Optional longer bracketed words for Body/Blood formulae | `token_toggle` | Not supported | Brackets static in text | Add per-formula boolean toggles |
+| Both | Ministration invitation | Invitation form A **or** B; bracketed optional add-on clauses | `single_select_block` + `token_toggle` | Supported | `communion.invitation.form` + `communion.invitation.appended_clause` | Keep as implemented; unify naming with future token toggles |
+| Both | Distribution formulae | Optional longer bracketed words for Body/Blood formulae | `token_toggle` | Supported | `communion.distribution.body_clause` + `communion.distribution.blood_clause` | Keep as implemented |
 | Both | Communion close | Optional closing scripture sentence | `toggle` + `custom_text_ref` | Not supported | Rubric note only | Add toggle + selectable/typed sentence |
 | Both | Post Communion Prayer | Rite prayer **or** prayer from the other rite | `cross_rite_swap` | Not supported | Swap is only printed rubric text | Add explicit cross-rite swap selector (`own_rite` / `other_rite`) |
 | Both | Blessing | This blessing **or** alternate blessing | `single_select_block` | Partial | Can disable entire row; no alternate blessing selection | Add blessing selector + optional custom blessing text |
-| Both | Dismissal | Four dismissal options; seasonal alleluia add-on rules | `single_select_block` + `rule_driven` | Not supported | All options printed in-line | Add `dismissal_form` enum + `alleluia_mode` (`auto/on/off`) |
+| Both | Dismissal | Four dismissal options; seasonal alleluia add-on rules | `single_select_block` + `rule_driven` | Supported | `dismissal.form` + `dismissal.alleluia_mode` | Keep as implemented |
 | Both | Exhortation | Celebrant may say Exhortation | `toggle` | Not supported | Rubric note only | Add optional row or optional appended element |
 | RAT | Prayers of the People | RAT form **or** AST form | `cross_rite_swap` | Not supported | Swap note in static text | Add `prayers_form` enum with rite-aware defaults |
 | RAT | Prayers of the People | People may add petitions silently/aloud; additional petitions and thanksgivings may be invited | `toggle` + `free_text_list` | Not supported | Rubric note only | Add fields for intercessions mode and optional free-text additions |
-| RAT | Prayers of the People | Bracketed local inserts (`[especially ...]`) | `templated_insert` | Not supported | Placeholder remains literal | Add named fill-ins (e.g. `public_service_names`, `departed_names`) |
+| RAT | Prayers of the People | Bracketed local inserts (`[especially ...]`) | `templated_insert` | Partial | `prayers.*.especially_clause` include/omit + named fills implemented | Extend named fills to richer list/profile structures as needed |
 | AST | Prayers of the People | AST form **or** RAT form | `cross_rite_swap` | Not supported | Swap note in static text | Add `prayers_form` enum with rite-aware defaults |
 | AST | Prayers of the People | Additional prayers may be added | `free_text_list` | Partial | Can add standalone custom element, but not bound to this section | Use independent custom rows (no fixed anchor), with suggested insertion point UX only |
-| AST | Prayers of the People | Placeholder substitutions (`President/Sovereign/Prime Minister`, `Archbishop/Bishop/...`) and bracketed inserts | `templated_insert` + `single_select_enum` | Not supported | Static placeholders in text | Add canonical “local polity profile” with office-title presets + manual overrides |
-| AST | Confession invitation | Long invitation **or** short “Let us humbly confess...” | `single_select_block` | Not supported | Both choices printed together | Add `confession_invitation_form` enum |
+| AST | Prayers of the People | Placeholder substitutions (`President/Sovereign/Prime Minister`, `Archbishop/Bishop/...`) and bracketed inserts | `templated_insert` + `single_select_enum` | Partial | Bracketed inserts support include/omit + named fills (`prayers.*` keys); polity/title substitutions still static | Add canonical “local polity profile” with office-title presets + manual overrides |
+| AST | Confession invitation | Long invitation **or** short “Let us humbly confess...” | `single_select_block` | Supported | `confession.invitation_form` selector | Keep as implemented |
 
 ## Matrix B: Config Type -> Product Strategy
 
@@ -102,24 +102,24 @@ Already supported in code:
 
 ### Phase 1 (core option engine + highest-value controls)
 
-- [ ] Migration: add `services.service_option_values` JSON column (default `{}`) and wire it into load/save paths.
-- [ ] Rendering: implement option-aware, non-destructive transformers in the text rendering pipeline.
-- [ ] API/UI: add controls for:
-  - [ ] `confession.invitation_form`
-  - [ ] `lords_prayer.form`
-  - [ ] `dismissal.form`
-  - [ ] `fraction.form`
-  - [ ] `fraction.alleluia_mode`
-  - [ ] `dismissal.alleluia_mode`
-  - [ ] `communion.invitation.form`
-- [ ] API/UI: add token toggles for bracketed clauses (Filioque, Communion formula additions, etc.).
-- [ ] Tests: add unit + integration coverage for default behavior, explicit overrides, and seasonal `auto` modes.
+- [x] Migration: add `services.service_option_values` JSON column (default `{}`) and wire it into load/save paths.
+- [x] Rendering: implement option-aware, non-destructive transformers in the text rendering pipeline.
+- [x] API/UI: add controls for:
+  - [x] `confession.invitation_form`
+  - [x] `lords_prayer.form`
+  - [x] `dismissal.form`
+  - [x] `fraction.form`
+  - [x] `fraction.alleluia_mode`
+  - [x] `dismissal.alleluia_mode`
+  - [x] `communion.invitation.form`
+- [ ] API/UI: add token toggles for bracketed clauses (Filioque, Communion formula additions, etc.) (Communion + Filioque + Prayers toggles complete; remaining bracketed tokens pending).
+- [x] Tests: add unit + integration coverage for default behavior, explicit overrides, and seasonal `auto` modes.
 
 ### Phase 2 (expanded content selection + rite swaps + templated inserts)
 
 - [ ] Add `multi_select_block` support for Comfortable Words (one or more).
 - [ ] Add `cross_rite_swap` rendering for Prayers and Post-Communion (render swapped text in full).
-- [ ] Add `templated_insert` fields for bracket placeholders and office-title substitutions.
+- [ ] Add `templated_insert` fields for bracket placeholders and office-title substitutions (Prayers named fills complete; office-title substitutions pending).
 - [ ] Add canonical lesson alternative picker (`reading_catalog_select`) before custom free-text override.
 - [ ] Add quick-add custom-row affordances from relevant sections (no fixed insertion anchor).
 - [ ] Revisit deferred Gloria modeling with hymn/song workflow.
