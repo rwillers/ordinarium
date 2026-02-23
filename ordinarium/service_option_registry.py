@@ -2,6 +2,31 @@ import json
 
 
 SERVICE_OPTION_DEFINITIONS = {
+    "law.form": {
+        "label": "Summary of the Law form",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "summary", "label": "Use Summary of the Law"},
+            {"value": "decalogue", "label": "Use Decalogue (page 100)"},
+        ],
+    },
+    "penitential_song.mode": {
+        "label": "Penitential song mode",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "kyrie", "label": "Use Kyrie"},
+            {"value": "trisagion", "label": "Use Trisagion"},
+        ],
+    },
+    "kyrie.form": {
+        "label": "Kyrie form",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "traditional", "label": "Lord, have mercy upon us"},
+            {"value": "contemporary", "label": "Lord, have mercy"},
+            {"value": "greek", "label": "Kyrie eleison"},
+        ],
+    },
     "lords_prayer.form": {
         "label": "Lord's Prayer form",
         "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
@@ -274,6 +299,14 @@ SERVICE_OPTION_DEFINITIONS = {
         "choices": [
             {"value": "own_rite", "label": "Use this rite's prayer"},
             {"value": "other_rite", "label": "Use the other rite's prayer"},
+        ],
+    },
+    "psalm.gloria_patri": {
+        "label": "Psalm Gloria Patri",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "include", "label": "Include Gloria Patri"},
+            {"value": "omit", "label": "Omit Gloria Patri"},
         ],
     },
 }

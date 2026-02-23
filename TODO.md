@@ -3,9 +3,7 @@
 Remaining work and follow-ups.
 
 - Work through practical liturgy usability items (complicated rubrics, either/or instructions, etc.) — likely requires manual review.
-  - Move optionalities into a single modal by plan element row (to avoid proliferation of option modals).
-  - Rename "adversity" otions to "in need".
-  - Also show live preview (render) of element text in options modal.
+- Add Bible text integration options (and tie into both standard text rendering as well as live preview modals).
 - Add standardized element reordering, in line with BCP eucharist additional instructions.
 - Add "live edit" mode, in which changes can be made within the service view mode.
 - PCO integration enhancements:

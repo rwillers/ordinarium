@@ -497,3 +497,118 @@ Purpose:
   - Extended service-page option action presence test for `Set adversity clause` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
 - Backward compatibility notes:
   - Existing services are unaffected; this is UI exposure/visibility parity for an already-supported option key.
+
+### 2026-02-23 - Planner UX refactor: row-scoped options modal + live preview
+
+- Scope: Consolidate service-option editing into one modal per plan row, rename adversity wording in planner UI, and add live rendered row preview while editing.
+- Option keys added/changed:
+  - No new keys.
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added batch-save endpoint in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py`:
+    - `POST /service/<id>/service-options`
+    - validates + applies multiple option key updates in a single request.
+  - Added row-preview endpoint in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py`:
+    - `POST /service/<id>/service-option-preview`
+    - applies draft option patch in-memory and returns rendered HTML for selected row token.
+- UI changes:
+  - Reworked service option modal in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` to:
+    - render all controls for a row in one modal
+    - save all row controls in one explicit save action
+    - show a live preview pane for the selected row.
+  - Replaced per-key menu actions with a single `Set options` row action.
+  - Added collapsible grouped sections for Prayers controls in modal UI.
+  - Planner wording update: adversity fields are labeled as “in need” in modal UI.
+- Styling changes:
+  - Added row-options section and preview styles in `/Users/rwillers/Desktop/Ordinarium/ordinarium/static/styles/style.css`.
+- Tests added/updated:
+  - Added batch update API test for `/service/<id>/service-options` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added preview API test for `/service/<id>/service-option-preview` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added invalid payload tests for both new endpoints in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Updated service-page UI test expectations for new single-action options flow and preview endpoint wiring in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing single-key endpoint (`/service/<id>/service-option`) remains in place for compatibility.
+  - Existing saved option data structures are unchanged.
+
+### 2026-02-23 - Phase 3 polish tranche 1: modal preview/render parity + UI constraints
+
+- Scope: Complete initial UI polish items for row-scoped options modal (preview rendering parity, corner radius, input width constraints, and explicit alternate-rite labels).
+- Option keys added/changed:
+  - No new keys.
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - No additional backend API changes in this tranche.
+- UI changes:
+  - Updated options modal preview rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` to wrap preview HTML with liturgy-rendering class (`propers-search-markdown`) so preview typography/code/pre behavior matches standard text view rules.
+  - Added dynamic rite-aware choice labels in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` for cross-rite selectors:
+    - `post_communion.form` now shows explicit alternate rite name.
+    - `prayers.form` now shows explicit “this rite” vs alternate rite naming.
+- Styling changes:
+  - Updated modal section border radii to standard small radius in `/Users/rwillers/Desktop/Ordinarium/ordinarium/static/styles/style.css`.
+  - Added explicit width/min-width constraints for modal option inputs/selects/textareas in `/Users/rwillers/Desktop/Ordinarium/ordinarium/static/styles/style.css` to prevent overflow/stretch beyond modal/section bounds.
+- Tests added/updated:
+  - Existing service-page and modal route tests remain green; no new test fixtures required for these CSS/copy-only changes.
+- Backward compatibility notes:
+  - Data format and option semantics unchanged.
+
+### 2026-02-23 - Phase 3 tranche 2: legacy modal consolidation + remaining rite options
+
+- Scope: Complete remaining Phase 3 checklist items by folding legacy row options into the shared options modal, adding missing rite controls, and stripping inapplicable rubrics when explicit selections remove optionality.
+- Option keys added/changed:
+  - Added `law.form` (`summary`, `decalogue`).
+  - Added `penitential_song.mode` (`kyrie`, `trisagion`).
+  - Added `kyrie.form` (`traditional`, `contemporary`, `greek`).
+  - Added `psalm.gloria_patri` (`include`, `omit`).
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Extended option render transforms in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py`:
+    - Summary/Decalogue selection (`law.form`).
+    - Kyrie/Trisagion mode and Kyrie form selection.
+    - Psalm Gloria Patri include/omit behavior.
+    - Explicit alleluia modes now remove seasonal instructional rubric tails in Fraction/Dismissal.
+  - Extended preview endpoint in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py` to support shared-modal draft patches for:
+    - lesson passage override (`default` / `canonical` / `custom`)
+    - proper override (`default` / selected proper)
+    - offertory sentence selection
+  - Preview rendering now uses full rendered ordinaries pipeline for row-accurate output under draft patches.
+- UI changes:
+  - Updated row action menu in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` so lesson/proper/offertory/service options all open the shared `Set options` modal.
+  - Added shared-modal sections for legacy controls:
+    - Override passage
+    - Override proper
+    - Offertory sentence
+  - Canonical lesson mode is only enabled when canonical alternates are available for the selected lesson row.
+  - Added planner wiring for new keys:
+    - Summary of the Law row (`law.form`)
+    - Kyrie/Trisagion rows (`penitential_song.mode`, `kyrie.form`)
+    - Psalm lesson row (`psalm.gloria_patri`)
+- Rendering behavior:
+  - Explicit selections now collapse optional rubric branches where the option is no longer relevant.
+  - Penitential-song mode selection resolves the Kyrie/Trisagion binary in output.
+- Tests added/updated:
+  - Added preview-route coverage for lesson override patch handling in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added rendering coverage for:
+    - Summary/Decalogue option
+    - Kyrie/Trisagion + Kyrie form
+    - Psalm Gloria Patri option
+    - Rubric stripping behavior for explicit alleluia modes
+  - Updated service-page UI assertions for new row option key wiring.
+- Backward compatibility notes:
+  - Existing service data remains valid; new keys are optional and only affect output when explicitly set.
+
+### 2026-02-23 - Phase 3 tranche 2 follow-up: live preview row-token fix
+
+- Scope: Fix incorrect/missing live preview behavior in shared options modal (wrong row rendered, intermittent “Preview unavailable”, and stale preview while changing row options).
+- Root cause:
+  - Preview selection was resolved by enabled-row index, but render-time optionality can remove rows (for example, `penitential_song.mode` dropping Kyrie or Trisagion), shifting downstream indices.
+- Backend changes:
+  - Updated preview row resolution in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py` to match by stable `row_token` identity instead of list index.
+  - Added graceful omitted-state preview response when the selected row is removed by explicit option choices.
+  - Updated `/Users/rwillers/Desktop/Ordinarium/ordinarium/text_rendering.py` to preserve row `token` through `build_rendered_ordinaries`.
+- Tests added/updated:
+  - Added regression coverage in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`:
+    - `test_service_option_preview_route_matches_rows_by_token_not_index`
+  - Confirms Collect/Dismissal/Post-Communion previews bind to the correct row even when upstream rows are conditionally removed, and that Post-Communion preview changes under option edits.

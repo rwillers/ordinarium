@@ -23,12 +23,12 @@ Already supported in code:
 
 | Rite | Liturgy area | Rubric optionality / swap | Config type | Current support | Current mechanism | Recommended approach |
 |---|---|---|---|---|---|---|
-| Both | Summary of the Law | Summary of the Law **or** Decalogue | `single_select_block` | Not supported | Both are embedded in one static text block | Add typed option key (e.g. `law_form`) with enumerated values and render selected block only |
-| Both | Kyrie / Trisagion | Multiple Kyrie forms; **or this** Trisagion | `single_select_block` (with nested select) | Partial | Can disable whole row(s), but cannot select one internal variant | Model as `penitential_song_mode` + `kyrie_form` enum |
+| Both | Summary of the Law | Summary of the Law **or** Decalogue | `single_select_block` | Supported | `law.form` controls Summary vs Decalogue rubric rendering | Keep `law.form`; revisit full Decalogue text sourcing if we later add page-100 content directly |
+| Both | Kyrie / Trisagion | Multiple Kyrie forms; **or this** Trisagion | `single_select_block` (with nested select) | Supported | `penitential_song.mode` + `kyrie.form` | Keep current model; extend only if additional Kyrie variants are needed |
 | Both | Gloria in Excelsis | Gloria **or** other song of praise; may be omitted seasonally | `single_select_enum` | Partial | Can disable row (omit) but cannot represent “other song” as structured choice | Defer for now; keep include/exclude behavior in Phase 1 and revisit with hymn/song modeling |
 | Both | Lessons intro/outro | One or more lessons; citation may be added; post-reading response variants; silence may follow | `multi_toggle` + `single_select_block` | Partial | Lessons are separate rows and can be disabled; response/citation/silence choices are not modeled | Add lesson-level options object (citation on/off, response form, silence on/off, lesson-count mode) |
 | Both | Lectionary alternatives | Alternate appointed readings/options within a slot | `reading_catalog_select` | Supported (reference-level) | Lesson modal supports `default` / `canonical` / `custom`; canonical alternates are surfaced from calendar-resolved lesson sets and stored as lesson overrides | Keep current picker; optionally evolve to text-id-backed persistence later |
-| Both | Psalm slot | Psalm, hymn, or anthem may follow; Gloria Patri may be sung/said | `single_select_enum` + `toggle` | Not supported | Static rubric text only | Add options for `psalm_slot_content` and `gloria_patri_enabled` |
+| Both | Psalm slot | Psalm, hymn, or anthem may follow; Gloria Patri may be sung/said | `single_select_enum` + `toggle` | Partial | `psalm.gloria_patri` controls Gloria Patri include/omit; slot content mode not yet modeled | Keep `psalm.gloria_patri`; defer psalm/hymn/anthem slot-content modeling |
 | Both | Nicene Creed | Filioque optional: `[and the Son]` | `token_toggle` | Supported | `creed.filioque_clause` include/omit toggle | Keep include/omit toggle; later add named local profile presets if needed |
 | Both | Peace | Ministers/People may greet one another | `row_toggle` | Supported | Include/exclude row | Keep row toggle; add display label “Exchange of the Peace” for clarity |
 | Both | Comfortable Words | Celebrant may say one **or more** of provided sentences | `multi_select_block` | Supported | `comfortable_words.sentences` stores selected sentence IDs and renders selected subset | Keep as implemented |
@@ -130,6 +130,19 @@ Already supported in code:
 - [x] Add canonical lesson alternative picker (`reading_catalog_select`) before custom free-text override.
 - [x] Add quick-add custom-row affordances from relevant sections (no fixed insertion anchor).
 - [ ] Revisit deferred Gloria modeling with hymn/song workflow (deferred by decision; no implementation in current phase).
+
+### Phase 3 (clean up, bug fixes, polish, etc.)
+
+- [x] The live preview shown in option modals should use the same CSS rendering as standard text views (e.g., pre + code sections are rendering using "standard" CSS instead of our custom text rendering rules).
+- [x] Please use the standard (smaller) rounded corners for section borders within modals.
+- [x] Ensure that modal selects and inputs are not allowed to stretch wider than the width of the modal (and any modal section constraints).
+- [x] Instead of saying "Using the other rite's prayer" (e.g., on the options for the post-communion prayer), update the language to refer to the specific alternate rite (e.g., when on a RAT rite service, it would read "Using the Anglican Standard Text prayer").
+- [x] Move other existing options (e.g., Override proper, Override passage) into the same shared options modal approach that we implemented for all new options. The modal for these should also include live previews.
+- [x] The Kyrie / Trisagion binary option doesn't appear to be implemented (at least in the UI).
+- [x] The Summary of the Law / Decalogue binary option doesn't appear to be implemented (at least in the UI).
+- [x] The ability to use a canonical alternative for any of the Lessons should only be enabled if there is a canonical alternative.
+- [x] I'm not seeing the gloria patri option for the Psalm.
+- [x] Double check that inapplicable rubrics are overridden based on selections made — for example, if an alleluia mode is set on The Dismissal, the remainder of the liturgy text explaining the use of alleluias through the end of that element does not need to be shown.
 
 ## Open decisions to annotate
 

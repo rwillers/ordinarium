@@ -17,7 +17,17 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
             updated.append(output)
             continue
         title = _normalize_title(output.get("title"))
+        detailed_title = _normalize_title(output.get("detailed_title"))
         text = output.get("text") or ""
+        penitential_mode = service_option_values.get("penitential_song.mode")
+        if title == "the kyrie" and penitential_mode == "trisagion":
+            continue
+        if title == "the trisagion" and penitential_mode == "kyrie":
+            continue
+        if title == "the summary of the law":
+            text = _apply_law_form(text, service_option_values)
+        elif title == "the kyrie":
+            text = _apply_kyrie_form(text, service_option_values)
         if title == "the lord's prayer":
             text = _apply_lords_prayer_form(text, service_option_values)
         elif title == "the nicene creed":
@@ -37,6 +47,8 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
         elif title == "the dismissal":
             text = _apply_dismissal_form(text, service_option_values)
             text = _apply_dismissal_alleluia_mode(text, service_option_values, season)
+        elif title == "the lessons" and detailed_title == "the lessons (psalter)":
+            text = _apply_psalm_gloria_patri(text, service_option_values)
         output["text"] = text
         updated.append(output)
     return updated
@@ -45,6 +57,44 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
 def _normalize_title(value):
     cleaned = (value or "").replace("’", "'")
     return re.sub(r"\s+", " ", cleaned).strip().lower()
+
+
+def _apply_law_form(text, service_option_values):
+    form = service_option_values.get("law.form")
+    if form == "summary":
+        return (text or "").replace(
+            "Then follows the Summary of the Law, or The Decalogue (page 100).",
+            "Then follows the Summary of the Law.",
+        )
+    if form == "decalogue":
+        return "*Then follows the Decalogue (page 100).*"
+    return text
+
+
+def _apply_kyrie_form(text, service_option_values):
+    mode = service_option_values.get("penitential_song.mode")
+    if mode and mode != "kyrie":
+        return text
+    form = service_option_values.get("kyrie.form")
+    if not form and mode != "kyrie":
+        return text
+    choice_index = {
+        "traditional": 0,
+        "contemporary": 1,
+        "greek": 2,
+    }.get(form or "traditional")
+
+    base = (text or "").split("\n\n*or this*", 1)[0]
+    bullet_blocks = re.findall(r"(?ms)^-\s+.+?(?=^-\s+|\Z)", base)
+    if choice_index is None or choice_index >= len(bullet_blocks):
+        return base
+
+    heading_match = re.match(r"(?s)(.*?)(?=^-\s+)", base)
+    if not heading_match:
+        return base
+    heading = heading_match.group(1).rstrip()
+    selected = bullet_blocks[choice_index].strip()
+    return f"{heading}\n\n{selected}"
 
 
 def _apply_lords_prayer_form(text, service_option_values):
@@ -521,10 +571,48 @@ def _apply_fraction_alleluia_mode(text, service_option_values, season):
         return text
 
     if enabled:
-        return (text or "").replace("[Alleluia.]", "Alleluia.")
-    cleaned = re.sub(r"\s*\[Alleluia\.\]", "", text or "")
-    cleaned = re.sub(r" {2,}", " ", cleaned)
-    return cleaned
+        output = (text or "").replace("[Alleluia.]", "Alleluia.")
+    else:
+        output = re.sub(r"\s*\[Alleluia\.\]", "", text or "")
+        output = re.sub(r" {2,}", " ", output)
+    return _strip_fraction_alleluia_rubric(output)
+
+
+def _strip_fraction_alleluia_rubric(text):
+    return re.sub(
+        r"\n\n\*In Lent, Alleluia is omitted, and may be omitted at other times except during Easter Season\.\*",
+        "",
+        text or "",
+        count=1,
+    )
+
+
+def _strip_dismissal_alleluia_rubric(text):
+    return re.sub(
+        r"(?s)\n\n\*From the Easter Vigil through the Day of Pentecost, “Alleluia, alleluia” is added to any of the dismissals\. It may be added at other times, except during Lent and on other penitential occasions\.\*\n\n\*The People respond\*\n\n\*\*Thanks be to God\. Alleluia, alleluia\.\*\*",
+        "",
+        text or "",
+        count=1,
+    )
+
+
+def _apply_psalm_gloria_patri(text, service_option_values):
+    mode = service_option_values.get("psalm.gloria_patri")
+    if mode not in {"include", "omit"}:
+        return text
+
+    output = text or ""
+    rubric = "\n\n*At the end of the psalm the Gloria Patri (Glory be...) may be sung or said*"
+    gloria_block = (
+        "\n\n    Glory be to the Father, and to the Son, and to the Holy Spirit; *\n"
+        "        as it was in the beginning, is now, and ever shall be,\n"
+        "        world without end. Amen."
+    )
+    if mode == "include":
+        return output.replace(rubric, "", 1)
+    output = output.replace(rubric + gloria_block, "", 1)
+    output = output.replace(rubric, "", 1)
+    return output
 
 
 def _apply_dismissal_alleluia_mode(text, service_option_values, season):
@@ -556,4 +644,4 @@ def _apply_dismissal_alleluia_mode(text, service_option_values, season):
         output = output.replace(
             "**Thanks be to God. Alleluia, alleluia.**", "**Thanks be to God.**"
         )
-    return output
+    return _strip_dismissal_alleluia_rubric(output)

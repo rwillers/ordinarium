@@ -1530,6 +1530,68 @@ div#page {
 	background: transparent;
 	gap: 0.6em;
 }
+.service-option-sections {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75em;
+}
+.service-option-section {
+	border: 1px solid var(--line-color);
+	border-radius: var(--radius-sm);
+	padding: 0.55em 0.75em;
+	background: rgba(255, 255, 255, 0.92);
+	overflow: hidden;
+}
+.service-option-section summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.service-option-section[open] summary {
+	margin-bottom: 0.6em;
+}
+.service-option-section.is-flat h4 {
+	margin: 0 0 0.6em 0;
+	font-size: 0.95em;
+}
+.service-option-controls {
+	display: grid;
+	gap: 0.65em;
+}
+.service-option-controls .plan-field {
+	min-width: 0;
+}
+.service-option-controls .plan-field input[type="text"],
+.service-option-controls .plan-field select,
+.service-option-controls .plan-field textarea {
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+.service-option-controls .plan-radio-group {
+	min-width: 0;
+}
+.service-option-preview {
+	border: 1px solid var(--line-color);
+	border-radius: var(--radius-sm);
+	background: #fff;
+	padding: 0.7em 0.8em;
+}
+.service-option-preview h4 {
+	margin: 0 0 0.55em 0;
+	font-size: 0.95em;
+}
+.service-option-preview-content {
+	max-height: 250px;
+	overflow: auto;
+	font-size: 0.94em;
+}
+.service-option-preview-content .text-section {
+	margin: 0;
+}
+.service-option-preview-content .propers-search-markdown {
+	margin: 0;
+}
 .service-add-form p {
 	margin: 0;
 }

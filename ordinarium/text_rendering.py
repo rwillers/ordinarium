@@ -129,7 +129,13 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         user_id=user_id,
     )
     ordinaries = [
-        {"title": item["title"], "text": item["text"], "type": item.get("type")}
+        {
+            "token": item["token"],
+            "title": item["title"],
+            "detailed_title": item.get("detailed_title"),
+            "text": item["text"],
+            "type": item.get("type"),
+        }
         for item in plan_items
         if not item.get("disabled")
     ]
@@ -326,7 +332,9 @@ def build_rendered_ordinaries(
     )
     ordinaries = [
         {
+            "token": item.get("token"),
             "title": item.get("title"),
+            "detailed_title": item.get("detailed_title"),
             "text": item.get("text"),
             "type": item.get("type"),
         }
@@ -486,6 +494,7 @@ def build_rendered_ordinaries(
             rendered_title = render_template_text(item.get("title"), context)
         rendered.append(
             {
+                "token": item.get("token"),
                 "title": rendered_title,
                 "text": rendered_text,
                 "type": item.get("type"),
