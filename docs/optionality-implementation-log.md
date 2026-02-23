@@ -262,3 +262,238 @@ Purpose:
   - Existing services render unchanged unless named keys are set.
 - Follow-up items:
   - Implement office-title/polity substitutions (`President/Sovereign/Prime Minister`, `Archbishop/Bishop/...`) via canonical local profile settings.
+
+### 2026-02-23 - Phase 2 templated inserts: AST polity/title substitutions
+
+- Scope: Implement AST Prayers placeholder substitutions for civil-leader/clergy names and titles.
+- Option keys added/changed:
+  - `prayers.ast.civil_leader.name` (text)
+  - `prayers.ast.civil_leader.title` (enum: `president` / `sovereign` / `prime_minister`)
+  - `prayers.ast.clergy.name` (text)
+  - `prayers.ast.clergy.title` (enum: `archbishop` / `bishop` / `priest` / `deacon`)
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added option definitions/validation in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_registry.py`.
+  - Added AST profile substitution rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py` for:
+    - `especially N, our President/Sovereign/Prime Minister`
+    - `servant(s) N, our Archbishop/Bishop/Priest/Deacon, etc.`
+- UI changes:
+  - Added AST Prayers row actions in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` for civil/clergy name/title settings.
+  - Extended Prayers indicator logic to include new AST profile keys in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+- Rendering behavior:
+  - User-selected names/titles replace AST slash placeholders non-destructively at render time.
+  - Unset keys preserve original source wording.
+- Tests added/updated:
+  - Added API update/validation tests for AST profile keys and rite restrictions in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added rendering tests for AST profile substitutions in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added service-page action presence checks for new AST profile controls in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing services remain unchanged unless new keys are set.
+- Follow-up items:
+  - Add optional profile presets that set a coherent civil/clergy combination in one selection.
+
+### 2026-02-23 - Phase 2 templated inserts: AST profile presets + default prayer substitutions
+
+- Scope: Add one-click AST profile selection and make AST prayer title substitutions default to profile values when unset.
+- Option keys added/changed:
+  - `prayers.ast.profile` (enum: `american` / `commonwealth`)
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added `prayers.ast.profile` definition/validation in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_registry.py`.
+  - Extended AST substitution rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py` to:
+    - Resolve selected profile (`american` default when unset/invalid)
+    - Apply profile title defaults (`President/Bishop` vs `Sovereign/Archbishop`)
+    - Keep per-field title/name overrides authoritative when present
+  - Updated override entry guard so substitutions still run when `service_option_values` is `{}` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py`.
+- UI changes:
+  - Added AST Prayers action for `Set AST profile` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+  - Extended Prayers indicator logic to include `prayers.ast.profile` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+- Rendering behavior:
+  - AST prayer text now defaults to profile-resolved substitutions even with no explicit AST keys set:
+    - Default profile: `american` -> `N, our President` and `N, our Bishop`
+    - Optional profile: `commonwealth` -> `N, our Sovereign` and `N, our Archbishop`
+  - Explicit civil/clergy name/title overrides still supersede profile defaults.
+- Tests added/updated:
+  - Added API update/validation coverage for `prayers.ast.profile` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added rendering tests for:
+    - default American substitutions with no AST options set
+    - Commonwealth profile defaults
+    - explicit name/title override precedence
+- Backward compatibility notes:
+  - AST prayer output now normalizes slash placeholders into concrete titles by default; no source text is mutated.
+- Follow-up items:
+  - Expand profile catalog only if additional regional presets are needed.
+
+### 2026-02-23 - Phase 2 cross-rite swaps: Prayers + Post Communion
+
+- Scope: Implement render-time swap controls for Prayers of the People and Post Communion Prayer so either rite can render the corresponding section from the other rite.
+- Option keys added/changed:
+  - `prayers.form` (enum: `rat` / `ast`)
+  - `post_communion.form` (enum: `own_rite` / `other_rite`)
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added option definitions/validation in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_registry.py`.
+  - Added cross-rite source loading and swap application in `/Users/rwillers/Desktop/Ordinarium/ordinarium/text_rendering.py`:
+    - loads opposite-rite text blocks for `The Prayers of the People` and `The Post Communion Prayer`
+    - applies section swap non-destructively before section-level option transforms
+  - Updated rendered-ordinaries pipeline so option transforms are applied pre-template-render for consistency across view/export/sync paths in `/Users/rwillers/Desktop/Ordinarium/ordinarium/text_rendering.py`.
+- UI changes:
+  - Updated planner row option mapping in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`:
+    - Prayers primary option key -> `prayers.form`
+    - Post Communion row now supports `post_communion.form` via row `Set option`
+  - Updated client-side indicator logic for the Prayers row primary key in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+- Rendering behavior:
+  - `prayers.form` now swaps the full Prayers section text between RAT/AST at render time.
+  - `post_communion.form=other_rite` now swaps the full Post Communion Prayer text to the other rite at render time.
+  - Source `texts.text` remains unchanged; swaps are render-only.
+- Tests added/updated:
+  - Added API update/validation coverage for `prayers.form` and `post_communion.form` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added service page assertions for row option bindings to new keys in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added rendering tests verifying both RAT->AST and AST->RAT section swaps for Prayers and Post Communion in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing services render unchanged unless one of the new cross-rite swap keys is set.
+- Follow-up items:
+  - Add swapped-form-specific optional controls where rites differ (for example RAT-only public-service insert controls when AST services swap to RAT Prayers).
+
+### 2026-02-23 - Phase 2 multi-select blocks: Comfortable Words
+
+- Scope: Implement one-or-more sentence selection for Comfortable Words.
+- Option keys added/changed:
+  - `comfortable_words.sentences` (multi-select array)
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added multi-select option definition and choices in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_registry.py`.
+  - Extended option normalization/validation for `input_type=multi_select` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_registry.py`.
+  - Added render transform in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py` to render only selected Comfortable Words sentence blocks while preserving section intro text.
+- UI changes:
+  - Bound Comfortable Words row to `comfortable_words.sentences` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+  - Extended service-option modal to support multi-select checkbox controls in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+- Rendering behavior:
+  - When set, only selected Comfortable Words sentence/ref blocks are rendered (in canonical order).
+  - When unset, source text is unchanged and all four sentence blocks remain.
+- Tests added/updated:
+  - Added API update/storage test for `comfortable_words.sentences` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added invalid-value test coverage for malformed multi-select payloads in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added service-page binding assertion for Comfortable Words option key in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added rendering test for selected Comfortable Words subset in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing services render unchanged unless `comfortable_words.sentences` is set.
+- Follow-up items:
+  - Reuse multi-select support for additional “one or more” rubric patterns as they are implemented.
+
+### 2026-02-23 - Phase 2 reading catalog select: canonical lesson alternates
+
+- Scope: Add lesson-level canonical alternate picking before free-text custom override.
+- Option keys added/changed:
+  - None in `service_option_values`; implemented in lesson override workflow.
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Added canonical lesson option resolution helpers in `/Users/rwillers/Desktop/Ordinarium/ordinarium/plan_lessons.py`:
+    - `_resolve_lesson_reference_options`
+    - `_resolve_lesson_reference_alternates`
+  - Refactored default lesson selection to reuse options resolution in `/Users/rwillers/Desktop/Ordinarium/ordinarium/plan_lessons.py`.
+  - Exposed canonical lesson alternates in planner context via `/Users/rwillers/Desktop/Ordinarium/ordinarium/plan_context.py`.
+  - Extended lesson save route in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py`:
+    - supports `lesson_mode=canonical`
+    - validates submitted canonical value against computed alternates
+    - stores selected canonical reference in `lesson_overrides`.
+- UI changes:
+  - Extended lesson modal in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` to include:
+    - `Use canonical alternate` mode
+    - canonical alternate `<select>` field
+  - Added planner-side JS wiring for mode toggling and canonical option population from `lesson_alternate_options`.
+- Rendering behavior:
+  - Canonical lesson picks flow through existing `lesson_overrides` rendering path and appear in view/export the same as custom overrides.
+  - Default behavior remains unchanged when no override is selected.
+- Tests added/updated:
+  - Added canonical lesson route acceptance/rejection tests (with deterministic alternates via monkeypatch) in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added service-page assertion for canonical lesson mode UI presence in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing `lesson_overrides` values continue to work unchanged.
+  - Canonical selections are stored as reference strings (not text IDs) in current implementation.
+- Follow-up items:
+  - Consider text-id-backed persistence for canonical picks to improve long-term stability against formatting changes.
+
+### 2026-02-23 - Phase 2 free-text list UX: section-level quick-add custom rows
+
+- Scope: Add quick-add custom row affordances from relevant sections without introducing fixed insertion anchors.
+- Option keys added/changed:
+  - None.
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - No API/data-model changes; reused existing custom element insert flow.
+- UI changes:
+  - Added section-level quick-add actions in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`:
+    - `Quick add additional prayer` (Prayers of the People)
+    - `Quick add communion sentence` (Ministration of Communion)
+    - `Quick add alternate blessing` (Blessing)
+  - Extended custom-element modal open flow to accept suggested title/text from action metadata while keeping insertion point as the selected row token.
+- Rendering behavior:
+  - Custom rows continue to render as independent elements in plan order.
+  - Quick-add now pre-fills suggested content and insertion point, but users can freely edit title/text and re-order.
+- Tests added/updated:
+  - Added service-page assertions for quick-add action presence in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing custom rows and add/edit flows remain unchanged; quick-add is additive UI behavior only.
+- Follow-up items:
+  - Consider adding more section-specific quick-add templates once usage patterns are known.
+
+### 2026-02-23 - Phase 2 templated inserts: Communion clause text overrides
+
+- Scope: Complete `templated_insert` coverage for bracketed clauses outside Prayers by allowing explicit replacement text in Communion invitation/distribution formulas.
+- Option keys added/changed:
+  - `communion.invitation.appended_text` (text)
+  - `communion.distribution.body_text` (text)
+  - `communion.distribution.blood_text` (text)
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - Extended Communion clause rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py`:
+    - explicit include/omit modes still supported
+    - custom text now replaces bracket content when set
+    - explicit `omit` continues to take precedence over custom text
+    - when text is set and no include/omit mode is set, clause auto-includes
+- UI changes:
+  - Added planner row actions in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`:
+    - `Set invitation clause text`
+    - `Set Body formula text`
+    - `Set Blood formula text`
+  - Extended Communion row “configured” indicator logic to include these text keys.
+- Rendering behavior:
+  - Communion bracket clauses can now be rendered as:
+    - omitted
+    - included with source bracket text
+    - included with customized replacement text
+- Tests added/updated:
+  - Added API update/storage assertions for new Communion text keys in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added invalid-value tests for max-length enforcement on the new text keys in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added service-page assertions for new row action labels in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+  - Added render tests for custom text replacement, auto-include behavior, and omit precedence in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing services remain unchanged unless new text keys are set.
+- Decision note:
+  - Deferred item retained: Gloria/hymn workflow remains intentionally out of scope for this phase.
+
+### 2026-02-23 - Phase 1 API/UI parity: remaining bracket token toggle exposure
+
+- Scope: Close the remaining API/UI gap for bracketed-token toggles by exposing Prayers adversity clause control in planner actions and indicator logic.
+- Option keys added/changed:
+  - No new keys; wired existing key:
+    - `prayers.adversity.especially_clause`
+- Schema/migrations:
+  - No additional schema changes.
+- Backend changes:
+  - No backend registry/render changes required; key already supported.
+- UI changes:
+  - Added Prayers row action `Set adversity clause` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+  - Updated Prayers row configured-indicator logic to include `prayers.adversity.especially_clause` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+- Tests added/updated:
+  - Extended service-page option action presence test for `Set adversity clause` in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`.
+- Backward compatibility notes:
+  - Existing services are unaffected; this is UI exposure/visibility parity for an already-supported option key.

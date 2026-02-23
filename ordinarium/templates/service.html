@@ -236,14 +236,18 @@
 			{% set service_option_key = 'lords_prayer.form' %}
 		{% elif ordinary.title == 'The Nicene Creed' %}
 			{% set service_option_key = 'creed.filioque_clause' %}
+		{% elif ordinary.title == 'The Comfortable Words' %}
+			{% set service_option_key = 'comfortable_words.sentences' %}
 		{% elif ordinary.title == 'The Prayers of the People' %}
-			{% set service_option_key = 'prayers.adversity.especially_clause' %}
+			{% set service_option_key = 'prayers.form' %}
 		{% elif ordinary.title == 'The Fraction' %}
 			{% set service_option_key = 'fraction.form' %}
 		{% elif ordinary.title == 'The Ministration of Communion' %}
 			{% set service_option_key = 'communion.invitation.form' %}
 		{% elif ordinary.title == 'The Dismissal' %}
 			{% set service_option_key = 'dismissal.form' %}
+		{% elif ordinary.title == 'The Post Communion Prayer' %}
+			{% set service_option_key = 'post_communion.form' %}
 		{% elif ordinary.title == 'The Confession and Absolution of Sin' and service.rite == 'Anglican Standard Text' %}
 			{% set service_option_key = 'confession.invitation_form' %}
 		{% endif %}
@@ -272,6 +276,11 @@
 			or service_option_values.get('prayers.departed.especially_names')
 			or service_option_values.get('prayers.saints.named_insert')
 			or service_option_values.get('prayers.saints.named_person')
+			or service_option_values.get('prayers.ast.profile')
+			or service_option_values.get('prayers.ast.civil_leader.name')
+			or service_option_values.get('prayers.ast.civil_leader.title')
+			or service_option_values.get('prayers.ast.clergy.name')
+			or service_option_values.get('prayers.ast.clergy.title')
 		) %}
 			{% set service_option_indicator_value = 'set' %}
 		{% endif %}
@@ -339,20 +348,38 @@
 						{% endif %}
 						{% if ordinary.title == 'The Ministration of Communion' %}
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.invitation.appended_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set invitation clause</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.invitation.appended_text" role="menuitem">{{ dropdown_item_icon('✎') }}Set invitation clause text</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.distribution.body_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set Body formula clause</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.distribution.body_text" role="menuitem">{{ dropdown_item_icon('✎') }}Set Body formula text</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.distribution.blood_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set Blood formula clause</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="communion.distribution.blood_text" role="menuitem">{{ dropdown_item_icon('✎') }}Set Blood formula text</button>
 						{% endif %}
 						{% if ordinary.title == 'The Prayers of the People' %}
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.adversity.especially_names" role="menuitem">{{ dropdown_item_icon('✎') }}Set adversity names</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.adversity.especially_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set adversity clause</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.departed.especially_names" role="menuitem">{{ dropdown_item_icon('✎') }}Set departed names</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.departed.especially_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set departed clause</button>
 						{% if service.rite == 'Renewed Ancient Text' %}
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.public_service.especially_names" role="menuitem">{{ dropdown_item_icon('✎') }}Set public service names</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.public_service.especially_clause" role="menuitem">{{ dropdown_item_icon('☰') }}Set public service clause</button>
 						{% elif service.rite == 'Anglican Standard Text' %}
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.ast.profile" role="menuitem">{{ dropdown_item_icon('☰') }}Set AST profile</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.ast.civil_leader.name" role="menuitem">{{ dropdown_item_icon('✎') }}Set civil leader name</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.ast.civil_leader.title" role="menuitem">{{ dropdown_item_icon('☰') }}Set civil leader title</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.ast.clergy.name" role="menuitem">{{ dropdown_item_icon('✎') }}Set clergy name</button>
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.ast.clergy.title" role="menuitem">{{ dropdown_item_icon('☰') }}Set clergy title</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.saints.named_person" role="menuitem">{{ dropdown_item_icon('✎') }}Set saint name</button>
 						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="prayers.saints.named_insert" role="menuitem">{{ dropdown_item_icon('☰') }}Set saints insert</button>
 						{% endif %}
+						{% endif %}
+						{% if ordinary.title == 'The Prayers of the People' %}
+						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Additional Prayer" data-suggest-text="Insert additional prayer or thanksgiving here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add additional prayer</button>
+						{% endif %}
+						{% if ordinary.title == 'The Ministration of Communion' %}
+						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Communion closing sentence" data-suggest-text="Insert a concluding sentence of Scripture here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add communion sentence</button>
+						{% endif %}
+						{% if ordinary.title == 'The Blessing' %}
+						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Alternate Blessing" data-suggest-text="Insert alternate blessing text here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add alternate blessing</button>
 						{% endif %}
 						<button class="dropdown-menu-item" type="button" data-custom-add role="menuitem">{{ dropdown_item_icon('＋') }}Add new</button>
 				{% endcall %}
@@ -429,11 +456,21 @@
 								<input type="radio" name="lesson_mode" value="default">
 								<span>Use default: <strong id="lesson-default-display"></strong></span>
 							</label>
+							<label class="plan-radio-option" data-lesson-canonical-option hidden>
+								<input type="radio" name="lesson_mode" value="canonical">
+								<span>Use canonical alternate</span>
+							</label>
 							<label class="plan-radio-option">
 								<input type="radio" name="lesson_mode" value="custom">
 								<span>Use custom passage</span>
 							</label>
 						</div>
+					</label>
+				</p>
+				<p data-lesson-canonical-field hidden>
+					<label class="plan-field">
+						<span>Canonical alternate</span>
+						<select name="canonical_passage" id="lesson-canonical-select"></select>
 					</label>
 				</p>
 				<p data-lesson-custom-field>
@@ -523,6 +560,7 @@
 						<span>Value</span>
 						<select name="option_value" id="service-option-select" data-service-option-select-field></select>
 						<input type="text" id="service-option-text" data-service-option-text-field hidden>
+						<div id="service-option-multi" data-service-option-multi-field hidden></div>
 					</label>
 				</p>
 				<div class="plan-custom-actions">
@@ -897,9 +935,12 @@
 		const serviceOptionForm = serviceOptionModal?.querySelector('form')
 		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
 		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
+		const lessonCanonicalSelect = lessonModal?.querySelector('#lesson-canonical-select')
 		const lessonCustomInput = lessonModal?.querySelector('input[name="custom_passage"]')
 		const lessonModeInputs = lessonModal?.querySelectorAll('input[name="lesson_mode"]')
 		const lessonError = lessonModal?.querySelector('#lesson-passage-error')
+		const lessonCanonicalOption = lessonModal?.querySelector('[data-lesson-canonical-option]')
+		const lessonCanonicalField = lessonModal?.querySelector('[data-lesson-canonical-field]')
 		const lessonCustomField = lessonModal?.querySelector('[data-lesson-custom-field]')
 		const offertorySelect = offertoryModal?.querySelector('#offertory-sentence-select')
 		const offertoryError = offertoryModal?.querySelector('#offertory-sentence-error')
@@ -912,11 +953,13 @@
 		const serviceOptionKeyInput = serviceOptionForm?.querySelector('input[name="option_key"]')
 		const serviceOptionSelect = serviceOptionForm?.querySelector('#service-option-select')
 		const serviceOptionTextInput = serviceOptionForm?.querySelector('#service-option-text')
+		const serviceOptionMultiField = serviceOptionForm?.querySelector('#service-option-multi')
 		const serviceOptionError = serviceOptionModal?.querySelector('#service-option-error')
 		const properOptionMap = {
 			collect_of_the_day: {{ proper_collect_options | tojson }},
 			proper_preface: {{ proper_preface_options | tojson }}
 		}
+		const lessonAlternateOptions = {{ lesson_alternate_options | tojson }}
 		const serviceOptionMap = {{ service_option_definitions | tojson }}
 		const serviceOptionValues = {{ service_option_values | tojson }}
 		let activeLessonRow = null
@@ -1229,11 +1272,13 @@
 				}
 				customModal.dataset.mode = 'edit'
 			} else {
+				const suggestedTitle = mode?.suggestedTitle || ''
+				const suggestedText = mode?.suggestedText || ''
 				if (titleInput) {
-					titleInput.value = ''
+					titleInput.value = suggestedTitle
 				}
 				if (textInput) {
-					textInput.value = ''
+					textInput.value = suggestedText
 				}
 				if (idInput) {
 					idInput.value = ''
@@ -1242,10 +1287,10 @@
 					insertAfterInput.value = mode?.insertAfter || ''
 				}
 				if (initialTitleInput) {
-					initialTitleInput.value = ''
+					initialTitleInput.value = suggestedTitle
 				}
 				if (initialTextInput) {
-					initialTextInput.value = ''
+					initialTextInput.value = suggestedText
 				}
 				if (modalTitle) {
 					modalTitle.textContent = 'Add custom element'
@@ -1290,10 +1335,14 @@
 				if (!row) {
 					return
 				}
+				const suggestedTitle = customAddButton.getAttribute('data-suggest-title') || ''
+				const suggestedText = customAddButton.getAttribute('data-suggest-text') || ''
 				closeServiceDropdownMenus()
 				openCustomModal({
 					type: 'add',
-					insertAfter: row.getAttribute('data-plan-token')
+					insertAfter: row.getAttribute('data-plan-token'),
+					suggestedTitle,
+					suggestedText
 				})
 				return
 			}
@@ -1347,6 +1396,12 @@
 			lessonModeInputs.forEach((input) => {
 				input.checked = input.value === mode
 			})
+			if (lessonCanonicalSelect) {
+				lessonCanonicalSelect.disabled = mode !== 'canonical'
+			}
+			if (lessonCanonicalField) {
+				lessonCanonicalField.hidden = mode !== 'canonical'
+			}
 			if (lessonCustomInput) {
 				lessonCustomInput.disabled = mode !== 'custom'
 			}
@@ -1363,11 +1418,26 @@
 			const lessonKey = row.getAttribute('data-lesson-kind')
 			const defaultValue = row.getAttribute('data-lesson-default') || ''
 			const customValue = row.getAttribute('data-lesson-custom') || ''
+			const alternates = Array.isArray(lessonAlternateOptions?.[lessonKey])
+				? lessonAlternateOptions[lessonKey]
+				: []
 			if (lessonKeyInput) {
 				lessonKeyInput.value = lessonKey || ''
 			}
 			if (lessonDefaultDisplay) {
 				lessonDefaultDisplay.textContent = defaultValue || 'No default available. Set a service date to auto-detect.'
+			}
+			if (lessonCanonicalOption) {
+				lessonCanonicalOption.hidden = alternates.length === 0
+			}
+			if (lessonCanonicalSelect) {
+				lessonCanonicalSelect.innerHTML = '<option value="">Select canonical alternate</option>'
+				alternates.forEach((optionValue) => {
+					const option = document.createElement('option')
+					option.value = optionValue
+					option.textContent = optionValue
+					lessonCanonicalSelect.appendChild(option)
+				})
 			}
 			if (lessonCustomInput) {
 				lessonCustomInput.value = customValue
@@ -1376,10 +1446,22 @@
 				lessonError.textContent = ''
 				lessonError.style.display = 'none'
 			}
-			setLessonMode(customValue ? 'custom' : 'default')
+			const isCanonicalOverride = customValue && alternates.includes(customValue)
+			if (lessonCanonicalSelect) {
+				lessonCanonicalSelect.value = isCanonicalOverride ? customValue : ''
+			}
+			if (isCanonicalOverride) {
+				setLessonMode('canonical')
+			} else if (customValue) {
+				setLessonMode('custom')
+			} else {
+				setLessonMode('default')
+			}
 			lessonModal.setAttribute('aria-hidden', 'false')
 			document.body.classList.add('is-modal-open')
-			if (lessonCustomInput && customValue) {
+			if (isCanonicalOverride && lessonCanonicalSelect) {
+				lessonCanonicalSelect.focus()
+			} else if (lessonCustomInput && customValue) {
 				lessonCustomInput.focus()
 			}
 		}
@@ -1487,14 +1569,20 @@
 		}
 
 		const renderServiceOptionControl = (optionKey, selectedValue) => {
-			if (!serviceOptionSelect || !serviceOptionTextInput) {
+			if (!serviceOptionSelect || !serviceOptionTextInput || !serviceOptionMultiField) {
 				return
 			}
 			const optionDefinition = serviceOptionMap?.[optionKey]
-			const inputType = optionDefinition?.input_type === 'text' ? 'text' : 'select'
+			const inputType =
+				optionDefinition?.input_type === 'text'
+					? 'text'
+					: optionDefinition?.input_type === 'multi_select'
+						? 'multi_select'
+						: 'select'
 			activeServiceOptionInputType = inputType
 			if (inputType === 'text') {
 				serviceOptionSelect.hidden = true
+				serviceOptionMultiField.hidden = true
 				serviceOptionTextInput.hidden = false
 				serviceOptionTextInput.value = selectedValue || ''
 				serviceOptionTextInput.placeholder = optionDefinition?.placeholder || ''
@@ -1506,7 +1594,33 @@
 				}
 				return
 			}
+			if (inputType === 'multi_select') {
+				serviceOptionSelect.hidden = true
+				serviceOptionTextInput.hidden = true
+				serviceOptionMultiField.hidden = false
+				serviceOptionMultiField.innerHTML = ''
+				const choices = Array.isArray(optionDefinition?.choices) ? optionDefinition.choices : []
+				const selectedSet = new Set(Array.isArray(selectedValue) ? selectedValue : [])
+				choices.forEach((choice, index) => {
+					const label = document.createElement('label')
+					label.className = 'plan-radio-option'
+					const input = document.createElement('input')
+					input.type = 'checkbox'
+					input.value = choice.value
+					input.checked = selectedSet.has(choice.value)
+					if (index === 0) {
+						input.setAttribute('data-service-option-multi-first', 'true')
+					}
+					const text = document.createElement('span')
+					text.textContent = choice.label || choice.value
+					label.appendChild(input)
+					label.appendChild(text)
+					serviceOptionMultiField.appendChild(label)
+				})
+				return
+			}
 			serviceOptionTextInput.hidden = true
+			serviceOptionMultiField.hidden = true
 			serviceOptionSelect.hidden = false
 			const choices = Array.isArray(optionDefinition?.choices) ? optionDefinition.choices : []
 			serviceOptionSelect.innerHTML = '<option value="">Use default wording</option>'
@@ -1530,23 +1644,32 @@
 			const primaryKey = row.getAttribute('data-service-option-key') || ''
 			const primaryValue = primaryKey ? (serviceOptionValues?.[primaryKey] || '') : ''
 			const hasDismissalAlleluia = Boolean(serviceOptionValues?.['dismissal.alleluia_mode'])
-			const hasFractionAlleluia = Boolean(serviceOptionValues?.['fraction.alleluia_mode'])
-			const hasCommunionSecondary =
-				Boolean(serviceOptionValues?.['communion.invitation.appended_clause'])
-				|| Boolean(serviceOptionValues?.['communion.distribution.body_clause'])
-				|| Boolean(serviceOptionValues?.['communion.distribution.blood_clause'])
-			const hasPrayersSecondary =
-				Boolean(serviceOptionValues?.['prayers.public_service.especially_clause'])
-				|| Boolean(serviceOptionValues?.['prayers.public_service.especially_names'])
-				|| Boolean(serviceOptionValues?.['prayers.adversity.especially_names'])
-				|| Boolean(serviceOptionValues?.['prayers.departed.especially_clause'])
+				const hasFractionAlleluia = Boolean(serviceOptionValues?.['fraction.alleluia_mode'])
+				const hasCommunionSecondary =
+					Boolean(serviceOptionValues?.['communion.invitation.appended_clause'])
+					|| Boolean(serviceOptionValues?.['communion.invitation.appended_text'])
+					|| Boolean(serviceOptionValues?.['communion.distribution.body_clause'])
+					|| Boolean(serviceOptionValues?.['communion.distribution.body_text'])
+					|| Boolean(serviceOptionValues?.['communion.distribution.blood_clause'])
+					|| Boolean(serviceOptionValues?.['communion.distribution.blood_text'])
+				const hasPrayersSecondary =
+					Boolean(serviceOptionValues?.['prayers.public_service.especially_clause'])
+					|| Boolean(serviceOptionValues?.['prayers.public_service.especially_names'])
+					|| Boolean(serviceOptionValues?.['prayers.adversity.especially_clause'])
+					|| Boolean(serviceOptionValues?.['prayers.adversity.especially_names'])
+					|| Boolean(serviceOptionValues?.['prayers.departed.especially_clause'])
 				|| Boolean(serviceOptionValues?.['prayers.departed.especially_names'])
 				|| Boolean(serviceOptionValues?.['prayers.saints.named_insert'])
 				|| Boolean(serviceOptionValues?.['prayers.saints.named_person'])
+				|| Boolean(serviceOptionValues?.['prayers.ast.profile'])
+				|| Boolean(serviceOptionValues?.['prayers.ast.civil_leader.name'])
+				|| Boolean(serviceOptionValues?.['prayers.ast.civil_leader.title'])
+				|| Boolean(serviceOptionValues?.['prayers.ast.clergy.name'])
+				|| Boolean(serviceOptionValues?.['prayers.ast.clergy.title'])
 			const isDismissalRow = primaryKey === 'dismissal.form'
 			const isFractionRow = primaryKey === 'fraction.form'
 			const isCommunionRow = primaryKey === 'communion.invitation.form'
-			const isPrayersRow = primaryKey === 'prayers.adversity.especially_clause'
+			const isPrayersRow = primaryKey === 'prayers.form'
 			indicator.hidden =
 				!primaryValue
 				&& !(isDismissalRow && hasDismissalAlleluia)
@@ -1582,6 +1705,11 @@
 			document.body.classList.add('is-modal-open')
 			if (activeServiceOptionInputType === 'text') {
 				serviceOptionTextInput.focus()
+			} else if (activeServiceOptionInputType === 'multi_select') {
+				const firstOption = serviceOptionMultiField?.querySelector('[data-service-option-multi-first]')
+				if (firstOption) {
+					firstOption.focus()
+				}
 			} else if (serviceOptionSelect) {
 				serviceOptionSelect.focus()
 			}
@@ -1646,7 +1774,7 @@
 					const customPassage = data?.custom_passage || ''
 					if (activeLessonRow) {
 						const indicator = activeLessonRow.querySelector('[data-lesson-indicator]')
-						if (mode === 'custom') {
+						if (mode === 'custom' || mode === 'canonical') {
 							activeLessonRow.setAttribute('data-lesson-custom', customPassage)
 							if (indicator) {
 								indicator.hidden = false
@@ -1781,9 +1909,17 @@
 					serviceOptionError.style.display = 'none'
 				}
 				const formData = new FormData(serviceOptionForm)
-				const optionValueInput = activeServiceOptionInputType === 'text'
-					? (serviceOptionTextInput?.value || '')
-					: (serviceOptionSelect?.value || '')
+				let optionValueInput = ''
+				if (activeServiceOptionInputType === 'text') {
+					optionValueInput = serviceOptionTextInput?.value || ''
+				} else if (activeServiceOptionInputType === 'multi_select') {
+					const selectedValues = Array.from(
+						serviceOptionMultiField?.querySelectorAll('input[type="checkbox"]:checked') || []
+					).map((input) => input.value)
+					optionValueInput = selectedValues.length ? JSON.stringify(selectedValues) : ''
+				} else {
+					optionValueInput = serviceOptionSelect?.value || ''
+				}
 				formData.set('option_value', optionValueInput)
 				try {
 					const response = await fetch(serviceOptionForm.action, {

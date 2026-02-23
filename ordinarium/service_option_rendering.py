@@ -7,7 +7,7 @@ EASTER_ALLELUIA_SEASONS = {"Easter", "Ascension", "Pentecost"}
 def apply_service_option_overrides(ordinaries, service_option_values, season=None):
     if not isinstance(ordinaries, list) or not ordinaries:
         return ordinaries
-    if not isinstance(service_option_values, dict) or not service_option_values:
+    if not isinstance(service_option_values, dict):
         return ordinaries
 
     updated = []
@@ -22,6 +22,8 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
             text = _apply_lords_prayer_form(text, service_option_values)
         elif title == "the nicene creed":
             text = _apply_creed_filioque_clause(text, service_option_values)
+        elif title == "the comfortable words":
+            text = _apply_comfortable_words_sentences(text, service_option_values)
         elif title == "the prayers of the people":
             text = _apply_prayers_bracket_clauses(text, service_option_values)
         elif title == "the confession and absolution of sin":
@@ -87,8 +89,50 @@ def _apply_creed_filioque_clause(text, service_option_values):
     return text
 
 
+def _apply_comfortable_words_sentences(text, service_option_values):
+    selected = _resolve_comfortable_words_selection(service_option_values)
+    if not selected:
+        return text
+
+    pattern = re.compile(
+        r"(?s)"
+        r"(.*?Hear the Word of God to all who truly turn to him\.\n\n)"
+        r"(Come to me, all who labor and are heavy laden, and I will give you rest\.\s*\n###### Matthew 11:28)\n\n"
+        r"(God so loved the world, that he gave his only-begotten Son, that whoever believes in him should not perish but have eternal life\.\s*\n###### John 3:16T)\n\n"
+        r"(The saying is trustworthy and deserving of full acceptance, that Christ Jesus came into the world to save sinners\.\s*\n###### 1 Timothy 1:15)\n\n"
+        r"(If anyone sins, we have an advocate with the Father, Jesus Christ the righteous\. He is the propitiation for our sins, and not for ours only, but also for the sins of the whole world\.\s*\n###### 1 John 2:1-2T)"
+        r"(.*)"
+    )
+    match = pattern.fullmatch(text or "")
+    if not match:
+        return text
+
+    sentence_map = {
+        "matthew_11_28": match.group(2).strip(),
+        "john_3_16": match.group(3).strip(),
+        "first_timothy_1_15": match.group(4).strip(),
+        "first_john_2_1_2": match.group(5).strip(),
+    }
+    ordered_selection = [
+        sentence_map[key]
+        for key in (
+            "matthew_11_28",
+            "john_3_16",
+            "first_timothy_1_15",
+            "first_john_2_1_2",
+        )
+        if key in selected
+    ]
+    if not ordered_selection:
+        return text
+
+    selected_block = "\n\n".join(ordered_selection)
+    return f"{match.group(1)}{selected_block}{match.group(6)}"
+
+
 def _apply_prayers_bracket_clauses(text, service_option_values):
     output = text or ""
+    output = _apply_ast_prayers_profile_substitutions(output, service_option_values)
     output = _apply_prayers_named_value_for_prefixes(
         output,
         service_option_values,
@@ -173,6 +217,38 @@ def _apply_prayers_bracket_clauses(text, service_option_values):
     return output
 
 
+def _apply_ast_prayers_profile_substitutions(text, service_option_values):
+    output = text or ""
+    profile = _resolve_ast_profile(service_option_values)
+    default_civil_title, default_clergy_title = _ast_profile_defaults(profile)
+
+    civil_name = (
+        _sanitize_named_value("prayers.ast.civil_leader.name", service_option_values)
+        or "N"
+    )
+    civil_title = _resolve_ast_civil_title(service_option_values) or default_civil_title
+    output = re.sub(
+        r"especially N,\s+our President/Sovereign/Prime Minister,",
+        f"especially {civil_name}, our {civil_title},",
+        output,
+        count=1,
+    )
+
+    clergy_name = (
+        _sanitize_named_value("prayers.ast.clergy.name", service_option_values) or "N"
+    )
+    clergy_title = (
+        _resolve_ast_clergy_title(service_option_values) or default_clergy_title
+    )
+    output = re.sub(
+        r"especially to your servant\(s\) N,\s+our Archbishop/Bishop/Priest/Deacon, etc\.,",
+        f"especially to your servant(s) {clergy_name}, our {clergy_title}, etc.,",
+        output,
+        count=1,
+    )
+    return output
+
+
 def _apply_dismissal_form(text, service_option_values):
     form = service_option_values.get("dismissal.form")
     option_map = {
@@ -242,32 +318,36 @@ def _apply_communion_invitation_form(text, service_option_values):
 
 def _apply_communion_clauses(text, service_option_values):
     output = text or ""
-    output = _apply_bracket_clause_option(
+    output = _apply_bracket_clause_with_text_option(
         output,
         "communion.invitation.appended_clause",
+        "communion.invitation.appended_text",
         "The gifts of God for the people of God.",
         service_option_values,
     )
-    output = _apply_bracket_clause_option(
+    output = _apply_bracket_clause_with_text_option(
         output,
         "communion.distribution.body_clause",
+        "communion.distribution.body_text",
         "The Body of our Lord Jesus Christ,",
         service_option_values,
     )
-    output = _apply_bracket_clause_option(
+    output = _apply_bracket_clause_with_text_option(
         output,
         "communion.distribution.blood_clause",
+        "communion.distribution.blood_text",
         "The Blood of our Lord Jesus Christ,",
         service_option_values,
     )
     return output
 
 
-def _apply_bracket_clause_option(text, key, prefix, service_option_values):
-    mode = service_option_values.get(key)
-    if mode not in {"include", "omit"}:
-        return text
-    return _apply_bracket_clause_mode(text, mode, prefix)
+def _apply_bracket_clause_with_text_option(
+    text, mode_key, text_key, prefix, service_option_values
+):
+    mode = _resolve_include_omit_mode(service_option_values, mode_key, text_key)
+    replacement_text = _sanitize_clause_text(text_key, service_option_values)
+    return _apply_bracket_clause_mode_with_text(text, mode, prefix, replacement_text)
 
 
 def _apply_bracket_clause_mode(text, mode, prefix):
@@ -280,6 +360,22 @@ def _apply_bracket_clause_mode(text, mode, prefix):
     if mode == "include":
         return pattern.sub(r"\1 \2", text, count=1)
     return pattern.sub(r"\1", text, count=1)
+
+
+def _apply_bracket_clause_mode_with_text(text, mode, prefix, replacement_text):
+    if mode not in {"include", "omit"}:
+        return text
+    pattern = re.compile(rf"({re.escape(prefix)}) \[(.+?)\]")
+    match = pattern.search(text or "")
+    if not match:
+        return text
+    if mode == "omit":
+        return pattern.sub(r"\1", text, count=1)
+    if replacement_text:
+        return pattern.sub(
+            lambda match: f"{match.group(1)} {replacement_text}", text, count=1
+        )
+    return pattern.sub(r"\1 \2", text, count=1)
 
 
 def _apply_bracket_clause_option_for_prefixes(
@@ -347,6 +443,65 @@ def _sanitize_named_value(value_key, service_option_values):
         return None
     cleaned = re.sub(r"\s+", " ", str(value)).strip().rstrip(",.;")
     return cleaned or None
+
+
+def _sanitize_clause_text(value_key, service_option_values):
+    value = service_option_values.get(value_key)
+    if not value:
+        return None
+    cleaned = re.sub(r"\s+", " ", str(value)).strip()
+    return cleaned or None
+
+
+def _resolve_comfortable_words_selection(service_option_values):
+    value = service_option_values.get("comfortable_words.sentences")
+    if not isinstance(value, list):
+        return set()
+    return {
+        item
+        for item in value
+        if item
+        in {
+            "matthew_11_28",
+            "john_3_16",
+            "first_timothy_1_15",
+            "first_john_2_1_2",
+        }
+    }
+
+
+def _resolve_ast_civil_title(service_option_values):
+    value = service_option_values.get("prayers.ast.civil_leader.title")
+    title_map = {
+        "president": "President",
+        "sovereign": "Sovereign",
+        "prime_minister": "Prime Minister",
+    }
+    return title_map.get(value)
+
+
+def _resolve_ast_clergy_title(service_option_values):
+    value = service_option_values.get("prayers.ast.clergy.title")
+    title_map = {
+        "archbishop": "Archbishop",
+        "bishop": "Bishop",
+        "priest": "Priest",
+        "deacon": "Deacon",
+    }
+    return title_map.get(value)
+
+
+def _resolve_ast_profile(service_option_values):
+    value = service_option_values.get("prayers.ast.profile")
+    if value in {"american", "commonwealth"}:
+        return value
+    return "american"
+
+
+def _ast_profile_defaults(profile):
+    if profile == "commonwealth":
+        return "Sovereign", "Archbishop"
+    return "President", "Bishop"
 
 
 def _alleluia_enabled(mode, season):

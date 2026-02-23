@@ -17,6 +17,76 @@ from .service_planning import (
     _resolve_proper_override,
 )
 
+RAT_RITE = "Renewed Ancient Text"
+AST_RITE = "Anglican Standard Text"
+_CROSS_RITE_TITLES = ("The Prayers of the People", "The Post Communion Prayer")
+
+
+def _other_rite_name(rite_name):
+    if rite_name == RAT_RITE:
+        return AST_RITE
+    if rite_name == AST_RITE:
+        return RAT_RITE
+    return None
+
+
+def _load_cross_rite_swap_texts(db, rite_name):
+    other_rite = _other_rite_name(rite_name)
+    if not other_rite:
+        return {}
+    placeholders = ",".join("?" for _ in _CROSS_RITE_TITLES)
+    rows = db.execute(
+        f"""
+        select title, text
+        from texts
+        where type=?
+          and filter_type=?
+          and filter_content=?
+          and title in ({placeholders})
+        """,
+        ("ordinarium", "rite", other_rite, *_CROSS_RITE_TITLES),
+    ).fetchall()
+    return {row["title"]: row["text"] for row in rows}
+
+
+def _apply_cross_rite_swaps(ordinaries, rite_name, service_option_values, swap_texts):
+    if not isinstance(ordinaries, list) or not ordinaries:
+        return ordinaries
+    if not isinstance(service_option_values, dict):
+        return ordinaries
+
+    prayers_form = service_option_values.get("prayers.form")
+    target_prayers_rite = None
+    if prayers_form == "rat":
+        target_prayers_rite = RAT_RITE
+    elif prayers_form == "ast":
+        target_prayers_rite = AST_RITE
+    swap_prayers = bool(target_prayers_rite and target_prayers_rite != rite_name)
+    swap_post_communion = (
+        service_option_values.get("post_communion.form") == "other_rite"
+    )
+
+    if not swap_prayers and not swap_post_communion:
+        return ordinaries
+
+    updated = []
+    for item in ordinaries:
+        output = dict(item)
+        if output.get("type") == "custom":
+            updated.append(output)
+            continue
+        title = output.get("title") or ""
+        if swap_prayers and title == "The Prayers of the People":
+            swapped = swap_texts.get("The Prayers of the People")
+            if swapped:
+                output["text"] = swapped
+        elif swap_post_communion and title == "The Post Communion Prayer":
+            swapped = swap_texts.get("The Post Communion Prayer")
+            if swapped:
+                output["text"] = swapped
+        updated.append(output)
+    return updated
+
 
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not saved_service:
@@ -63,6 +133,13 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         for item in plan_items
         if not item.get("disabled")
     ]
+    cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
+    ordinaries = _apply_cross_rite_swaps(
+        ordinaries,
+        rite_name,
+        saved_data.get("service_option_values"),
+        cross_rite_swap_texts,
+    )
     ordinaries = apply_service_option_overrides(
         ordinaries, saved_data.get("service_option_values"), season=season
     )
@@ -260,6 +337,16 @@ def build_rendered_ordinaries(
         return None
 
     season = saved_service.get("season") or ""
+    cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
+    ordinaries = _apply_cross_rite_swaps(
+        ordinaries,
+        rite_name,
+        saved_data.get("service_option_values"),
+        cross_rite_swap_texts,
+    )
+    ordinaries = apply_service_option_overrides(
+        ordinaries, saved_data.get("service_option_values"), season=season
+    )
 
     acclamation = None
     if season:
@@ -404,9 +491,6 @@ def build_rendered_ordinaries(
                 "type": item.get("type"),
             }
         )
-    rendered = apply_service_option_overrides(
-        rendered, saved_data.get("service_option_values"), season=season
-    )
     if include_metadata:
         return {
             "title": title,

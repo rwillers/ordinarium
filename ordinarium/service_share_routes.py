@@ -5,6 +5,7 @@ from flask import flash, g, jsonify, redirect, request, url_for
 from .auth_session import login_required
 from .db import get_db
 from .error_pages import render_error
+from .plan_lessons import _resolve_lesson_reference_alternates
 from .service_option_registry import (
     is_valid_service_option_value,
     normalize_service_option_value,
@@ -61,13 +62,14 @@ def register_service_share_routes(bp):
         lesson_key = normalize_value(request.form.get("lesson_key"))
         mode = normalize_value(request.form.get("lesson_mode")) or "default"
         custom_passage = normalize_value(request.form.get("custom_passage"))
+        canonical_passage = normalize_value(request.form.get("canonical_passage"))
 
         allowed_keys = {"lesson_1", "psalm", "lesson_2", "gospel"}
         if lesson_key not in allowed_keys:
             if wants_json:
                 return jsonify({"ok": False, "error": "Invalid lesson key."}), 400
             return render_error("Invalid lesson key.", 400)
-        if mode not in {"default", "custom"}:
+        if mode not in {"default", "custom", "canonical"}:
             if wants_json:
                 return jsonify({"ok": False, "error": "Invalid lesson mode."}), 400
             return render_error("Invalid lesson mode.", 400)
@@ -86,9 +88,30 @@ def register_service_share_routes(bp):
             if wants_json:
                 return jsonify({"ok": False, "error": "Service not found."}), 404
             return render_error("Service not found.", 404)
+        if mode == "canonical":
+            alternate_options = _resolve_lesson_reference_alternates(
+                service_data.get("service_date"),
+                service_data.get("observance_handle"),
+            )
+            valid_options = set(alternate_options.get(lesson_key) or [])
+            if not canonical_passage or canonical_passage not in valid_options:
+                if wants_json:
+                    return (
+                        jsonify(
+                            {
+                                "ok": False,
+                                "error": "Canonical lesson option is invalid.",
+                            }
+                        ),
+                        400,
+                    )
+                flash("Canonical lesson option is invalid.", "error")
+                return redirect(url_for("main.service", service_id=service_id))
         lesson_overrides = service_data.get("lesson_overrides") or {}
         if mode == "custom":
             lesson_overrides[lesson_key] = custom_passage
+        elif mode == "canonical":
+            lesson_overrides[lesson_key] = canonical_passage
         else:
             lesson_overrides.pop(lesson_key, None)
         service_data["lesson_overrides"] = lesson_overrides

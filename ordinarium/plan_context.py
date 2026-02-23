@@ -3,7 +3,10 @@ from datetime import date
 from .db import get_db
 from .plan_customizations import load_custom_templates
 from .plan_items import build_plan_items
-from .plan_lessons import _resolve_lesson_references
+from .plan_lessons import (
+    _resolve_lesson_reference_alternates,
+    _resolve_lesson_references,
+)
 from .plan_offertory import (
     _format_offertory_label,
     _load_offertory_sentences,
@@ -57,6 +60,7 @@ def build_plan_context(
     observance_title = saved_plan["title"] if saved_plan and saved_plan["title"] else ""
     observance_handle = saved_plan["observance_handle"] if saved_plan else None
     lesson_defaults = {}
+    lesson_alternate_options = {}
     if saved_plan and saved_plan["service_date"]:
         try:
             service_date = date.fromisoformat(saved_plan["service_date"])
@@ -64,6 +68,9 @@ def build_plan_context(
             service_date = None
         if service_date:
             lesson_defaults = _resolve_lesson_references(
+                saved_plan["service_date"], observance_handle
+            )
+            lesson_alternate_options = _resolve_lesson_reference_alternates(
                 saved_plan["service_date"], observance_handle
             )
             observance_title = observance_title or ""
@@ -133,6 +140,7 @@ def build_plan_context(
         "custom_templates": load_custom_templates(user_id),
         "lesson_overrides": lesson_overrides,
         "lesson_defaults": lesson_defaults,
+        "lesson_alternate_options": lesson_alternate_options,
         "proper_overrides": proper_overrides,
         "service_option_values": service_option_values,
         "service_option_definitions": service_option_definitions,
