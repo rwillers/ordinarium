@@ -583,12 +583,12 @@ def register_service_share_routes(bp):
         preview_text = preview_row.get("text") or ""
         if preview_row.get("type") == "custom":
             preview_html = render_template_string(
-                "{{ value | markdown_user }}",
+                "{{ value | markdown_user | trailing_indent }}",
                 value=preview_text,
             )
         else:
             preview_html = render_template_string(
-                "{{ value | markdown_template }}",
+                "{{ value | markdown_template | trailing_indent }}",
                 value=preview_text,
             )
         return jsonify(
@@ -596,5 +596,6 @@ def register_service_share_routes(bp):
                 "ok": True,
                 "title": preview_row.get("title") or row_item.get("title") or "",
                 "preview_html": preview_html,
+                "is_custom": preview_row.get("type") == "custom",
             }
         )

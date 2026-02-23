@@ -451,6 +451,11 @@ button:hover, input[type="submit"]:hover, .button:hover {
 	gap: 0.5em;
 	justify-content: flex-start;
 }
+.shared-table-menu .dropdown-menu-item {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	align-items: flex-start;
+}
 .dropdown-menu-item:hover,
 .dropdown-menu-item:focus-visible {
 	background: rgba(118, 50, 63, 0.08);
@@ -1104,6 +1109,7 @@ div#page {
 	.shared-table .dropdown-menu-panel {
 		top: calc(100% + 0.25em);
 		z-index: 1200;
+		max-width: min(22em, calc(100vw - 20px));
 	}
 	.shared-table .dropdown-menu-panel.is-layered {
 		position: fixed;
@@ -1591,6 +1597,21 @@ div#page {
 }
 .service-option-preview-content .propers-search-markdown {
 	margin: 0;
+}
+.service-option-preview-content .text-element-custom ul {
+	white-space: normal;
+	overflow: visible;
+	list-style: disc;
+	padding-left: 1.25em;
+}
+.service-option-preview-content .text-element-custom ul li {
+	display: list-item;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.service-option-preview-content .text-element-custom ul li + li {
+	margin-top: 0.35em;
 }
 .service-add-form p {
 	margin: 0;

@@ -612,3 +612,38 @@ Purpose:
   - Added regression coverage in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`:
     - `test_service_option_preview_route_matches_rows_by_token_not_index`
   - Confirms Collect/Dismissal/Post-Communion previews bind to the correct row even when upstream rows are conditionally removed, and that Post-Communion preview changes under option edits.
+
+### 2026-02-23 - Phase 3 tranche 2 follow-up: dismissal rubric + dropdown overflow + custom list preview parity
+
+- Scope: Address final UX/rendering bugs reported after shared-modal rollout.
+- Backend changes:
+  - Updated dismissal rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py`:
+    - When a non-default `dismissal.form` is explicitly selected, remove the trailing seasonal alleluia instruction block for the full set of dismissals.
+    - Expanded dismissal rubric-strip pattern to match both `**Thanks be to God. Alleluia, alleluia.**` and `**Thanks be to God.**` variants.
+  - Updated preview rendering in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py`:
+    - Apply `trailing_indent` filter in preview output to better match service-view typography.
+    - Return `is_custom` flag so UI can apply custom-row wrapper classes.
+- UI/styling changes:
+  - Updated preview wrapper in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html` to render content inside `.text-element` and `.text-element-custom` wrappers for closer parity with `/service/<id>/view`.
+  - Fixed long action-label overflow in `/Users/rwillers/Desktop/Ordinarium/ordinarium/static/styles/style.css`:
+    - allow wrapping for shared-table menu items
+    - increase shared-table dropdown max width to avoid clipping at right boundary
+  - Added preview-specific custom list rules so custom `ul > li` rows render with normal list behavior inside options preview.
+- Tests added/updated:
+  - Added custom preview metadata regression test in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`:
+    - `test_service_option_preview_route_marks_custom_rows`
+  - Extended dismissal form rendering test to assert removal of the trailing seasonal instruction block when non-default dismissal form is selected.
+
+### 2026-02-23 - Phase 3 tranche 2 follow-up: Kyrie variant selection regression fix
+
+- Scope: Fix Kyrie form selection not taking effect in live preview and final render.
+- Root cause:
+  - Kyrie variant parser in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py` did not correctly split markdown bullet blocks, so all Kyrie variants remained in output.
+- Backend changes:
+  - Reworked `_apply_kyrie_form` bullet parsing to detect bullet start offsets and select a single normalized bullet block by `kyrie.form`.
+- Tests added/updated:
+  - Added preview regression coverage in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`:
+    - `test_service_option_preview_route_applies_kyrie_form_selection`
+  - Strengthened final-render Kyrie assertions in:
+    - `test_text_uses_penitential_song_and_kyrie_form_options`
+  - Confirms only the selected Kyrie variant appears.

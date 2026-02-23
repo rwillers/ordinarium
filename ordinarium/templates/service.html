@@ -2095,9 +2095,15 @@
 							serviceOptionPreviewContent.innerHTML = '<p>Preview unavailable.</p>'
 							return
 						}
-						serviceOptionPreviewContent.innerHTML = data.preview_html
-							? `<div class="propers-search-markdown">${data.preview_html}</div>`
-							: '<p>No preview available.</p>'
+						if (data.preview_html) {
+							const elementClass = data.is_custom
+								? 'text-element text-element-custom'
+								: 'text-element'
+							serviceOptionPreviewContent.innerHTML =
+								`<div class="propers-search-markdown"><div class="${elementClass}">${data.preview_html}</div></div>`
+						} else {
+							serviceOptionPreviewContent.innerHTML = '<p>No preview available.</p>'
+						}
 				} catch (error) {
 					if (requestId === serviceOptionPreviewRequestId) {
 						serviceOptionPreviewContent.innerHTML = '<p>Preview unavailable.</p>'

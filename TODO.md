@@ -3,6 +3,8 @@
 Remaining work and follow-ups.
 
 - Work through practical liturgy usability items (complicated rubrics, either/or instructions, etc.) — likely requires manual review.
+- Move plan element addition buttons (+) to hovers with button centered over dividing border.
+- Consider exposing remaining plan element action buttons directly in row rather than in drop down menu.
 - Add Bible text integration options (and tie into both standard text rendering as well as live preview modals).
 - Add standardized element reordering, in line with BCP eucharist additional instructions.
 - Add "live edit" mode, in which changes can be made within the service view mode.

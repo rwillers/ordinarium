@@ -63,6 +63,14 @@ def _plan_row_token_for_detailed_title(html, detailed_title):
     return match.group(1) if match else ""
 
 
+def _plan_row_token_for_custom_id(html, custom_id):
+    pattern = re.compile(
+        rf'data-plan-token="([^"]+)"[^>]*data-custom-id="{int(custom_id)}"'
+    )
+    match = pattern.search(html or "")
+    return match.group(1) if match else ""
+
+
 def test_services_new_redirects_to_next_id(auth_client, service_factory):
     client, user_id = auth_client
     service_factory(user_id=user_id, service_id=10)
@@ -1414,6 +1422,54 @@ def test_service_option_preview_route_applies_lesson_override_patch(
     assert "Genesis 1:1-5" in preview_html
 
 
+def test_service_option_preview_route_marks_custom_rows(
+    auth_client, service_factory, app
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=332,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (
+                service_id,
+                user_id,
+                "Custom prayer",
+                "- One custom petition\n- Another custom petition",
+            ),
+        )
+        db.commit()
+        custom_row = db.execute(
+            "select id from service_custom_elements where service_id=? and user_id=? order by id desc limit 1",
+            (service_id, user_id),
+        ).fetchone()
+        assert custom_row is not None
+        custom_id = custom_row["id"]
+
+    service_response = client.get(f"/service/{service_id}")
+    assert service_response.status_code == 200
+    row_token = _plan_row_token_for_custom_id(
+        service_response.get_data(as_text=True),
+        custom_id,
+    )
+    assert row_token
+    preview_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={"row_token": row_token, "option_values": {}},
+        headers={"Accept": "application/json"},
+    )
+    assert preview_response.status_code == 200
+    payload = preview_response.get_json()
+    assert payload["ok"] is True
+    assert payload["is_custom"] is True
+    assert "custom petition" in (payload["preview_html"] or "")
+
+
 def test_service_option_preview_route_matches_rows_by_token_not_index(
     auth_client, service_factory
 ):
@@ -1481,6 +1537,62 @@ def test_service_option_preview_route_matches_rows_by_token_not_index(
     assert post_swap_payload["ok"] is True
     assert post_swap_payload["title"] == "The Post Communion Prayer"
     assert post_swap_payload["preview_html"] != post_default_payload["preview_html"]
+
+
+def test_service_option_preview_route_applies_kyrie_form_selection(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=333,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    service_response = client.get(f"/service/{service_id}")
+    assert service_response.status_code == 200
+    row_token = _plan_row_token_for_title(
+        service_response.get_data(as_text=True),
+        "The Kyrie",
+    )
+    assert row_token
+
+    greek_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={
+            "row_token": row_token,
+            "option_values": {
+                "penitential_song.mode": "kyrie",
+                "kyrie.form": "greek",
+            },
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert greek_response.status_code == 200
+    greek_payload = greek_response.get_json()
+    greek_html = greek_payload["preview_html"] or ""
+    assert greek_payload["ok"] is True
+    assert "Kyrie eleison." in greek_html
+    assert "Lord, have mercy upon us." not in greek_html
+
+    contemporary_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={
+            "row_token": row_token,
+            "option_values": {
+                "penitential_song.mode": "kyrie",
+                "kyrie.form": "contemporary",
+            },
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert contemporary_response.status_code == 200
+    contemporary_payload = contemporary_response.get_json()
+    contemporary_html = contemporary_payload["preview_html"] or ""
+    assert contemporary_payload["ok"] is True
+    assert "Lord, have mercy." in contemporary_html
+    assert "Lord, have mercy upon us." not in contemporary_html
+    assert "Kyrie eleison." not in contemporary_html
 
 
 def test_service_option_route_updates_filioque_clause_key(
@@ -2089,6 +2201,8 @@ def test_text_uses_penitential_song_and_kyrie_form_options(
     assert kyrie_response.status_code == 200
     kyrie_html = kyrie_response.get_data(as_text=True)
     assert "Kyrie eleison." in kyrie_html
+    assert "Lord, have mercy upon us." not in kyrie_html
+    assert "Lord, have mercy." not in kyrie_html
     assert "Holy God," not in kyrie_html
     assert "*or this*" not in kyrie_html
 
@@ -2140,6 +2254,8 @@ def test_text_uses_dismissal_form_option(auth_client, service_factory):
         "Let us go forth into the world, rejoicing in the power of the Holy Spirit."
         not in html
     )
+    assert "From the Easter Vigil through the Day of Pentecost" not in html
+    assert "*The People respond*" not in html
 
 
 def test_text_uses_fraction_form_option(auth_client, service_factory):

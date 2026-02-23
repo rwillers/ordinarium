@@ -85,14 +85,17 @@ def _apply_kyrie_form(text, service_option_values):
     }.get(form or "traditional")
 
     base = (text or "").split("\n\n*or this*", 1)[0]
-    bullet_blocks = re.findall(r"(?ms)^-\s+.+?(?=^-\s+|\Z)", base)
+    bullet_starts = [match.start() for match in re.finditer(r"(?m)^-\s+", base)]
+    if not bullet_starts:
+        return base
+    bullet_blocks = []
+    for index, start in enumerate(bullet_starts):
+        end = bullet_starts[index + 1] if index + 1 < len(bullet_starts) else len(base)
+        bullet_blocks.append(base[start:end].strip())
     if choice_index is None or choice_index >= len(bullet_blocks):
         return base
 
-    heading_match = re.match(r"(?s)(.*?)(?=^-\s+)", base)
-    if not heading_match:
-        return base
-    heading = heading_match.group(1).rstrip()
+    heading = base[: bullet_starts[0]].rstrip()
     selected = bullet_blocks[choice_index].strip()
     return f"{heading}\n\n{selected}"
 
@@ -320,7 +323,12 @@ def _apply_dismissal_form(text, service_option_values):
     if not match:
         return text
 
-    return f"{match.group(1)}{match.group(selected_group)}{match.group(6)}"
+    output = f"{match.group(1)}{match.group(selected_group)}{match.group(6)}"
+    # When a non-default dismissal form is explicitly selected, the trailing
+    # seasonal instruction block no longer applies to a choice among all forms.
+    if form and form != "go_forth_name_of_christ":
+        return _strip_dismissal_alleluia_rubric(output)
+    return output
 
 
 def _apply_fraction_form(text, service_option_values):
@@ -589,7 +597,7 @@ def _strip_fraction_alleluia_rubric(text):
 
 def _strip_dismissal_alleluia_rubric(text):
     return re.sub(
-        r"(?s)\n\n\*From the Easter Vigil through the Day of Pentecost, “Alleluia, alleluia” is added to any of the dismissals\. It may be added at other times, except during Lent and on other penitential occasions\.\*\n\n\*The People respond\*\n\n\*\*Thanks be to God\. Alleluia, alleluia\.\*\*",
+        r"(?s)\n\n\*From the Easter Vigil through the Day of Pentecost, “Alleluia, alleluia” is added to any of the dismissals\. It may be added at other times, except during Lent and on other penitential occasions\.\*\n\n\*The People respond\*\n\n\*\*Thanks be to God\.(?: Alleluia, alleluia\.)?\*\*",
         "",
         text or "",
         count=1,
