@@ -6,6 +6,7 @@ from flask import current_app, render_template, request
 from .db import get_db
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance
+from .service_option_rendering import apply_service_option_overrides
 from .service_defaults import OFFERTORY_DEFAULT_PREFIX
 from .service_planning import (
     build_plan_items,
@@ -44,6 +45,10 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not rite:
         return render_error("Rite not found.", 404)
 
+    season = request.args.get("season", "")
+    if service_id and saved_service and saved_service["season"]:
+        season = saved_service["season"]
+
     order_tokens = parse_plan_tokens(saved_service["text_order"])
     disabled_tokens = parse_plan_tokens(saved_service["text_disabled"])
     plan_items = build_plan_items(
@@ -58,13 +63,11 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         for item in plan_items
         if not item.get("disabled")
     ]
+    ordinaries = apply_service_option_overrides(
+        ordinaries, saved_data.get("service_option_values"), season=season
+    )
     if not ordinaries:
         return render_error("Content not found.", 404)
-
-    season = request.args.get("season", "")
-    if service_id:
-        if saved_service and saved_service["season"]:
-            season = saved_service["season"]
 
     acclamation = None
     if season:
@@ -193,6 +196,7 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         service_title=service_title,
         service_date_display=service_date_display,
         generated_at_display=generated_at_display,
+        service_option_values=saved_data.get("service_option_values") or {},
         ordinaries=ordinaries,
         **propers,
     )
@@ -400,6 +404,9 @@ def build_rendered_ordinaries(
                 "type": item.get("type"),
             }
         )
+    rendered = apply_service_option_overrides(
+        rendered, saved_data.get("service_option_values"), season=season
+    )
     if include_metadata:
         return {
             "title": title,
@@ -408,6 +415,7 @@ def build_rendered_ordinaries(
             "service_date_display": service_date_display,
             "service_date": saved_service.get("service_date"),
             "generated_at_display": generated_at_display,
+            "service_option_values": saved_data.get("service_option_values") or {},
             "ordinaries": rendered,
         }
     return rendered

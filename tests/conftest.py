@@ -101,6 +101,7 @@ def service_factory(app):
         text_order=None,
         text_disabled=None,
         observance_handle=None,
+        service_option_values=None,
     ):
         with app.app_context():
             db = get_db()
@@ -118,8 +119,9 @@ def service_factory(app):
                   observance_handle,
                   lesson_overrides,
                   offertory_sentence_id,
-                  proper_overrides
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  proper_overrides,
+                  service_option_values
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     service_id,
@@ -134,6 +136,7 @@ def service_factory(app):
                     json.dumps({}),
                     None,
                     json.dumps({}),
+                    json.dumps(service_option_values or {}),
                 ),
             )
             db.commit()

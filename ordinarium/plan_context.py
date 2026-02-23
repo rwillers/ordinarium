@@ -10,6 +10,7 @@ from .plan_offertory import (
     _offertory_default_row,
 )
 from .plan_propers import _load_collect_options, _load_proper_preface_options
+from .service_option_registry import get_service_option_definitions_for_rite
 from .plan_tokens import parse_plan_tokens, parse_json_object
 
 
@@ -33,6 +34,7 @@ def build_plan_context(
           lesson_overrides,
           offertory_sentence_id,
           proper_overrides,
+          service_option_values,
           updated_at
         from services
         where id=? and user_id=? limit 1
@@ -80,6 +82,11 @@ def build_plan_context(
     proper_overrides = parse_json_object(
         saved_plan["proper_overrides"] if saved_plan else None
     )
+    service_option_values = parse_json_object(
+        saved_plan["service_option_values"] if saved_plan else None
+    )
+    service_data["service_option_values"] = service_option_values
+    service_option_definitions = get_service_option_definitions_for_rite(effective_rite)
     proper_collect_options = _load_collect_options(db)
     proper_preface_options = _load_proper_preface_options(db)
     proper_collect_ids = {option["id"] for option in proper_collect_options}
@@ -127,6 +134,8 @@ def build_plan_context(
         "lesson_overrides": lesson_overrides,
         "lesson_defaults": lesson_defaults,
         "proper_overrides": proper_overrides,
+        "service_option_values": service_option_values,
+        "service_option_definitions": service_option_definitions,
         "proper_collect_options": proper_collect_options,
         "proper_preface_options": proper_preface_options,
         "collect_override_id": selected_collect_override_id,

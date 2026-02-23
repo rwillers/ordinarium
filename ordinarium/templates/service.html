@@ -218,6 +218,9 @@
 		{% set is_offertory = ordinary.title == 'The Offertory' %}
 		{% set proper_key = '' %}
 		{% set proper_selected_id = '' %}
+		{% set service_option_key = '' %}
+		{% set service_option_value = '' %}
+		{% set service_option_indicator_value = '' %}
 		{% if ordinary.title == 'The Collect of the Day' %}
 			{% set proper_key = 'collect_of_the_day' %}
 			{% if collect_override_id %}
@@ -229,8 +232,24 @@
 				{% set proper_selected_id = proper_preface_override_id %}
 			{% endif %}
 		{% endif %}
+		{% if ordinary.title == 'The Lord’s Prayer' %}
+			{% set service_option_key = 'lords_prayer.form' %}
+		{% elif ordinary.title == 'The Fraction' %}
+			{% set service_option_key = 'fraction.alleluia_mode' %}
+		{% elif ordinary.title == 'The Dismissal' %}
+			{% set service_option_key = 'dismissal.form' %}
+		{% elif ordinary.title == 'The Confession and Absolution of Sin' and service.rite == 'Anglican Standard Text' %}
+			{% set service_option_key = 'confession.invitation_form' %}
+		{% endif %}
+		{% if service_option_key %}
+			{% set service_option_value = service_option_values.get(service_option_key) or '' %}
+			{% set service_option_indicator_value = service_option_value %}
+		{% endif %}
+		{% if ordinary.title == 'The Dismissal' and service_option_values.get('dismissal.alleluia_mode') %}
+			{% set service_option_indicator_value = 'set' %}
+		{% endif %}
 		{% set checkbox_id = 'include-' ~ loop.index0 %}
-		<tr class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %} draggable="true">
+		<tr class="plan-row" data-plan-token="{{ ordinary.token }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %}{% if service_option_key %} data-service-option-key="{{ service_option_key }}" data-service-option-value="{{ service_option_value | e }}"{% endif %} draggable="true">
 			<td class="shared-table-select">
 				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 			</td>
@@ -243,6 +262,9 @@
 						{% endif %}
 						{% if proper_key %}
 						<span class="plan-lesson-override"{% if not proper_selected_id %} hidden{% endif %} data-proper-indicator>Proper overridden</span>
+						{% endif %}
+						{% if service_option_key %}
+						<span class="plan-lesson-override"{% if not service_option_indicator_value %} hidden{% endif %} data-service-option-indicator>Option set</span>
 						{% endif %}
 					</span>
 					{% if ordinary.text %}
@@ -278,6 +300,12 @@
 						{% endif %}
 						{% if is_offertory %}
 						<button class="dropdown-menu-item" type="button" data-offertory-edit role="menuitem">{{ dropdown_item_icon('✓') }}Select sentence</button>
+						{% endif %}
+						{% if service_option_key %}
+						<button class="dropdown-menu-item" type="button" data-service-option-edit role="menuitem">{{ dropdown_item_icon('⚙') }}Set option</button>
+						{% endif %}
+						{% if ordinary.title == 'The Dismissal' %}
+						<button class="dropdown-menu-item" type="button" data-service-option-edit data-option-key="dismissal.alleluia_mode" role="menuitem">{{ dropdown_item_icon('☀') }}Set alleluia mode</button>
 						{% endif %}
 						<button class="dropdown-menu-item" type="button" data-custom-add role="menuitem">{{ dropdown_item_icon('＋') }}Add new</button>
 				{% endcall %}
@@ -430,6 +458,27 @@
 				</p>
 				<div class="plan-custom-actions">
 					<button class="plan-submit" type="button" data-proper-override-close>Cancel</button>
+					<button class="plan-submit" type="submit">Save</button>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="share-modal" id="service-option-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-service-option-close></div>
+		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="service-option-title">
+			<h3 id="service-option-title">Set option</h3>
+			<form class="plan-custom-form" action="{{ url_for('main.service_option_value', service_id=service_id) }}" method="post">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<input type="hidden" name="option_key" value="">
+				<p class="plan-save-error" id="service-option-error" aria-live="polite"></p>
+				<p>
+					<label class="plan-field">
+						<span>Value</span>
+						<select name="option_value" id="service-option-select"></select>
+					</label>
+				</p>
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-service-option-close>Cancel</button>
 					<button class="plan-submit" type="submit">Save</button>
 				</div>
 			</form>
@@ -791,11 +840,13 @@
 		const lessonModal = document.querySelector('#lesson-passage-modal')
 		const offertoryModal = document.querySelector('#offertory-sentence-modal')
 		const properModal = document.querySelector('#proper-override-modal')
+		const serviceOptionModal = document.querySelector('#service-option-modal')
 		const templateSelect = document.querySelector('#custom-template-select')
 		const customForm = customModal?.querySelector('form')
 		const lessonForm = lessonModal?.querySelector('form')
 		const offertoryForm = offertoryModal?.querySelector('form')
 		const properForm = properModal?.querySelector('form')
+		const serviceOptionForm = serviceOptionModal?.querySelector('form')
 		const lessonKeyInput = lessonForm?.querySelector('input[name="lesson_key"]')
 		const lessonDefaultDisplay = lessonModal?.querySelector('#lesson-default-display')
 		const lessonCustomInput = lessonModal?.querySelector('input[name="custom_passage"]')
@@ -809,20 +860,27 @@
 		const properTextSelect = properModal?.querySelector('#proper-text-select')
 		const properError = properModal?.querySelector('#proper-override-error')
 		const properCustomField = properModal?.querySelector('[data-proper-custom-field]')
+		const serviceOptionTitle = serviceOptionModal?.querySelector('#service-option-title')
+		const serviceOptionKeyInput = serviceOptionForm?.querySelector('input[name="option_key"]')
+		const serviceOptionSelect = serviceOptionForm?.querySelector('#service-option-select')
+		const serviceOptionError = serviceOptionModal?.querySelector('#service-option-error')
 		const properOptionMap = {
 			collect_of_the_day: {{ proper_collect_options | tojson }},
 			proper_preface: {{ proper_preface_options | tojson }}
 		}
+		const serviceOptionMap = {{ service_option_definitions | tojson }}
+		const serviceOptionValues = {{ service_option_values | tojson }}
 		let activeLessonRow = null
 		let activeOffertoryRow = null
 		let activeProperRow = null
-	const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
+		let activeServiceOptionRow = null
+		const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
 
-	const pcoServiceTypeSelects = document.querySelectorAll('[data-pco-service-type]')
-	const pcoLinkForms = document.querySelectorAll('[data-pco-link-form]')
-	const pcoLinkButtons = document.querySelectorAll('[data-pco-link-mode]')
-	const syncDateNodes = document.querySelectorAll('[data-sync-datetime]')
-	pcoServiceTypeSelects.forEach((select) => {
+		const pcoServiceTypeSelects = document.querySelectorAll('[data-pco-service-type]')
+		const pcoLinkForms = document.querySelectorAll('[data-pco-link-form]')
+		const pcoLinkButtons = document.querySelectorAll('[data-pco-link-mode]')
+		const syncDateNodes = document.querySelectorAll('[data-sync-datetime]')
+		pcoServiceTypeSelects.forEach((select) => {
 		const formatPlanDate = (value) => {
 			if (!value) {
 				return ''
@@ -1219,6 +1277,17 @@
 				openOffertoryModal(row)
 				return
 			}
+			const serviceOptionEditButton = event.target.closest('[data-service-option-edit]')
+			if (serviceOptionEditButton) {
+				const row = serviceOptionEditButton.closest('.plan-row')
+				if (!row) {
+					return
+				}
+				const optionKeyOverride = serviceOptionEditButton.getAttribute('data-option-key') || ''
+				closeServiceDropdownMenus()
+				openServiceOptionModal(row, optionKeyOverride)
+				return
+			}
 		})
 
 		const setLessonMode = (mode) => {
@@ -1365,6 +1434,76 @@
 			properModal.setAttribute('aria-hidden', 'true')
 			document.body.classList.remove('is-modal-open')
 			activeProperRow = null
+		}
+
+		const renderServiceOptionChoices = (optionKey, selectedValue) => {
+			if (!serviceOptionSelect) {
+				return
+			}
+			const optionDefinition = serviceOptionMap?.[optionKey]
+			const choices = Array.isArray(optionDefinition?.choices) ? optionDefinition.choices : []
+			serviceOptionSelect.innerHTML = '<option value="">Use default wording</option>'
+			choices.forEach((choice) => {
+				const option = document.createElement('option')
+				option.value = choice.value
+				option.textContent = choice.label || choice.value
+				serviceOptionSelect.appendChild(option)
+			})
+			serviceOptionSelect.value = selectedValue || ''
+		}
+
+		const updateServiceOptionIndicator = (row) => {
+			if (!row) {
+				return
+			}
+			const indicator = row.querySelector('[data-service-option-indicator]')
+			if (!indicator) {
+				return
+			}
+			const primaryKey = row.getAttribute('data-service-option-key') || ''
+			const primaryValue = primaryKey ? (serviceOptionValues?.[primaryKey] || '') : ''
+			const hasDismissalAlleluia = Boolean(serviceOptionValues?.['dismissal.alleluia_mode'])
+			const isDismissalRow = primaryKey === 'dismissal.form'
+			indicator.hidden = !primaryValue && !(isDismissalRow && hasDismissalAlleluia)
+		}
+
+		const openServiceOptionModal = (row, optionKeyOverride = '') => {
+			if (!serviceOptionModal || !row) {
+				return
+			}
+			activeServiceOptionRow = row
+			const rowOptionKey = row.getAttribute('data-service-option-key') || ''
+			const optionKey = optionKeyOverride || rowOptionKey
+			const optionValue = serviceOptionValues?.[optionKey] || ''
+			if (!optionKey) {
+				return
+			}
+			if (serviceOptionKeyInput) {
+				serviceOptionKeyInput.value = optionKey
+			}
+			if (serviceOptionTitle) {
+				const optionLabel = serviceOptionMap?.[optionKey]?.label || 'option'
+				serviceOptionTitle.textContent = `Set ${optionLabel}`
+			}
+			renderServiceOptionChoices(optionKey, optionValue)
+			if (serviceOptionError) {
+				serviceOptionError.textContent = ''
+				serviceOptionError.style.display = 'none'
+			}
+			serviceOptionModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			if (serviceOptionSelect) {
+				serviceOptionSelect.focus()
+			}
+		}
+
+		const closeServiceOptionModal = () => {
+			if (!serviceOptionModal) {
+				return
+			}
+			serviceOptionModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
+			activeServiceOptionRow = null
 		}
 
 		if (lessonModeInputs && lessonModeInputs.length) {
@@ -1541,6 +1680,63 @@
 			})
 		}
 
+		if (serviceOptionForm) {
+			serviceOptionForm.addEventListener('submit', async (event) => {
+				event.preventDefault()
+				if (!serviceOptionForm.action) {
+					return
+				}
+				if (serviceOptionError) {
+					serviceOptionError.textContent = ''
+					serviceOptionError.style.display = 'none'
+				}
+				const formData = new FormData(serviceOptionForm)
+				try {
+					const response = await fetch(serviceOptionForm.action, {
+						method: 'POST',
+						body: formData,
+						headers: {
+							Accept: 'application/json',
+							...csrfHeaders
+						}
+					})
+					if (!response.ok) {
+						const data = await response.json().catch(() => null)
+						const message = data?.error || 'Unable to save option.'
+						if (serviceOptionError) {
+							serviceOptionError.textContent = message
+							serviceOptionError.style.display = 'block'
+						}
+						return
+					}
+					const data = await response.json().catch(() => null)
+					const optionKey = data?.option_key || ''
+					const optionValue = data?.option_value || ''
+					if (optionKey) {
+						if (optionValue) {
+							serviceOptionValues[optionKey] = optionValue
+						} else {
+							delete serviceOptionValues[optionKey]
+						}
+					}
+					if (activeServiceOptionRow && optionKey) {
+						const rowOptionKey = activeServiceOptionRow.getAttribute('data-service-option-key') || ''
+						if (rowOptionKey && rowOptionKey === optionKey) {
+							activeServiceOptionRow.setAttribute('data-service-option-value', optionValue)
+						}
+						updateServiceOptionIndicator(activeServiceOptionRow)
+					}
+					markPcoUnsynced()
+					closeServiceOptionModal()
+				} catch (error) {
+					if (serviceOptionError) {
+						serviceOptionError.textContent = 'Unable to save option.'
+						serviceOptionError.style.display = 'block'
+					}
+				}
+			})
+		}
+
 
 		if (customModal) {
 			customModal.addEventListener('click', (event) => {
@@ -1605,6 +1801,14 @@
 			properModal.addEventListener('click', (event) => {
 				if (event.target && event.target.matches('[data-proper-override-close]')) {
 					closeProperModal()
+				}
+			})
+		}
+
+		if (serviceOptionModal) {
+			serviceOptionModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-service-option-close]')) {
+					closeServiceOptionModal()
 				}
 			})
 		}

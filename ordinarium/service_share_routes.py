@@ -5,6 +5,10 @@ from flask import flash, g, jsonify, redirect, request, url_for
 from .auth_session import login_required
 from .db import get_db
 from .error_pages import render_error
+from .service_option_registry import (
+    is_valid_service_option_value,
+    normalize_service_option_value,
+)
 from .service_store import load_service_payload, update_service_columns
 
 
@@ -231,4 +235,55 @@ def register_service_share_routes(bp):
         db.commit()
         if wants_json:
             return jsonify({"ok": True, "offertory_sentence_id": sentence_id})
+        return redirect(url_for("main.service", service_id=service_id))
+
+    @bp.route("/service/<int:service_id>/service-option", methods=["POST"])
+    @login_required
+    def service_option_value(service_id):
+        def normalize_value(value):
+            if value is None:
+                return None
+            value = value.strip()
+            return value or None
+
+        wants_json = "application/json" in request.headers.get("Accept", "")
+        option_key = normalize_value(request.form.get("option_key"))
+        option_value = normalize_service_option_value(request.form.get("option_value"))
+
+        if not option_key:
+            if wants_json:
+                return jsonify({"ok": False, "error": "Invalid option key."}), 400
+            return render_error("Invalid option key.", 400)
+
+        db = get_db()
+        service_data = load_service_payload(db, service_id, g.user["id"])
+        if not service_data:
+            if wants_json:
+                return jsonify({"ok": False, "error": "Service not found."}), 404
+            return render_error("Service not found.", 404)
+
+        if not is_valid_service_option_value(
+            service_data.get("rite"), option_key, option_value
+        ):
+            if wants_json:
+                return jsonify({"ok": False, "error": "Invalid option value."}), 400
+            return render_error("Invalid option value.", 400)
+
+        service_option_values = service_data.get("service_option_values") or {}
+        if option_value is None:
+            service_option_values.pop(option_key, None)
+        else:
+            service_option_values[option_key] = option_value
+        service_data["service_option_values"] = service_option_values
+
+        update_service_columns(db, service_id, service_data)
+        db.commit()
+        if wants_json:
+            return jsonify(
+                {
+                    "ok": True,
+                    "option_key": option_key,
+                    "option_value": option_value,
+                }
+            )
         return redirect(url_for("main.service", service_id=service_id))

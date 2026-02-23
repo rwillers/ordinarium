@@ -222,11 +222,12 @@ CREATE TABLE services (
   lesson_overrides JSON CHECK (lesson_overrides IS NULL OR json_valid(lesson_overrides)),
   offertory_sentence_id INTEGER,
   proper_overrides JSON CHECK (proper_overrides IS NULL OR json_valid(proper_overrides)),
+  service_option_values JSON CHECK (service_option_values IS NULL OR json_valid(service_option_values)) DEFAULT '{}',
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
-INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id, proper_overrides) VALUES (1, 1, 'Last Sunday of Christmas', 'Renewed Ancient Text', 'Christmastide', '2026-01-04', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL, NULL);
-INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id, proper_overrides) VALUES (2, 1, 'First Sunday of Epiphanytide', 'Renewed Ancient Text', 'Epiphanytide', '2026-01-11', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL, NULL);
+INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id, proper_overrides, service_option_values) VALUES (1, 1, 'Last Sunday of Christmas', 'Renewed Ancient Text', 'Christmastide', '2026-01-04', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL, NULL, '{}');
+INSERT INTO services (id, user_id, title, rite, season, service_date, text_order, text_disabled, observance_handle, lesson_overrides, offertory_sentence_id, proper_overrides, service_option_values) VALUES (2, 1, 'First Sunday of Epiphanytide', 'Renewed Ancient Text', 'Epiphanytide', '2026-01-11', '[68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96]', '[]', NULL, NULL, NULL, NULL, '{}');
 CREATE INDEX idx_services_user_id ON services(user_id);
 CREATE INDEX idx_services_rite ON services(rite);
 CREATE INDEX idx_services_season ON services(season);
