@@ -451,6 +451,11 @@ button:hover, input[type="submit"]:hover, .button:hover {
 	gap: 0.5em;
 	justify-content: flex-start;
 }
+.shared-table-menu .dropdown-menu-item {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	align-items: flex-start;
+}
 .dropdown-menu-item:hover,
 .dropdown-menu-item:focus-visible {
 	background: rgba(118, 50, 63, 0.08);
@@ -683,6 +688,9 @@ div#page {
 	}
 	.plan-row.is-menu-open {
 		z-index: 3;
+	}
+	.plan-row-penitential-hidden {
+		display: none;
 	}
 	.plan-item {
 		display: block;
@@ -1104,11 +1112,87 @@ div#page {
 	.shared-table .dropdown-menu-panel {
 		top: calc(100% + 0.25em);
 		z-index: 1200;
+		max-width: min(22em, calc(100vw - 20px));
 	}
 	.shared-table .dropdown-menu-panel.is-layered {
 		position: fixed;
 		right: auto;
 		z-index: 2100;
+	}
+	.plan-row-content {
+		position: relative;
+	}
+	.plan-row-handle-cell {
+		position: relative;
+	}
+	.plan-row-actions {
+		display: inline-flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.35em;
+	}
+	.plan-row-action-form {
+		margin: 0;
+	}
+	.plan-row-action-icon {
+		width: 2em;
+		height: 2em;
+		padding: 0;
+		font-size: 1em;
+		line-height: 1;
+	}
+	.plan-row-action-delete {
+		color: #7c1e1a !important;
+	}
+	.plan-row-action-options {
+		color: var(--rubric-color) !important;
+	}
+	.plan-row-add-button {
+		position: absolute;
+		right: 0.2em;
+		bottom: 0;
+		transform: translateY(50%);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.7em;
+		height: 1.7em;
+		border: 1px solid rgba(118, 50, 63, 0.4);
+		border-radius: 999px;
+		background: #fff;
+		color: var(--rubric-color);
+		font-size: 1em;
+		padding: 0;
+		cursor: pointer;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.12s ease, background-color 0.12s ease;
+		z-index: 6;
+	}
+	.plan-row-add-button > span {
+		display: block;
+		line-height: 1;
+		transform: translateY(-0.06em);
+	}
+	.plan-row-add-button:hover {
+		background: #fff;
+	}
+	.plan-row-add-button:focus-visible {
+		opacity: 1;
+		pointer-events: auto;
+		outline: 2px solid rgba(118, 50, 63, 0.35);
+		outline-offset: 1px;
+	}
+	.plan-row:hover .plan-row-add-button,
+	.plan-row:focus-within .plan-row-add-button {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	@media (hover: none) {
+		.plan-row-add-button {
+			opacity: 1;
+			pointer-events: auto;
+		}
 	}
 	@media (max-width: 700px) {
 		.shared-table {
@@ -1529,6 +1613,83 @@ div#page {
 	padding: 0;
 	background: transparent;
 	gap: 0.6em;
+}
+.service-option-sections {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75em;
+}
+.service-option-section {
+	border: 1px solid var(--line-color);
+	border-radius: var(--radius-sm);
+	padding: 0.55em 0.75em;
+	background: rgba(255, 255, 255, 0.92);
+	overflow: hidden;
+}
+.service-option-section summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.service-option-section[open] summary {
+	margin-bottom: 0.6em;
+}
+.service-option-section.is-flat h4 {
+	margin: 0 0 0.6em 0;
+	font-size: 0.95em;
+}
+.service-option-controls {
+	display: grid;
+	gap: 0.65em;
+}
+.service-option-controls .plan-field {
+	min-width: 0;
+}
+.service-option-controls .plan-field input[type="text"],
+.service-option-controls .plan-field select,
+.service-option-controls .plan-field textarea {
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+.service-option-controls .plan-radio-group {
+	min-width: 0;
+}
+.service-option-preview {
+	border: 1px solid var(--line-color);
+	border-radius: var(--radius-sm);
+	background: #fff;
+	padding: 0.7em 0.8em;
+}
+.service-option-preview h4 {
+	margin: 0 0 0.55em 0;
+	font-size: 0.95em;
+}
+.service-option-preview-content {
+	max-height: 250px;
+	overflow: auto;
+	font-size: 0.94em;
+}
+.service-option-preview-content .text-section {
+	margin: 0;
+}
+.service-option-preview-content .propers-search-markdown {
+	margin: 0;
+}
+.service-option-preview-content .text-element-custom ul {
+	white-space: normal;
+	overflow: visible;
+	list-style: disc;
+	padding-left: 1.25em;
+}
+.service-option-preview-content .text-element-custom ul li {
+	display: list-item;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.service-option-preview-content .text-element-custom ul li + li {
+	margin-top: 0.35em;
 }
 .service-add-form p {
 	margin: 0;

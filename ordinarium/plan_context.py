@@ -3,13 +3,17 @@ from datetime import date
 from .db import get_db
 from .plan_customizations import load_custom_templates
 from .plan_items import build_plan_items
-from .plan_lessons import _resolve_lesson_references
+from .plan_lessons import (
+    _resolve_lesson_reference_alternates,
+    _resolve_lesson_references,
+)
 from .plan_offertory import (
     _format_offertory_label,
     _load_offertory_sentences,
     _offertory_default_row,
 )
 from .plan_propers import _load_collect_options, _load_proper_preface_options
+from .service_option_registry import get_service_option_definitions_for_rite
 from .plan_tokens import parse_plan_tokens, parse_json_object
 
 
@@ -33,6 +37,7 @@ def build_plan_context(
           lesson_overrides,
           offertory_sentence_id,
           proper_overrides,
+          service_option_values,
           updated_at
         from services
         where id=? and user_id=? limit 1
@@ -55,6 +60,7 @@ def build_plan_context(
     observance_title = saved_plan["title"] if saved_plan and saved_plan["title"] else ""
     observance_handle = saved_plan["observance_handle"] if saved_plan else None
     lesson_defaults = {}
+    lesson_alternate_options = {}
     if saved_plan and saved_plan["service_date"]:
         try:
             service_date = date.fromisoformat(saved_plan["service_date"])
@@ -62,6 +68,9 @@ def build_plan_context(
             service_date = None
         if service_date:
             lesson_defaults = _resolve_lesson_references(
+                saved_plan["service_date"], observance_handle
+            )
+            lesson_alternate_options = _resolve_lesson_reference_alternates(
                 saved_plan["service_date"], observance_handle
             )
             observance_title = observance_title or ""
@@ -80,6 +89,11 @@ def build_plan_context(
     proper_overrides = parse_json_object(
         saved_plan["proper_overrides"] if saved_plan else None
     )
+    service_option_values = parse_json_object(
+        saved_plan["service_option_values"] if saved_plan else None
+    )
+    service_data["service_option_values"] = service_option_values
+    service_option_definitions = get_service_option_definitions_for_rite(effective_rite)
     proper_collect_options = _load_collect_options(db)
     proper_preface_options = _load_proper_preface_options(db)
     proper_collect_ids = {option["id"] for option in proper_collect_options}
@@ -126,7 +140,10 @@ def build_plan_context(
         "custom_templates": load_custom_templates(user_id),
         "lesson_overrides": lesson_overrides,
         "lesson_defaults": lesson_defaults,
+        "lesson_alternate_options": lesson_alternate_options,
         "proper_overrides": proper_overrides,
+        "service_option_values": service_option_values,
+        "service_option_definitions": service_option_definitions,
         "proper_collect_options": proper_collect_options,
         "proper_preface_options": proper_preface_options,
         "collect_override_id": selected_collect_override_id,

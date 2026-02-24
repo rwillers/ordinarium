@@ -66,6 +66,7 @@ def register_service_persist_routes(bp):
             "lesson_overrides": lesson_overrides,
             "offertory_sentence_id": existing_data.get("offertory_sentence_id"),
             "proper_overrides": proper_overrides,
+            "service_option_values": existing_data.get("service_option_values") or {},
         }
         payload.update(
             {

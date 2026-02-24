@@ -4,6 +4,8 @@ from .plan_items import build_plan_items
 from .plan_lessons import (
     _build_lesson_readings,
     _format_lesson_reference,
+    _resolve_lesson_reference_alternates,
+    _resolve_lesson_reference_options,
     _resolve_lesson_references,
 )
 from .plan_offertory import (
@@ -33,6 +35,8 @@ __all__ = [
     "_parse_json_object",
     "_build_lesson_readings",
     "_format_lesson_reference",
+    "_resolve_lesson_reference_alternates",
+    "_resolve_lesson_reference_options",
     "_resolve_lesson_references",
     "_resolve_seasonal_text",
     "_resolve_collect_text",

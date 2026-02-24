@@ -29,7 +29,8 @@ def _load_service_plan(service_id, user_id):
           observance_handle,
           lesson_overrides,
           offertory_sentence_id,
-          proper_overrides
+          proper_overrides,
+          service_option_values
         from services
         where id=? and user_id=?
         limit 1
@@ -43,6 +44,7 @@ def _load_service_plan(service_id, user_id):
         "lesson_overrides": parse_json_object(saved["lesson_overrides"]),
         "offertory_sentence_id": saved["offertory_sentence_id"],
         "proper_overrides": parse_json_object(saved["proper_overrides"]),
+        "service_option_values": parse_json_object(saved["service_option_values"]),
     }
     ordinaries = build_rendered_ordinaries(
         service_id,

@@ -6,6 +6,7 @@ from flask import current_app, render_template, request
 from .db import get_db
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance
+from .service_option_rendering import apply_service_option_overrides
 from .service_defaults import OFFERTORY_DEFAULT_PREFIX
 from .service_planning import (
     build_plan_items,
@@ -15,6 +16,76 @@ from .service_planning import (
     _resolve_offertory_sentence,
     _resolve_proper_override,
 )
+
+RAT_RITE = "Renewed Ancient Text"
+AST_RITE = "Anglican Standard Text"
+_CROSS_RITE_TITLES = ("The Prayers of the People", "The Post Communion Prayer")
+
+
+def _other_rite_name(rite_name):
+    if rite_name == RAT_RITE:
+        return AST_RITE
+    if rite_name == AST_RITE:
+        return RAT_RITE
+    return None
+
+
+def _load_cross_rite_swap_texts(db, rite_name):
+    other_rite = _other_rite_name(rite_name)
+    if not other_rite:
+        return {}
+    placeholders = ",".join("?" for _ in _CROSS_RITE_TITLES)
+    rows = db.execute(
+        f"""
+        select title, text
+        from texts
+        where type=?
+          and filter_type=?
+          and filter_content=?
+          and title in ({placeholders})
+        """,
+        ("ordinarium", "rite", other_rite, *_CROSS_RITE_TITLES),
+    ).fetchall()
+    return {row["title"]: row["text"] for row in rows}
+
+
+def _apply_cross_rite_swaps(ordinaries, rite_name, service_option_values, swap_texts):
+    if not isinstance(ordinaries, list) or not ordinaries:
+        return ordinaries
+    if not isinstance(service_option_values, dict):
+        return ordinaries
+
+    prayers_form = service_option_values.get("prayers.form")
+    target_prayers_rite = None
+    if prayers_form == "rat":
+        target_prayers_rite = RAT_RITE
+    elif prayers_form == "ast":
+        target_prayers_rite = AST_RITE
+    swap_prayers = bool(target_prayers_rite and target_prayers_rite != rite_name)
+    swap_post_communion = (
+        service_option_values.get("post_communion.form") == "other_rite"
+    )
+
+    if not swap_prayers and not swap_post_communion:
+        return ordinaries
+
+    updated = []
+    for item in ordinaries:
+        output = dict(item)
+        if output.get("type") == "custom":
+            updated.append(output)
+            continue
+        title = output.get("title") or ""
+        if swap_prayers and title == "The Prayers of the People":
+            swapped = swap_texts.get("The Prayers of the People")
+            if swapped:
+                output["text"] = swapped
+        elif swap_post_communion and title == "The Post Communion Prayer":
+            swapped = swap_texts.get("The Post Communion Prayer")
+            if swapped:
+                output["text"] = swapped
+        updated.append(output)
+    return updated
 
 
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
@@ -44,6 +115,10 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not rite:
         return render_error("Rite not found.", 404)
 
+    season = request.args.get("season", "")
+    if service_id and saved_service and saved_service["season"]:
+        season = saved_service["season"]
+
     order_tokens = parse_plan_tokens(saved_service["text_order"])
     disabled_tokens = parse_plan_tokens(saved_service["text_disabled"])
     plan_items = build_plan_items(
@@ -54,17 +129,28 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         user_id=user_id,
     )
     ordinaries = [
-        {"title": item["title"], "text": item["text"], "type": item.get("type")}
+        {
+            "token": item["token"],
+            "title": item["title"],
+            "detailed_title": item.get("detailed_title"),
+            "text": item["text"],
+            "type": item.get("type"),
+        }
         for item in plan_items
         if not item.get("disabled")
     ]
+    cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
+    ordinaries = _apply_cross_rite_swaps(
+        ordinaries,
+        rite_name,
+        saved_data.get("service_option_values"),
+        cross_rite_swap_texts,
+    )
+    ordinaries = apply_service_option_overrides(
+        ordinaries, saved_data.get("service_option_values"), season=season
+    )
     if not ordinaries:
         return render_error("Content not found.", 404)
-
-    season = request.args.get("season", "")
-    if service_id:
-        if saved_service and saved_service["season"]:
-            season = saved_service["season"]
 
     acclamation = None
     if season:
@@ -87,6 +173,7 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
+    decalogue_text = fetch_text("law_form", "rite", rite_name)
     observance = None
     propers_list = []
     if saved_service and saved_service["service_date"]:
@@ -153,6 +240,11 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             if proper_preface
             else "*Error: No proper preface found.*"
         ),
+        "decalogue_text": (
+            decalogue_text["text"]
+            if decalogue_text
+            else "*Error: No Decalogue text found.*"
+        ),
     }
     lesson_overrides = saved_data.get("lesson_overrides")
     if not isinstance(lesson_overrides, dict):
@@ -193,6 +285,7 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
         service_title=service_title,
         service_date_display=service_date_display,
         generated_at_display=generated_at_display,
+        service_option_values=saved_data.get("service_option_values") or {},
         ordinaries=ordinaries,
         **propers,
     )
@@ -245,7 +338,9 @@ def build_rendered_ordinaries(
     )
     ordinaries = [
         {
+            "token": item.get("token"),
             "title": item.get("title"),
+            "detailed_title": item.get("detailed_title"),
             "text": item.get("text"),
             "type": item.get("type"),
         }
@@ -256,6 +351,16 @@ def build_rendered_ordinaries(
         return None
 
     season = saved_service.get("season") or ""
+    cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
+    ordinaries = _apply_cross_rite_swaps(
+        ordinaries,
+        rite_name,
+        saved_data.get("service_option_values"),
+        cross_rite_swap_texts,
+    )
+    ordinaries = apply_service_option_overrides(
+        ordinaries, saved_data.get("service_option_values"), season=season
+    )
 
     acclamation = None
     if season:
@@ -278,6 +383,7 @@ def build_rendered_ordinaries(
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
+    decalogue_text = fetch_text("law_form", "rite", rite_name)
 
     observance = None
     propers_list = []
@@ -345,6 +451,11 @@ def build_rendered_ordinaries(
             if proper_preface
             else "*Error: No proper preface found.*"
         ),
+        "decalogue_text": (
+            decalogue_text["text"]
+            if decalogue_text
+            else "*Error: No Decalogue text found.*"
+        ),
     }
     lesson_overrides = saved_data.get("lesson_overrides")
     if not isinstance(lesson_overrides, dict):
@@ -395,6 +506,7 @@ def build_rendered_ordinaries(
             rendered_title = render_template_text(item.get("title"), context)
         rendered.append(
             {
+                "token": item.get("token"),
                 "title": rendered_title,
                 "text": rendered_text,
                 "type": item.get("type"),
@@ -408,6 +520,7 @@ def build_rendered_ordinaries(
             "service_date_display": service_date_display,
             "service_date": saved_service.get("service_date"),
             "generated_at_display": generated_at_display,
+            "service_option_values": saved_data.get("service_option_values") or {},
             "ordinaries": rendered,
         }
     return rendered

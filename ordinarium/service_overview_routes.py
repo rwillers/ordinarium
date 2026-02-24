@@ -146,6 +146,7 @@ def register_service_overview_routes(bp):
         source_lesson_overrides = None
         source_offertory_sentence_id = None
         source_proper_overrides = None
+        source_service_option_values = None
 
         if mode == "copy":
             raw_source_id = request.form.get("from_service_id")
@@ -163,7 +164,8 @@ def register_service_overview_routes(bp):
                   text_disabled,
                   lesson_overrides,
                   offertory_sentence_id,
-                  proper_overrides
+                  proper_overrides,
+                  service_option_values
                 from services
                 where id=? and user_id=? limit 1
                 """,
@@ -182,6 +184,9 @@ def register_service_overview_routes(bp):
             source_lesson_overrides = _parse_json_object(source["lesson_overrides"])
             source_offertory_sentence_id = source["offertory_sentence_id"]
             source_proper_overrides = _parse_json_object(source["proper_overrides"])
+            source_service_option_values = _parse_json_object(
+                source["service_option_values"]
+            )
 
         def build_base_payload(raw_date, handle):
             if not raw_date:
@@ -246,6 +251,8 @@ def register_service_overview_routes(bp):
                     payload["offertory_sentence_id"] = source_offertory_sentence_id
                 if source_proper_overrides:
                     payload["proper_overrides"] = source_proper_overrides
+                if source_service_option_values:
+                    payload["service_option_values"] = source_service_option_values
                 update_service_columns(db, new_service_id, payload)
                 return new_service_id
 
