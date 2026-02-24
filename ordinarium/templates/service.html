@@ -963,15 +963,18 @@
 				serviceRite === 'Renewed Ancient Text'
 					? 'Anglican Standard Text'
 					: 'Renewed Ancient Text'
-		let activeLessonRow = null
-			let activeOffertoryRow = null
-			let activeProperRow = null
-			let activeServiceOptionRow = null
-			let activeServiceOptionKeys = []
-			let activeLegacyOptionTypes = []
-			let serviceOptionPreviewTimer = null
-			let serviceOptionPreviewRequestId = 0
-			const serviceId = planMetaForm?.querySelector('input[name="service_id"]')?.value
+			let activeLessonRow = null
+				let activeOffertoryRow = null
+				let activeProperRow = null
+				let activeServiceOptionRow = null
+				let activeServiceOptionKeys = []
+				let activeLegacyOptionTypes = []
+				let serviceOptionPreviewTimer = null
+				let serviceOptionPreviewRequestId = 0
+				const parsedServiceId = Number.parseInt({{ service_id | tojson }}, 10)
+				const serviceId = Number.isFinite(parsedServiceId) && parsedServiceId > 0
+					? parsedServiceId
+					: null
 
 		const pcoServiceTypeSelects = document.querySelectorAll('[data-pco-service-type]')
 		const pcoLinkForms = document.querySelectorAll('[data-pco-link-form]')
@@ -1855,18 +1858,18 @@
 				field.className = 'plan-field'
 				field.setAttribute('data-legacy-type', 'lesson_override')
 				field.setAttribute('data-lesson-key', lessonKey)
-				field.innerHTML = `
-					<span>Passage</span>
-					<div class="plan-radio-group">
-						<label class="plan-radio-option">
-							<input type="radio" name="service-option-lesson-mode" value="default">
-							<span>Use default: <strong>${defaultValue || 'No default available.'}</strong></span>
-						</label>
-						<label class="plan-radio-option" data-legacy-lesson-canonical-option ${alternates.length ? '' : 'hidden'}>
-							<input type="radio" name="service-option-lesson-mode" value="canonical" ${alternates.length ? '' : 'disabled'}>
-							<span>Use canonical alternate</span>
-						</label>
-						<label class="plan-radio-option">
+					field.innerHTML = `
+						<span>Passage</span>
+						<div class="plan-radio-group">
+							<label class="plan-radio-option">
+								<input type="radio" name="service-option-lesson-mode" value="default">
+								<span>Use default: <strong data-legacy-lesson-default-value></strong></span>
+							</label>
+							<label class="plan-radio-option" data-legacy-lesson-canonical-option hidden>
+								<input type="radio" name="service-option-lesson-mode" value="canonical" disabled>
+								<span>Use canonical alternate</span>
+							</label>
+							<label class="plan-radio-option">
 							<input type="radio" name="service-option-lesson-mode" value="custom">
 							<span>Use custom passage</span>
 						</label>
@@ -1885,10 +1888,26 @@
 							<input type="text" data-legacy-lesson-custom-input placeholder="e.g., John 3:16-18">
 						</label>
 					</div>
-				`
-				const canonicalSelect = field.querySelector('[data-legacy-lesson-canonical-select]')
-				alternates.forEach((value) => {
-					const option = document.createElement('option')
+					`
+					const defaultValueEl = field.querySelector('[data-legacy-lesson-default-value]')
+					if (defaultValueEl) {
+						defaultValueEl.textContent = defaultValue || 'No default available.'
+					}
+					const canonicalOption = field.querySelector('[data-legacy-lesson-canonical-option]')
+					const canonicalModeInput = canonicalOption?.querySelector(
+						'input[name="service-option-lesson-mode"][value="canonical"]'
+					)
+					if (alternates.length) {
+						if (canonicalOption) {
+							canonicalOption.hidden = false
+						}
+						if (canonicalModeInput) {
+							canonicalModeInput.disabled = false
+						}
+					}
+					const canonicalSelect = field.querySelector('[data-legacy-lesson-canonical-select]')
+					alternates.forEach((value) => {
+						const option = document.createElement('option')
 					option.value = value
 					option.textContent = value
 					canonicalSelect?.appendChild(option)
@@ -2758,11 +2777,15 @@
 			editButton.setAttribute('aria-label', 'Edit custom element')
 			editButton.textContent = '✎'
 
-			const deleteForm = document.createElement('form')
-			deleteForm.className = 'plan-row-action-form'
-			deleteForm.action = serviceId
-				? `/service/${serviceId}/custom-element/${customId}/delete`
-				: ''
+				const deleteForm = document.createElement('form')
+				deleteForm.className = 'plan-row-action-form'
+				const parsedCustomId = Number.parseInt(String(customId), 10)
+				const safeCustomId = Number.isFinite(parsedCustomId) && parsedCustomId > 0
+					? parsedCustomId
+					: null
+				deleteForm.action = serviceId && safeCustomId
+					? `/service/${serviceId}/custom-element/${safeCustomId}/delete`
+					: ''
 			deleteForm.method = 'post'
 			deleteForm.setAttribute('data-custom-delete', '')
 			deleteForm.onsubmit = () =>
