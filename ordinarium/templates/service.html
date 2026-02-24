@@ -301,14 +301,20 @@
 			{% set service_option_indicator_value = 'set' %}
 		{% endif %}
 		{% set checkbox_id = 'include-' ~ loop.index0 %}
-			<tr class="plan-row" data-plan-token="{{ ordinary.token }}" data-ordinary-title="{{ ordinary.title | e }}" data-ordinary-detailed-title="{{ (ordinary.detailed_title or '') | e }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %}{% if service_option_key %} data-service-option-key="{{ service_option_key }}" data-service-option-value="{{ service_option_value | e }}"{% endif %} draggable="true">
+			<tr class="plan-row{% if ordinary.title == 'The Trisagion' %} plan-row-penitential-hidden{% endif %}" data-plan-token="{{ ordinary.token }}" data-ordinary-title="{{ ordinary.title | e }}" data-ordinary-detailed-title="{{ (ordinary.detailed_title or '') | e }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if ordinary.title == 'The Trisagion' %} data-penitential-hidden="true"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %}{% if service_option_key %} data-service-option-key="{{ service_option_key }}" data-service-option-value="{{ service_option_value | e }}"{% endif %} draggable="{{ 'false' if ordinary.title == 'The Trisagion' else 'true' }}">
 			<td class="shared-table-select">
 				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 			</td>
 			<td>
 				<label class="plan-item" for="{{ checkbox_id }}">
 					<span class="plan-title">
-						{% if ordinary.detailed_title %}{{ ordinary.detailed_title }}{% else %}{{ ordinary.title }}{% endif %}
+						{% if ordinary.title == 'The Kyrie' %}
+							Penitential Acclamation (Kyrie / Trisagion)
+						{% elif ordinary.detailed_title %}
+							{{ ordinary.detailed_title }}
+						{% else %}
+							{{ ordinary.title }}
+						{% endif %}
 						{% if lesson_kind %}
 						<span class="plan-lesson-override"{% if not lesson_overrides.get(lesson_kind) %} hidden{% endif %} data-lesson-indicator>Passage overridden</span>
 						{% endif %}
@@ -696,12 +702,27 @@
 		const planSaveStatus = document.querySelector('#plan-save-status')
 		const planSaveError = document.querySelector('#plan-save-error')
 		const planList = document.querySelector('.plan-list')
+		const kyriePlanRow = planList?.querySelector('.plan-row[data-ordinary-title="The Kyrie"]') || null
+		const trisagionPlanRow = planList?.querySelector('.plan-row[data-ordinary-title="The Trisagion"]') || null
 		let draggedRow = null
+
+		const syncPenitentialRowInputs = () => {
+			if (!kyriePlanRow || !trisagionPlanRow) {
+				return
+			}
+			const kyrieInput = kyriePlanRow.querySelector('input[type="checkbox"]')
+			const trisagionInput = trisagionPlanRow.querySelector('input[type="checkbox"]')
+			if (!kyrieInput || !trisagionInput) {
+				return
+			}
+			trisagionInput.checked = kyrieInput.checked
+		}
 
 		const updatePlanInputs = () => {
 			if (!planMetaForm || !planList) {
 				return false
 			}
+			syncPenitentialRowInputs()
 			const ids = planMetaForm.querySelector('input[name="ids"]')
 			const disabled = planMetaForm.querySelector('input[name="disabled"]')
 			if (!ids || !disabled) {
@@ -860,6 +881,7 @@
 		if (planServiceDate && planServiceDate.value) {
 			setSaveStatus('Saved', 'saved')
 		}
+		syncPenitentialRowInputs()
 
 		if (planList) {
 			planList.addEventListener('dragstart', (event) => {
@@ -890,6 +912,7 @@
 
 			planList.addEventListener('change', (event) => {
 				if (event.target && event.target.matches('input[type="checkbox"]')) {
+					syncPenitentialRowInputs()
 					scheduleAutosave()
 				}
 			})
@@ -2211,8 +2234,11 @@
 				}
 				activeServiceOptionRow = row
 				const rowTitle = row.getAttribute('data-ordinary-title') || 'row'
+				const modalTitle = rowTitle === 'The Kyrie'
+					? 'Penitential Acclamation (Kyrie / Trisagion)'
+					: rowTitle
 				if (serviceOptionTitle) {
-					serviceOptionTitle.textContent = `Set options: ${rowTitle}`
+					serviceOptionTitle.textContent = `Set options: ${modalTitle}`
 				}
 				if (serviceOptionRowTokenInput) {
 					serviceOptionRowTokenInput.value = row.getAttribute('data-plan-token') || ''

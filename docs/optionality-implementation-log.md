@@ -647,3 +647,20 @@ Purpose:
   - Strengthened final-render Kyrie assertions in:
     - `test_text_uses_penitential_song_and_kyrie_form_options`
   - Confirms only the selected Kyrie variant appears.
+
+### 2026-02-23 - Phase 3 tranche 2 follow-up: planner UI consolidation for Kyrie/Trisagion
+
+- Scope: Reduce either/or confusion by presenting Kyrie/Trisagion as a single planner element while keeping storage/model compatibility.
+- UI changes:
+  - Planner row label for Kyrie now displays as `Penitential Acclamation (Kyrie / Trisagion)` in `/Users/rwillers/Desktop/Ordinarium/ordinarium/templates/service.html`.
+  - Trisagion row is hidden in planner UI (retained in underlying token set) via `plan-row-penitential-hidden` class in `/Users/rwillers/Desktop/Ordinarium/ordinarium/static/styles/style.css`.
+  - Shared options modal title is normalized to the same composite label for Kyrie row options.
+  - Checkbox sync keeps hidden Trisagion token include-state aligned with visible Kyrie row state so autosave/order payloads remain stable.
+- Rendering behavior:
+  - Default penitential mode is now Kyrie when unset (previously both rendered) in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_option_rendering.py`.
+  - Live preview route supports composite fallback: when previewing Kyrie token with `penitential_song.mode=trisagion`, preview resolves to Trisagion content in `/Users/rwillers/Desktop/Ordinarium/ordinarium/service_share_routes.py`.
+- Tests added/updated:
+  - Added default-mode regression test in `/Users/rwillers/Desktop/Ordinarium/tests/test_services.py`:
+    - `test_text_defaults_to_kyrie_penitential_mode`
+  - Extended preview test to verify Kyrie-token preview returns Trisagion content when mode is `trisagion`.
+  - Updated service-page UI assertions for composite row label visibility.

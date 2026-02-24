@@ -1385,6 +1385,40 @@ def test_service_option_preview_route_returns_rendered_row_html(
     assert "[especially _____________]" not in preview_html
 
 
+def test_service_option_preview_route_renders_decalogue_text(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=337,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+    )
+    service_response = client.get(f"/service/{service_id}")
+    assert service_response.status_code == 200
+    row_token = _plan_row_token_for_title(
+        service_response.get_data(as_text=True),
+        "The Summary of the Law",
+    )
+    assert row_token
+    preview_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={
+            "row_token": row_token,
+            "option_values": {"law.form": "decalogue"},
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert preview_response.status_code == 200
+    payload = preview_response.get_json()
+    assert payload["ok"] is True
+    preview_html = payload["preview_html"] or ""
+    assert "Then follows the Decalogue (page 100)." in preview_html
+    assert "You shall have no other gods but me." in preview_html
+    assert "Hear what our Lord Jesus Christ says:" not in preview_html
+
+
 def test_service_option_preview_route_applies_lesson_override_patch(
     auth_client, service_factory
 ):
@@ -1593,6 +1627,23 @@ def test_service_option_preview_route_applies_kyrie_form_selection(
     assert "Lord, have mercy." in contemporary_html
     assert "Lord, have mercy upon us." not in contemporary_html
     assert "Kyrie eleison." not in contemporary_html
+
+    trisagion_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={
+            "row_token": row_token,
+            "option_values": {
+                "penitential_song.mode": "trisagion",
+            },
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert trisagion_response.status_code == 200
+    trisagion_payload = trisagion_response.get_json()
+    trisagion_html = trisagion_payload["preview_html"] or ""
+    assert trisagion_payload["ok"] is True
+    assert "Holy God," in trisagion_html
+    assert "Kyrie eleison." not in trisagion_html
 
 
 def test_service_option_route_updates_filioque_clause_key(
@@ -2141,6 +2192,8 @@ def test_service_page_includes_service_option_action(auth_client, service_factor
     assert "Quick add additional prayer" in html
     assert "Quick add communion sentence" in html
     assert "Quick add alternate blessing" in html
+    assert "Penitential Acclamation (Kyrie / Trisagion)" in html
+    assert "plan-row-penitential-hidden" in html
     assert 'data-service-option-key="comfortable_words.sentences"' in html
     assert 'data-service-option-key="law.form"' in html
     assert 'data-service-option-key="penitential_song.mode"' in html
@@ -2180,7 +2233,51 @@ def test_text_uses_summary_of_law_form_option(auth_client, service_factory):
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     assert "Then follows the Decalogue (page 100)." in html
+    assert (
+        "God spoke these words and said: I am the Lord your God. You shall have no other gods but me."
+        in html
+    )
+    assert "You shall have no other gods but me." in html
+    assert "and write all these, your laws, in our hearts, we beseech you." in html
     assert "Hear what our Lord Jesus Christ says:" not in html
+
+
+def test_text_uses_ast_summary_of_law_form_option(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=336,
+        service_date="2026-01-04",
+        rite="Anglican Standard Text",
+        service_option_values={"law.form": "decalogue"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Then follows the Decalogue (page 100)." in html
+    assert (
+        "God spoke these words and said: I am the Lord your God. You shall have no other gods but me."
+        in html
+    )
+    assert "You shall not make for yourself any idol." in html
+    assert "Hear what our Lord Jesus Christ says:" not in html
+
+
+def test_text_defaults_to_kyrie_penitential_mode(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=334,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "The Kyrie" in html
+    assert "Lord, have mercy upon us." in html
+    assert "The Trisagion" not in html
+    assert "Holy God," not in html
 
 
 def test_text_uses_penitential_song_and_kyrie_form_options(
@@ -2773,6 +2870,13 @@ def test_text_fraction_alleluia_mode_off_omits_bracketed_tokens(
     html = response.get_data(as_text=True)
     assert "[Alleluia.]" not in html
     assert "Christ our Passover is sacrificed for us." in html
+    assert (
+        re.search(
+            r"Christ our Passover is sacrificed for us\.</span><br\s*/?>\s*\n<em>People</em>",
+            html,
+        )
+        is not None
+    )
     assert "Therefore let us keep the feast." in html
     assert (
         "In Lent, Alleluia is omitted, and may be omitted at other times except during Easter Season."

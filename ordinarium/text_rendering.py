@@ -173,6 +173,7 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
+    decalogue_text = fetch_text("law_form", "rite", rite_name)
     observance = None
     propers_list = []
     if saved_service and saved_service["service_date"]:
@@ -238,6 +239,11 @@ def render_text_page(service_id, saved_service, saved_data, user_id=None):
             proper_preface["text"]
             if proper_preface
             else "*Error: No proper preface found.*"
+        ),
+        "decalogue_text": (
+            decalogue_text["text"]
+            if decalogue_text
+            else "*Error: No Decalogue text found.*"
         ),
     }
     lesson_overrides = saved_data.get("lesson_overrides")
@@ -377,6 +383,7 @@ def build_rendered_ordinaries(
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
         ).fetchone()
+    decalogue_text = fetch_text("law_form", "rite", rite_name)
 
     observance = None
     propers_list = []
@@ -443,6 +450,11 @@ def build_rendered_ordinaries(
             proper_preface["text"]
             if proper_preface
             else "*Error: No proper preface found.*"
+        ),
+        "decalogue_text": (
+            decalogue_text["text"]
+            if decalogue_text
+            else "*Error: No Decalogue text found.*"
         ),
     }
     lesson_overrides = saved_data.get("lesson_overrides")

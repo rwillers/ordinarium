@@ -573,6 +573,24 @@ def register_service_share_routes(bp):
             None,
         )
         if not preview_row:
+            preview_option_values = preview_data.get("service_option_values") or {}
+            penitential_mode = preview_option_values.get("penitential_song.mode")
+            source_title = (row_item.get("title") or "").strip()
+            alternate_title = None
+            if source_title == "The Kyrie" and penitential_mode == "trisagion":
+                alternate_title = "The Trisagion"
+            elif source_title == "The Trisagion" and penitential_mode != "trisagion":
+                alternate_title = "The Kyrie"
+            if alternate_title:
+                preview_row = next(
+                    (
+                        item
+                        for item in rendered_ordinaries
+                        if (item.get("title") or "").strip() == alternate_title
+                    ),
+                    None,
+                )
+        if not preview_row:
             return jsonify(
                 {
                     "ok": True,

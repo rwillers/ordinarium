@@ -689,6 +689,9 @@ div#page {
 	.plan-row.is-menu-open {
 		z-index: 3;
 	}
+	.plan-row-penitential-hidden {
+		display: none;
+	}
 	.plan-item {
 		display: block;
 	}

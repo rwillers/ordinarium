@@ -19,7 +19,7 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
         title = _normalize_title(output.get("title"))
         detailed_title = _normalize_title(output.get("detailed_title"))
         text = output.get("text") or ""
-        penitential_mode = service_option_values.get("penitential_song.mode")
+        penitential_mode = _resolve_penitential_song_mode(service_option_values)
         if title == "the kyrie" and penitential_mode == "trisagion":
             continue
         if title == "the trisagion" and penitential_mode == "kyrie":
@@ -67,17 +67,15 @@ def _apply_law_form(text, service_option_values):
             "Then follows the Summary of the Law.",
         )
     if form == "decalogue":
-        return "*Then follows the Decalogue (page 100).*"
+        return "*Then follows the Decalogue (page 100).*\n\n{{ decalogue_text | markdown }}"
     return text
 
 
 def _apply_kyrie_form(text, service_option_values):
-    mode = service_option_values.get("penitential_song.mode")
-    if mode and mode != "kyrie":
+    mode = _resolve_penitential_song_mode(service_option_values)
+    if mode != "kyrie":
         return text
     form = service_option_values.get("kyrie.form")
-    if not form and mode != "kyrie":
-        return text
     choice_index = {
         "traditional": 0,
         "contemporary": 1,
@@ -562,6 +560,14 @@ def _ast_profile_defaults(profile):
     return "President", "Bishop"
 
 
+def _resolve_penitential_song_mode(service_option_values):
+    value = service_option_values.get("penitential_song.mode")
+    if value in {"kyrie", "trisagion"}:
+        return value
+    # Default to Kyrie so planner/rendering behavior is deterministic.
+    return "kyrie"
+
+
 def _alleluia_enabled(mode, season):
     if mode == "on":
         return True
@@ -582,7 +588,6 @@ def _apply_fraction_alleluia_mode(text, service_option_values, season):
         output = (text or "").replace("[Alleluia.]", "Alleluia.")
     else:
         output = re.sub(r"\s*\[Alleluia\.\]", "", text or "")
-        output = re.sub(r" {2,}", " ", output)
     return _strip_fraction_alleluia_rubric(output)
 
 
