@@ -1119,6 +1119,81 @@ div#page {
 		right: auto;
 		z-index: 2100;
 	}
+	.plan-row-content {
+		position: relative;
+	}
+	.plan-row-handle-cell {
+		position: relative;
+	}
+	.plan-row-actions {
+		display: inline-flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.35em;
+	}
+	.plan-row-action-form {
+		margin: 0;
+	}
+	.plan-row-action-icon {
+		width: 2em;
+		height: 2em;
+		padding: 0;
+		font-size: 1em;
+		line-height: 1;
+	}
+	.plan-row-action-delete {
+		color: #7c1e1a !important;
+	}
+	.plan-row-action-options {
+		color: var(--rubric-color) !important;
+	}
+	.plan-row-add-button {
+		position: absolute;
+		right: 0.2em;
+		bottom: 0;
+		transform: translateY(50%);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.7em;
+		height: 1.7em;
+		border: 1px solid rgba(118, 50, 63, 0.4);
+		border-radius: 999px;
+		background: #fff;
+		color: var(--rubric-color);
+		font-size: 1em;
+		padding: 0;
+		cursor: pointer;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.12s ease, background-color 0.12s ease;
+		z-index: 6;
+	}
+	.plan-row-add-button > span {
+		display: block;
+		line-height: 1;
+		transform: translateY(-0.06em);
+	}
+	.plan-row-add-button:hover {
+		background: #fff;
+	}
+	.plan-row-add-button:focus-visible {
+		opacity: 1;
+		pointer-events: auto;
+		outline: 2px solid rgba(118, 50, 63, 0.35);
+		outline-offset: 1px;
+	}
+	.plan-row:hover .plan-row-add-button,
+	.plan-row:focus-within .plan-row-add-button {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	@media (hover: none) {
+		.plan-row-add-button {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
 	@media (max-width: 700px) {
 		.shared-table {
 			min-width: min(40rem, 180%);

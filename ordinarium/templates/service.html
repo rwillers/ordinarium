@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_dropdown_menu.html' import dropdown_menu, dropdown_item_icon %}
+{% from '_dropdown_menu.html' import dropdown_menu %}
 
 {% block content %}
 
@@ -305,70 +305,58 @@
 			<td class="shared-table-select">
 				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 			</td>
-			<td>
-				<label class="plan-item" for="{{ checkbox_id }}">
-					<span class="plan-title">
-						{% if ordinary.title == 'The Kyrie' %}
-							Penitential Acclamation (Kyrie / Trisagion)
-						{% elif ordinary.detailed_title %}
-							{{ ordinary.detailed_title }}
-						{% else %}
-							{{ ordinary.title }}
-						{% endif %}
-						{% if lesson_kind %}
-						<span class="plan-lesson-override"{% if not lesson_overrides.get(lesson_kind) %} hidden{% endif %} data-lesson-indicator>Passage overridden</span>
-						{% endif %}
-						{% if proper_key %}
-						<span class="plan-lesson-override"{% if not proper_selected_id %} hidden{% endif %} data-proper-indicator>Proper overridden</span>
-						{% endif %}
-						{% if service_option_key %}
-						<span class="plan-lesson-override"{% if not service_option_indicator_value %} hidden{% endif %} data-service-option-indicator>Option set</span>
-						{% endif %}
-					</span>
-					{% if ordinary.text %}
-						{% if ordinary.type == 'custom' %}
-							<small>{{ ordinary.text | markdown_user | striptags | clean | truncate(200) }}</small>
-						{% else %}
-							<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>
-						{% endif %}
+				<td>
+					<div class="plan-row-content">
+						<label class="plan-item" for="{{ checkbox_id }}">
+						<span class="plan-title">
+							{% if ordinary.title == 'The Kyrie' %}
+								Penitential Acclamation (Kyrie / Trisagion)
+							{% elif ordinary.detailed_title %}
+								{{ ordinary.detailed_title }}
+							{% else %}
+								{{ ordinary.title }}
+							{% endif %}
+							{% if lesson_kind %}
+							<span class="plan-lesson-override"{% if not lesson_overrides.get(lesson_kind) %} hidden{% endif %} data-lesson-indicator>Passage overridden</span>
+							{% endif %}
+							{% if proper_key %}
+							<span class="plan-lesson-override"{% if not proper_selected_id %} hidden{% endif %} data-proper-indicator>Proper overridden</span>
+							{% endif %}
+							{% if service_option_key %}
+							<span class="plan-lesson-override"{% if not service_option_indicator_value %} hidden{% endif %} data-service-option-indicator>Option set</span>
+							{% endif %}
+						</span>
+						{% if ordinary.text %}
+							{% if ordinary.type == 'custom' %}
+								<small>{{ ordinary.text | markdown_user | striptags | clean | truncate(200) }}</small>
+							{% else %}
+								<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>
+							{% endif %}
+							{% endif %}
+						</label>
+					</div>
+				</td>
+			<td class="shared-table-actions">
+				<div class="plan-row-actions">
+					{% if ordinary.type == 'custom' %}
+					<button class="plan-icon-button plan-row-action-icon" type="button" data-custom-edit aria-label="Edit custom element">✎</button>
+					<form class="plan-row-action-form" action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<button class="plan-icon-button plan-row-action-icon plan-row-action-delete" type="submit" aria-label="Delete custom element">✕</button>
+					</form>
 					{% endif %}
-				</label>
+					{% if lesson_kind or proper_key or is_offertory or service_option_key %}
+					<button class="plan-icon-button plan-row-action-icon plan-row-action-options" type="button" data-service-option-edit aria-label="Set options">⚙</button>
+					{% endif %}
+				</div>
 			</td>
-			<td class="shared-table-actions">
-				{% call dropdown_menu(
-					variant='icon',
-					toggle_aria_label='Row actions',
-					menu_classes='shared-table-menu',
-					toggle_classes='plan-menu-toggle',
-					group='service-page',
-					layered=true
-				) %}
-						{% if ordinary.type == 'custom' %}
-						<button class="dropdown-menu-item" type="button" data-custom-edit role="menuitem">{{ dropdown_item_icon('✎') }}Edit</button>
-						<form action="{{ url_for('main.service_delete_custom_element', service_id=service_id, custom_id=ordinary.id) }}" method="post" data-custom-delete onsubmit="return confirm('Remove this custom element from the service plan?')">
-							<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-							<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
-						</form>
-						{% endif %}
-						{% if lesson_kind or proper_key or is_offertory or service_option_key %}
-						<button class="dropdown-menu-item" type="button" data-service-option-edit role="menuitem">{{ dropdown_item_icon('⚙') }}Set options</button>
-						{% endif %}
-						{% if ordinary.title == 'The Prayers of the People' %}
-						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Additional Prayer" data-suggest-text="Insert additional prayer or thanksgiving here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add additional prayer</button>
-						{% endif %}
-						{% if ordinary.title == 'The Ministration of Communion' %}
-						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Communion closing sentence" data-suggest-text="Insert a concluding sentence of Scripture here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add communion sentence</button>
-						{% endif %}
-						{% if ordinary.title == 'The Blessing' %}
-						<button class="dropdown-menu-item" type="button" data-custom-add data-suggest-title="Alternate Blessing" data-suggest-text="Insert alternate blessing text here." role="menuitem">{{ dropdown_item_icon('＋') }}Quick add alternate blessing</button>
-						{% endif %}
-						<button class="dropdown-menu-item" type="button" data-custom-add role="menuitem">{{ dropdown_item_icon('＋') }}Add new</button>
-				{% endcall %}
-			</td>
-			<td class="shared-table-actions">
-				<span class="plan-handle shared-table-handle" aria-hidden="true">↕</span>
-			</td>
-		</tr>
+				<td class="shared-table-actions plan-row-handle-cell">
+					<button class="plan-row-add-button" type="button" data-custom-add aria-label="Add custom element after this row">
+						<span aria-hidden="true">+</span>
+					</button>
+					<span class="plan-handle shared-table-handle" aria-hidden="true">↕</span>
+				</td>
+			</tr>
 	{% endfor %}
 			</tbody>
 		</table>
@@ -2713,31 +2701,40 @@
 		}
 
 		const createCustomRowElement = ({ customId, title, text, token }) => {
-			const row = document.createElement('li')
+			const row = document.createElement('tr')
 			row.className = 'plan-row'
 			row.setAttribute('data-plan-token', token)
+			row.setAttribute('data-ordinary-title', title || '')
+			row.setAttribute('data-ordinary-detailed-title', '')
 			row.setAttribute('data-custom-title', title || '')
 			row.setAttribute('data-custom-text', text || '')
 			row.setAttribute('data-custom-id', customId)
 			row.setAttribute('draggable', 'true')
 
-			const main = document.createElement('div')
-			main.className = 'plan-row-main'
+			const checkboxId = `include-custom-${customId}-${Date.now()}`
 
-			const label = document.createElement('label')
-			label.className = 'plan-item'
+			const selectCell = document.createElement('td')
+			selectCell.className = 'shared-table-select'
 
 			const checkbox = document.createElement('input')
+			checkbox.id = checkboxId
 			checkbox.type = 'checkbox'
 			checkbox.name = 'ordinaries'
 			checkbox.value = token
 			checkbox.checked = true
+			selectCell.appendChild(checkbox)
+
+			const contentCell = document.createElement('td')
+			const content = document.createElement('div')
+			content.className = 'plan-row-content'
+
+			const label = document.createElement('label')
+			label.className = 'plan-item'
+			label.setAttribute('for', checkboxId)
 
 			const titleSpan = document.createElement('span')
 			titleSpan.className = 'plan-title'
 			titleSpan.textContent = title || ''
-
-			label.appendChild(checkbox)
 			label.appendChild(titleSpan)
 
 			if (text) {
@@ -2746,44 +2743,23 @@
 				label.appendChild(small)
 			}
 
-			const handle = document.createElement('span')
-			handle.className = 'plan-handle'
-			handle.setAttribute('aria-hidden', 'true')
-			handle.textContent = '↕'
+			content.appendChild(label)
+			contentCell.appendChild(content)
 
-			main.appendChild(label)
-			main.appendChild(handle)
-			row.appendChild(main)
-
-			const menu = document.createElement('div')
-			menu.className = 'shared-table-menu dropdown-menu dropdown-menu-icon'
-			menu.setAttribute('data-dropdown-menu', '')
-			menu.setAttribute('data-dropdown-variant', 'icon')
-			menu.setAttribute('data-dropdown-group', dropdownGroup)
-			menu.setAttribute('data-dropdown-layered', 'true')
-
-			const toggle = document.createElement('button')
-			toggle.className = 'plan-icon-button dropdown-menu-toggle plan-menu-toggle'
-			toggle.type = 'button'
-			toggle.setAttribute('data-dropdown-toggle', '')
-			toggle.setAttribute('aria-expanded', 'false')
-			toggle.setAttribute('aria-haspopup', 'true')
-			toggle.setAttribute('aria-label', 'Row actions')
-			toggle.innerHTML = '<span class="menu-trigger-icon" aria-hidden="true"></span>'
-
-			const panel = document.createElement('div')
-			panel.className = 'dropdown-menu-panel'
-			panel.setAttribute('role', 'menu')
-			panel.setAttribute('data-dropdown-panel', '')
+			const actionCell = document.createElement('td')
+			actionCell.className = 'shared-table-actions'
+			const actionWrap = document.createElement('div')
+			actionWrap.className = 'plan-row-actions'
 
 			const editButton = document.createElement('button')
-			editButton.className = 'dropdown-menu-item'
+			editButton.className = 'plan-icon-button plan-row-action-icon'
 			editButton.type = 'button'
 			editButton.setAttribute('data-custom-edit', '')
-			editButton.setAttribute('role', 'menuitem')
-			editButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">✎</span>Edit'
+			editButton.setAttribute('aria-label', 'Edit custom element')
+			editButton.textContent = '✎'
 
 			const deleteForm = document.createElement('form')
+			deleteForm.className = 'plan-row-action-form'
 			deleteForm.action = serviceId
 				? `/service/${serviceId}/custom-element/${customId}/delete`
 				: ''
@@ -2801,27 +2777,35 @@
 			}
 
 			const deleteButton = document.createElement('button')
-			deleteButton.className = 'dropdown-menu-item dropdown-menu-delete'
+			deleteButton.className = 'plan-icon-button plan-row-action-icon plan-row-action-delete'
 			deleteButton.type = 'submit'
-			deleteButton.setAttribute('role', 'menuitem')
-			deleteButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">✕</span>Delete'
-
+			deleteButton.setAttribute('aria-label', 'Delete custom element')
+			deleteButton.textContent = '✕'
 			deleteForm.appendChild(deleteButton)
 
+			actionWrap.appendChild(editButton)
+			actionWrap.appendChild(deleteForm)
+			actionCell.appendChild(actionWrap)
+
+			const handleCell = document.createElement('td')
+			handleCell.className = 'shared-table-actions plan-row-handle-cell'
 			const addButton = document.createElement('button')
-			addButton.className = 'dropdown-menu-item'
+			addButton.className = 'plan-row-add-button'
 			addButton.type = 'button'
 			addButton.setAttribute('data-custom-add', '')
-			addButton.setAttribute('role', 'menuitem')
-			addButton.innerHTML = '<span class="dropdown-menu-item-icon" aria-hidden="true">＋</span>Add new'
+			addButton.setAttribute('aria-label', 'Add custom element after this row')
+			addButton.innerHTML = '<span aria-hidden="true">+</span>'
+			const handle = document.createElement('span')
+			handle.className = 'plan-handle shared-table-handle'
+			handle.setAttribute('aria-hidden', 'true')
+			handle.textContent = '↕'
+			handleCell.appendChild(addButton)
+			handleCell.appendChild(handle)
 
-			panel.appendChild(editButton)
-			panel.appendChild(deleteForm)
-			panel.appendChild(addButton)
-
-			menu.appendChild(toggle)
-			menu.appendChild(panel)
-			row.appendChild(menu)
+			row.appendChild(selectCell)
+			row.appendChild(contentCell)
+			row.appendChild(actionCell)
+			row.appendChild(handleCell)
 
 			return row
 		}

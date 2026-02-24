@@ -2189,9 +2189,11 @@ def test_service_page_includes_service_option_action(auth_client, service_factor
     assert "Set options" in html
     assert "Live preview" in html
     assert "Use canonical alternate" in html
-    assert "Quick add additional prayer" in html
-    assert "Quick add communion sentence" in html
-    assert "Quick add alternate blessing" in html
+    assert "plan-row-add-button" in html
+    assert "data-custom-add" in html
+    assert "Quick add additional prayer" not in html
+    assert "Quick add communion sentence" not in html
+    assert "Quick add alternate blessing" not in html
     assert "Penitential Acclamation (Kyrie / Trisagion)" in html
     assert "plan-row-penitential-hidden" in html
     assert 'data-service-option-key="comfortable_words.sentences"' in html

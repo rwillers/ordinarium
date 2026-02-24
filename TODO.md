@@ -2,10 +2,6 @@
 
 Remaining work and follow-ups.
 
-- [ ] Revise plan element action drop downs:
-  - Expose plan element "set options" button directly in row rather than in drop down menu.
-  - Move plan element addition buttons (+) from drop down menus to hovers with button centered over dividing border between rows.
-  - Remove action drop downs (it is OK to lose the small number of "quick add" options).
 - [ ] Add "Additional Directions" eucharistic options (see following section).
 - [ ] Add "live edit" mode, in which changes can be made within the service view mode.
 - [ ] PCO integration enhancements:
