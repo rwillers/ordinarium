@@ -7,6 +7,7 @@ from .plan_lessons import (
     _resolve_lesson_reference_alternates,
     _resolve_lesson_reference_options,
     _resolve_lesson_references,
+    format_lesson_reference_with_biblia,
 )
 from .plan_offertory import (
     _format_offertory_label,
@@ -38,6 +39,7 @@ __all__ = [
     "_resolve_lesson_reference_alternates",
     "_resolve_lesson_reference_options",
     "_resolve_lesson_references",
+    "format_lesson_reference_with_biblia",
     "_resolve_seasonal_text",
     "_resolve_collect_text",
     "_resolve_proper_override",

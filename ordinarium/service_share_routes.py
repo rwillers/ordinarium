@@ -557,6 +557,9 @@ def register_service_share_routes(bp):
                 "lesson_overrides": preview_data.get("lesson_overrides") or {},
                 "offertory_sentence_id": preview_data.get("offertory_sentence_id"),
                 "proper_overrides": preview_data.get("proper_overrides") or {},
+                "default_bible_translation": preview_data.get(
+                    "owner_default_bible_translation"
+                ),
                 "service_option_values": preview_data.get("service_option_values")
                 or {},
             },

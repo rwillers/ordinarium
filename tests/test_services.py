@@ -6,7 +6,10 @@ import ordinarium.service_share_routes as service_share_routes
 import ordinarium.text_routes as text_routes
 from ordinarium.db import get_db
 from ordinarium.liturgical_calendar import resolve_observance, resolve_season
+from ordinarium.plan_lessons import format_lesson_reference_with_biblia
 from ordinarium.plan_propers import _load_collect_options
+from ordinarium.service_store import load_service_for_text
+from ordinarium.text_export import build_text_export_context
 
 
 def _service_proper_override_rows(db):
@@ -757,6 +760,75 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
     assert b"Holy Eucharist" in response.data
 
 
+def test_text_renders_biblia_link_for_lesson_override(auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=15,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        lesson_overrides={"lesson_1": "Genesis 1:1-5"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'href="https://biblia.com/books/esv/Gen1.1-5"' in body
+    assert ">Genesis 1:1-5<" in body
+
+
+def test_text_renders_biblia_link_using_saved_translation(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set default_bible_translation=? where id=?",
+            ("NIV", user_id),
+        )
+        db.commit()
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=16,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        lesson_overrides={"lesson_1": "Genesis 1:1-5"},
+    )
+    response = client.get(f"/service/{service_id}/view")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'href="https://biblia.com/books/niv2011/Gen1.1-5"' in body
+    assert 'href="https://biblia.com/books/esv/Gen1.1-5"' not in body
+
+
+def test_shared_text_uses_service_owner_bible_translation(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=17,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        lesson_overrides={"lesson_1": "Genesis 1:1-5"},
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set default_bible_translation=? where id=?",
+            ("NRSV", user_id),
+        )
+        db.execute(
+            "insert into service_shares (service_id, share_uuid) values (?, ?)",
+            (service_id, "lesson-link-share"),
+        )
+        db.commit()
+    response = client.get("/share/lesson-link-share")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert 'href="https://biblia.com/books/nrsv/Gen1.1-5"' in body
+
+
 def test_text_export_docx_returns_attachment(auth_client, service_factory, monkeypatch):
     client, user_id = auth_client
     service_id = service_factory(
@@ -1500,6 +1572,109 @@ def test_service_option_preview_route_applies_lesson_override_patch(
     assert payload["ok"] is True
     preview_html = payload["preview_html"] or ""
     assert "Genesis 1:1-5" in preview_html
+    assert 'href="https://biblia.com/books/esv/Gen1.1-5"' in preview_html
+
+
+def test_service_option_preview_route_leaves_unparseable_lesson_override_plain_text(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=338,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    service_response = client.get(f"/service/{service_id}")
+    assert service_response.status_code == 200
+    row_token = _plan_row_token_for_detailed_title(
+        service_response.get_data(as_text=True),
+        "The Lessons (1)",
+    )
+    assert row_token
+    preview_response = client.post(
+        f"/service/{service_id}/service-option-preview",
+        json={
+            "row_token": row_token,
+            "option_values": {},
+            "lesson_override": {
+                "lesson_key": "lesson_1",
+                "mode": "custom",
+                "custom_passage": "Gospel reading TBD",
+            },
+        },
+        headers={"Accept": "application/json"},
+    )
+    assert preview_response.status_code == 200
+    payload = preview_response.get_json()
+    assert payload["ok"] is True
+    preview_html = payload["preview_html"] or ""
+    assert "Gospel reading TBD" in preview_html
+    assert "href=" not in preview_html
+
+
+def test_build_text_export_context_keeps_lesson_references_plain_text(
+    app, auth_client, service_factory
+):
+    _client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=339,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+        lesson_overrides={"lesson_1": "Genesis 1:1-5"},
+    )
+    with app.app_context():
+        saved_service, saved_data = load_service_for_text(service_id, user_id)
+        context = build_text_export_context(
+            service_id,
+            saved_service,
+            saved_data,
+            user_id=user_id,
+        )
+    assert context is not None
+    lesson_row = next(
+        (
+            item
+            for item in context["ordinaries"]
+            if item["title_markdown"] == "The Lessons"
+        ),
+        None,
+    )
+    assert lesson_row is not None
+    assert "Genesis 1:1-5" in lesson_row["body_html"]
+    assert "<a " not in lesson_row["body_html"]
+
+
+def test_format_lesson_reference_with_biblia_links_structured_psalm_reference():
+    lesson = {
+        "book": "Ps",
+        "book_name": "Psalm",
+        "reference_short": "1:1-3",
+        "reference_long": "1:1-3",
+    }
+    linked = format_lesson_reference_with_biblia(
+        "Psalm (1:1-3)",
+        "ESV",
+        lesson=lesson,
+    )
+    assert linked == "[Psalm (1:1-3)](https://biblia.com/books/esv/Ps1.1-3)"
+
+
+def test_format_lesson_reference_with_biblia_links_roman_numeral_book_display():
+    linked = format_lesson_reference_with_biblia(
+        "I Corinthians (1:1-9)",
+        "NRSV",
+    )
+    assert linked == "[I Corinthians (1:1-9)](https://biblia.com/books/nrsv/1Cor1.1-9)"
+
+
+def test_format_lesson_reference_with_biblia_leaves_unknown_reference_unlinked():
+    linked = format_lesson_reference_with_biblia(
+        "Canticle (Benedictus)",
+        "ESV",
+    )
+    assert linked == "Canticle (Benedictus)"
 
 
 def test_service_option_preview_route_marks_custom_rows(

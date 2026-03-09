@@ -81,24 +81,28 @@ def load_service_payload(db, service_id, user_id=None):
         return None
     query = """
         select
-          user_id,
-          title,
-          rite,
-          text_order,
-          text_disabled,
-          season,
-          service_date,
-          observance_handle,
-          lesson_overrides,
-          offertory_sentence_id,
-          proper_overrides,
-          service_option_values
-        from services where id=? {user_filter} limit 1
+          services.user_id,
+          services.title,
+          services.rite,
+          services.text_order,
+          services.text_disabled,
+          services.season,
+          services.service_date,
+          services.observance_handle,
+          services.lesson_overrides,
+          services.offertory_sentence_id,
+          services.proper_overrides,
+          services.service_option_values,
+          users.default_bible_translation as owner_default_bible_translation
+        from services
+        left join users on users.id=services.user_id
+        where services.id=? {user_filter}
+        limit 1
         """
     params = [service_id]
     user_filter = ""
     if user_id:
-        user_filter = "and user_id=?"
+        user_filter = "and services.user_id=?"
         params.append(user_id)
     row = db.execute(query.format(user_filter=user_filter), params).fetchone()
     if not row:
@@ -164,17 +168,21 @@ def load_service_for_text(service_id, user_id=None):
         saved_service = db.execute(
             """
             select
-              text_order,
-              text_disabled,
-              season,
-              rite,
-              service_date,
-              observance_handle,
-              lesson_overrides,
-              offertory_sentence_id,
-              proper_overrides,
-              service_option_values
-            from services where id=? and user_id=? limit 1
+              services.text_order,
+              services.text_disabled,
+              services.season,
+              services.rite,
+              services.service_date,
+              services.observance_handle,
+              services.lesson_overrides,
+              services.offertory_sentence_id,
+              services.proper_overrides,
+              services.service_option_values,
+              users.default_bible_translation as owner_default_bible_translation
+            from services
+            left join users on users.id=services.user_id
+            where services.id=? and services.user_id=?
+            limit 1
             """,
             (service_id, user_id),
         ).fetchone()
@@ -182,17 +190,21 @@ def load_service_for_text(service_id, user_id=None):
         saved_service = db.execute(
             """
             select
-              text_order,
-              text_disabled,
-              season,
-              rite,
-              service_date,
-              observance_handle,
-              lesson_overrides,
-              offertory_sentence_id,
-              proper_overrides,
-              service_option_values
-            from services where id=? limit 1
+              services.text_order,
+              services.text_disabled,
+              services.season,
+              services.rite,
+              services.service_date,
+              services.observance_handle,
+              services.lesson_overrides,
+              services.offertory_sentence_id,
+              services.proper_overrides,
+              services.service_option_values,
+              users.default_bible_translation as owner_default_bible_translation
+            from services
+            left join users on users.id=services.user_id
+            where services.id=?
+            limit 1
             """,
             (service_id,),
         ).fetchone()
@@ -206,5 +218,6 @@ def load_service_for_text(service_id, user_id=None):
         "service_option_values": _parse_json_object(
             saved_service["service_option_values"]
         ),
+        "default_bible_translation": saved_service["owner_default_bible_translation"],
     }
     return saved_service, saved_data

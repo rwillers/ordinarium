@@ -184,6 +184,7 @@ def build_text_export_context(service_id, saved_service, saved_data, user_id=Non
         saved_data,
         user_id=user_id,
         include_metadata=True,
+        link_lesson_references=False,
     )
     if not payload:
         return None

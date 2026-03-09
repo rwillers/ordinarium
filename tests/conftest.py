@@ -118,6 +118,7 @@ def service_factory(app):
         text_order=None,
         text_disabled=None,
         observance_handle=None,
+        lesson_overrides=None,
         service_option_values=None,
     ):
         with app.app_context():
@@ -150,7 +151,7 @@ def service_factory(app):
                     text_order,
                     text_disabled,
                     observance_handle,
-                    json.dumps({}),
+                    json.dumps(lesson_overrides or {}),
                     None,
                     json.dumps({}),
                     json.dumps(service_option_values or {}),

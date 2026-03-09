@@ -51,6 +51,7 @@ def _load_service_plan(service_id, user_id):
         saved,
         saved_data,
         user_id=user_id,
+        link_lesson_references=False,
     )
     return saved, ordinaries or []
 
