@@ -10,6 +10,7 @@ from flask_login import (
 
 from .feature_flags import parse_feature_flags
 from .user_store import get_user_by_id
+from .user_settings import resolve_user_settings
 
 login_manager = LoginManager()
 
@@ -21,6 +22,9 @@ class OrdinariumUser(UserMixin):
     last_name: str
     email: str
     password_hash: str | None = None
+    default_rite: str | None = None
+    default_bible_translation: str | None = None
+    default_service_time: str | None = None
     feature_flags: dict | None = None
 
     @classmethod
@@ -30,12 +34,16 @@ class OrdinariumUser(UserMixin):
         feature_value = None
         if hasattr(row, "keys") and "feature_flags" in row.keys():
             feature_value = row["feature_flags"]
+        settings = resolve_user_settings(row)
         return cls(
             id=row["id"],
             first_name=row["first_name"],
             last_name=row["last_name"],
             email=row["email"],
             password_hash=row["password_hash"],
+            default_rite=settings["default_rite"],
+            default_bible_translation=settings["default_bible_translation"],
+            default_service_time=settings["default_service_time"],
             feature_flags=parse_feature_flags(feature_value),
         )
 

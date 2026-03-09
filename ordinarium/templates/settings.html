@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<div id="page">
+	<div class="plan-header">
+		<h2>Settings</h2>
+	</div>
+
+	<form class="auth-form" method="post" id="settings-form">
+		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+		<section class="integration-card">
+			<h3>Preferences</h3>
+			<p><label class="plan-field">
+				<span>Default rite</span>
+				<select name="default_rite" required>
+					{% for rite in rite_options %}
+						<option value="{{ rite }}"{% if rite == settings_values.default_rite %} selected{% endif %}>{{ rite }}</option>
+					{% endfor %}
+				</select>
+			</label></p>
+			<p><label class="plan-field">
+				<span>Default Bible translation</span>
+				<select name="default_bible_translation" required>
+					{% for translation in bible_translation_options %}
+						<option value="{{ translation }}"{% if translation == settings_values.default_bible_translation %} selected{% endif %}>{{ translation }}</option>
+					{% endfor %}
+				</select>
+			</label></p>
+			<p><label class="plan-field">
+				<span>Default service time</span>
+				<input type="time" name="default_service_time" value="{{ settings_values.default_service_time }}" required>
+			</label></p>
+		</section>
+	</form>
+
+	{% if pco_enabled %}
+	<section class="integration-card" id="settings-integrations">
+		<h3>Planning Center connection</h3>
+		{% if pco_connection %}
+			{% if pco_connection.pco_account_name %}
+				<p>Connected to {{ pco_connection.pco_account_name }}.</p>
+			{% else %}
+				<p>Connected.</p>
+			{% endif %}
+			<p>Use the button below to disconnect Planning Center and reset links for upcoming services.</p>
+			<form class="auth-form" action="{{ url_for('main.pco_disconnect') }}" method="post" onsubmit="return confirm('Disconnect Planning Center?');">
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				<div class="auth-actions">
+					<button class="plan-submit" type="submit">Disconnect</button>
+				</div>
+			</form>
+		{% else %}
+			<p>Connect Planning Center Online to sync service plans.</p>
+			<div class="auth-actions">
+				<a class="plan-submit" href="{{ url_for('main.pco_connect') }}">Connect</a>
+			</div>
+		{% endif %}
+	</section>
+	{% endif %}
+
+	<div class="auth-actions">
+		<button class="plan-submit" type="submit" form="settings-form">Save settings</button>
+	</div>
+</div>
+
+{% endblock %}

@@ -12,6 +12,7 @@ def get_user_by_id(user_id):
     user = db.execute(
         """
         select id, first_name, last_name, email, password_hash,
+               default_rite, default_bible_translation, default_service_time,
                feature_flags, created_at, last_login_at
         from users
         where id=? and deleted_at is null
@@ -29,6 +30,7 @@ def get_user_by_email(email):
     user = db.execute(
         """
         select id, first_name, last_name, email, password_hash,
+               default_rite, default_bible_translation, default_service_time,
                feature_flags, created_at, last_login_at
         from users
         where email=? and deleted_at is null

@@ -22,7 +22,7 @@
 				id="services-pco-batch-toggle"
 				aria-expanded="false"
 				aria-controls="service-pco-batch-modal"
-				{% if pco_connected %}data-bulk-submit disabled{% else %}disabled title="Connect Planning Center in Integrations first."{% endif %}
+				{% if pco_connected %}data-bulk-submit disabled{% else %}disabled title="Connect Planning Center in Settings first."{% endif %}
 			>PCO sync</button>
 			{% endif %}
 			<button class="plan-submit" type="submit" data-bulk-submit disabled>Delete</button>
@@ -30,7 +30,7 @@
 		</div>
 	</form>
 	{% if pco_enabled and not pco_connected %}
-	<p class="plan-meta">Connect Planning Center in Integrations to enable batch sync.</p>
+	<p class="plan-meta">Connect Planning Center in Settings to enable batch sync.</p>
 	{% endif %}
 	{% if current_services %}
 	<div class="shared-table-wrap">
@@ -301,7 +301,7 @@
 			<p class="plan-field">
 				<label>
 					<span>Default time for newly created plans</span>
-					<input type="time" id="service-pco-default-time" value="10:00" required>
+				<input type="time" id="service-pco-default-time" value="{{ default_service_time }}" required>
 				</label>
 			</p>
 			<p class="plan-error" id="service-pco-batch-error" style="display: none;"></p>

@@ -18,15 +18,23 @@ def test_integrations_requires_login(client):
     assert "/login" in response.headers["Location"]
 
 
-def test_integrations_shows_connect(app, auth_client):
+def test_integrations_redirects_to_settings_anchor(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
     response = client.get("/integrations")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings#settings-integrations")
+
+
+def test_settings_shows_connect_for_pco(app, auth_client):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    response = client.get("/settings")
     assert response.status_code == 200
     assert b"Connect" in response.data
 
 
-def test_integrations_shows_disconnect(app, auth_client):
+def test_settings_shows_disconnect_for_pco(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
     with app.app_context():
@@ -36,12 +44,12 @@ def test_integrations_shows_disconnect(app, auth_client):
             (user_id, "token"),
         )
         db.commit()
-    response = client.get("/integrations")
+    response = client.get("/settings")
     assert response.status_code == 200
     assert b"Disconnect" in response.data
 
 
-def test_integrations_shows_connected_org_name(app, auth_client):
+def test_settings_shows_connected_org_name(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
     with app.app_context():
@@ -57,7 +65,7 @@ def test_integrations_shows_connected_org_name(app, auth_client):
             (user_id, "token", "St. Mark Church"),
         )
         db.commit()
-    response = client.get("/integrations")
+    response = client.get("/settings")
     assert response.status_code == 200
     assert b"Connected to St. Mark Church." in response.data
 
@@ -137,12 +145,9 @@ def test_pco_disconnect_clears_only_upcoming_links_for_user(
         )
         db.commit()
 
-    response = client.post("/integrations/pco/disconnect", follow_redirects=True)
-    assert response.status_code == 200
-    assert (
-        b"Planning Center disconnected and upcoming service links reset."
-        in response.data
-    )
+    response = client.post("/integrations/pco/disconnect")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings#settings-integrations")
 
     with app.app_context():
         db = get_db()
@@ -200,13 +205,9 @@ def test_pco_callback_stores_org_name(app, auth_client, monkeypatch):
         lambda *_args, **_kwargs: "St. Mark Church",
     )
 
-    response = client.get(
-        "/integrations/pco/callback?state=state-token&code=code-123",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert b"Planning Center connected." in response.data
-    assert b"Connected to St. Mark Church." in response.data
+    response = client.get("/integrations/pco/callback?state=state-token&code=code-123")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings#settings-integrations")
 
     with app.app_context():
         db = get_db()
@@ -250,12 +251,9 @@ def test_pco_callback_allows_org_lookup_failure(app, auth_client, monkeypatch):
         _raise_lookup_error,
     )
 
-    response = client.get(
-        "/integrations/pco/callback?state=state-token&code=code-123",
-        follow_redirects=True,
-    )
-    assert response.status_code == 200
-    assert b"Planning Center connected." in response.data
+    response = client.get("/integrations/pco/callback?state=state-token&code=code-123")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/settings#settings-integrations")
 
     with app.app_context():
         db = get_db()

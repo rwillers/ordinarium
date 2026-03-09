@@ -17,6 +17,7 @@ from .pco_auth import get_valid_pco_connection
 from .pco_sync_status import resolve_pco_sync_state
 from .pco_store import get_service_pco_link
 from .pco_sync import list_service_types
+from .user_settings import resolve_user_settings
 
 
 def register_service_overview_routes(bp):
@@ -24,6 +25,8 @@ def register_service_overview_routes(bp):
     @login_required
     def services():
         db = get_db()
+        rite_options = load_rite_options()
+        user_settings = resolve_user_settings(g.user, rite_options)
         today = date.today().isoformat()
         current_services = db.execute(
             "select id, title, season, service_date, rite, observance_handle, updated_at from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
@@ -115,8 +118,9 @@ def register_service_overview_routes(bp):
             current_services=formatted_current_services,
             past_services=format_services(past_services),
             copy_services=format_services(copy_services),
-            default_rite=DEFAULT_RITE,
-            rite_options=load_rite_options(),
+            default_rite=user_settings["default_rite"],
+            default_service_time=user_settings["default_service_time"],
+            rite_options=rite_options,
             pco_enabled=pco_enabled,
             pco_connected=bool(pco_connection) if pco_enabled else False,
             pco_service_types=pco_service_types,
@@ -125,7 +129,9 @@ def register_service_overview_routes(bp):
 
     def _create_service_from_request():
         db = get_db()
-        rite = DEFAULT_RITE
+        rite_options = load_rite_options()
+        user_settings = resolve_user_settings(g.user, rite_options)
+        rite = user_settings["default_rite"]
         if request.method != "POST":
             return redirect(url_for("main.services"))
 
@@ -137,7 +143,7 @@ def register_service_overview_routes(bp):
 
         mode = request.form.get("mode", "defaults")
         add_mode = request.form.get("add_mode", "single")
-        rite = request.form.get("rite") or DEFAULT_RITE
+        rite = request.form.get("rite") or user_settings["default_rite"]
 
         source = None
         custom_rows = []
@@ -350,6 +356,7 @@ def register_service_overview_routes(bp):
                 pco_link["last_synced_at"],
                 pco_link["last_sync_status"],
             )
+        user_settings = resolve_user_settings(g.user)
         context.update(
             {
                 "pco_connected": bool(pco_connection) if pco_enabled else False,
@@ -357,6 +364,7 @@ def register_service_overview_routes(bp):
                 "pco_service_types": pco_service_types,
                 "pco_sync_state": pco_sync_state,
                 "pco_sync_at": pco_sync_at,
+                "default_service_time": user_settings["default_service_time"],
             }
         )
         return render_template("service.html", **context)

@@ -214,6 +214,28 @@ def test_services_new_uses_selected_rite(app, auth_client, service_factory):
         assert created["rite"] == "Anglican Standard Text"
 
 
+def test_services_page_uses_saved_default_rite_and_service_time(app, auth_client):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """
+            update users
+            set default_rite=?, default_service_time=?
+            where id=?
+            """,
+            ("Anglican Standard Text", "08:15", user_id),
+        )
+        db.commit()
+
+    response = client.get("/services")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert 'option value="Anglican Standard Text" selected' in body
+    assert 'id="service-pco-default-time" value="08:15"' in body
+
+
 def test_services_new_copies_non_default_rite(app, auth_client, service_factory):
     client, user_id = auth_client
     source_id = service_factory(
@@ -239,6 +261,30 @@ def test_services_new_copies_non_default_rite(app, auth_client, service_factory)
             "select rite from services where id=? limit 1", (41,)
         ).fetchone()
         assert copied["rite"] == "Anglican Standard Text"
+
+
+def test_service_page_uses_saved_default_service_time_for_new_pco_plan(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=42, service_date="2099-01-04")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set default_service_time=? where id=?",
+            ("08:15", user_id),
+        )
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    response = client.get("/service/42")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert 'name="pco_plan_time" value="08:15"' in body
 
 
 def test_services_multi_add_creates_services(app, auth_client):

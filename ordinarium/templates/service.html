@@ -111,7 +111,7 @@
 						</select>
 					<input type="text" name="pco_plan_title" placeholder="Plan title" value="{{ service.title or '' }}" required>
 					<input type="date" name="pco_plan_date" value="{{ service.service_date or '' }}" required>
-					<input type="time" name="pco_plan_time" required>
+					<input type="time" name="pco_plan_time" value="{{ default_service_time }}" required>
 					<input type="hidden" name="pco_series_title" value="{{ service.season or '' }}">
 					<input type="hidden" name="pco_plan_tz_offset" value="">
 					<button class="plan-submit" type="submit">Create and link</button>

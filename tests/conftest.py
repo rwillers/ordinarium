@@ -64,6 +64,9 @@ def user_factory(app):
         first_name="Test",
         last_name="User",
         feature_flags=None,
+        default_rite="Renewed Ancient Text",
+        default_bible_translation="ESV",
+        default_service_time="10:00",
     ):
         with app.app_context():
             db = get_db()
@@ -71,12 +74,26 @@ def user_factory(app):
                 json.dumps(feature_flags) if feature_flags is not None else None
             )
             db.execute(
-                "insert into users (first_name, last_name, email, password_hash, feature_flags) values (?, ?, ?, ?, ?)",
+                """
+                insert into users (
+                  first_name,
+                  last_name,
+                  email,
+                  password_hash,
+                  default_rite,
+                  default_bible_translation,
+                  default_service_time,
+                  feature_flags
+                ) values (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                 (
                     first_name,
                     last_name,
                     email,
                     generate_password_hash(password),
+                    default_rite,
+                    default_bible_translation,
+                    default_service_time,
                     flags_value,
                 ),
             )

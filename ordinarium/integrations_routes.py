@@ -5,7 +5,6 @@ from flask import (
     current_app,
     flash,
     redirect,
-    render_template,
     request,
     session,
     url_for,
@@ -38,6 +37,9 @@ def _pco_redirect_uri():
 
 
 def register_integration_routes(bp):
+    def _settings_integrations_redirect():
+        return redirect(url_for("main.settings", _anchor="settings-integrations"))
+
     def _require_pco_feature():
         if not user_has_feature(g.user, FEATURE_PCO_SYNC):
             return render_error("Not found.", 404)
@@ -46,14 +48,7 @@ def register_integration_routes(bp):
     @bp.route("/integrations")
     @login_required
     def integrations():
-        guard = _require_pco_feature()
-        if guard:
-            return guard
-        connection = get_pco_connection(user_id=g.user["id"])
-        return render_template(
-            "integrations.html",
-            pco_connection=connection,
-        )
+        return _settings_integrations_redirect()
 
     @bp.route("/integrations/pco/connect")
     @login_required
@@ -64,7 +59,7 @@ def register_integration_routes(bp):
         client_id = current_app.config.get("PCO_CLIENT_ID")
         if not client_id:
             flash("PCO client ID is not configured.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         state = secrets.token_urlsafe(24)
         session["pco_oauth_state"] = state
         redirect_uri = _pco_redirect_uri()
@@ -87,22 +82,22 @@ def register_integration_routes(bp):
         error = request.args.get("error")
         if error:
             flash("PCO authorization failed.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         state = request.args.get("state")
         expected_state = session.get("pco_oauth_state")
         session.pop("pco_oauth_state", None)
         if not state or state != expected_state:
             flash("PCO authorization state mismatch.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         code = request.args.get("code")
         if not code:
             flash("PCO authorization code missing.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         client_id = current_app.config.get("PCO_CLIENT_ID")
         client_secret = current_app.config.get("PCO_CLIENT_SECRET")
         if not client_id or not client_secret:
             flash("PCO client credentials are not configured.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         try:
             token = exchange_code_for_token(
                 client_id,
@@ -113,7 +108,7 @@ def register_integration_routes(bp):
             )
         except PcoAuthError:
             flash("PCO authorization failed during token exchange.", "error")
-            return redirect(url_for("main.integrations"))
+            return _settings_integrations_redirect()
         pco_account_name = None
         try:
             pco_account_name = fetch_services_organization_name(
@@ -135,7 +130,7 @@ def register_integration_routes(bp):
         )
         db.commit()
         flash("Planning Center connected.", "success")
-        return redirect(url_for("main.integrations"))
+        return _settings_integrations_redirect()
 
     @bp.route("/integrations/pco/disconnect", methods=["POST"])
     @login_required
@@ -154,4 +149,4 @@ def register_integration_routes(bp):
         flash(
             "Planning Center disconnected and upcoming service links reset.", "success"
         )
-        return redirect(url_for("main.integrations"))
+        return _settings_integrations_redirect()
