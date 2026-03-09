@@ -1674,6 +1674,14 @@ def test_format_lesson_reference_with_biblia_links_roman_numeral_book_display():
     assert linked == "[I Corinthians (1:1-9)](https://biblia.com/books/nrsv/1Cor1.1-9)"
 
 
+def test_format_lesson_reference_with_biblia_truncates_gap_references_after_comma():
+    linked = format_lesson_reference_with_biblia(
+        "John (9:1-13, 28-41)",
+        "NRSV",
+    )
+    assert linked == "[John (9:1-13, 28-41)](https://biblia.com/books/nrsv/John9.1-13)"
+
+
 def test_format_lesson_reference_with_biblia_leaves_unknown_reference_unlinked():
     linked = format_lesson_reference_with_biblia(
         "Canticle (Benedictus)",

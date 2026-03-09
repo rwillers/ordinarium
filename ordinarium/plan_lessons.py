@@ -230,9 +230,12 @@ def _normalize_biblia_reference(reference):
     if reference is None:
         return None
     normalized = str(reference).strip()
-    if not normalized or not _REFERENCE_ALLOWED_PATTERN.fullmatch(normalized):
+    if not normalized:
         return None
-    return normalized.replace("–", "-").replace(" ", "").replace(":", ".")
+    primary_segment = normalized.split(",", 1)[0].strip()
+    if not primary_segment or not _REFERENCE_ALLOWED_PATTERN.fullmatch(primary_segment):
+        return None
+    return primary_segment.replace("–", "-").replace(" ", "").replace(":", ".")
 
 
 def _parse_lesson_reference_text(display_text):
