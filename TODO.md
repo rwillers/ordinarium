@@ -2,6 +2,13 @@
 
 Remaining work and follow-ups.
 
+- [ ] Add a new Settings page and link to it from the header menu. It should include the following:
+      - Default rite (Anglican Standard Text [default] or Renewed Ancient Text), which should be used as the default in the add service modal
+      - Default Bible translation (ESV [default], NRSV, or NIV) — we will reference this later, but for now just capture
+      - An Integrations section that replaces the existing Integrations screen (only visible if pco_sync is enabled); this section should include the existing integration options (PCO sync) plus a default service time field (default to 10am), which should be used in the new account-specific service time default as the default in the PCO sync modal when creating a new service
+      - In addition, please remove the direct link to the Integrations screen from the header menu
+- [ ] When creating a new user account, route the user to the Settings page after creation with a flash message indicating that the user can update the settings to reflect their needs or accept the defaults.
+- [ ] Dynamically link scripture references in The Lessons service elements (1, 2, Psalter, Gospel) to Biblia deep links for the reference. For example, Psalm 1:1-3 in ESV is https://biblia.com/books/esv/Ps1.1-3. For the translations we support, ESV = "esv", NRSV = "nrsv", and NIV = "niv2011".
 - [ ] Add "Additional Directions" eucharistic options (see following section).
 - [ ] Add "live edit" mode, in which changes can be made within the service view mode.
 - [ ] PCO integration enhancements:
