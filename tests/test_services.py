@@ -772,7 +772,10 @@ def test_text_renders_biblia_link_for_lesson_override(auth_client, service_facto
     response = client.get(f"/service/{service_id}/view")
     assert response.status_code == 200
     body = response.get_data(as_text=True)
+    assert 'class="lesson-reference-link"' in body
     assert 'href="https://biblia.com/books/esv/Gen1.1-5"' in body
+    assert 'target="_blank"' in body
+    assert 'rel="noopener noreferrer"' in body
     assert ">Genesis 1:1-5<" in body
 
 
@@ -1571,8 +1574,10 @@ def test_service_option_preview_route_applies_lesson_override_patch(
     payload = preview_response.get_json()
     assert payload["ok"] is True
     preview_html = payload["preview_html"] or ""
+    assert 'class="lesson-reference-link"' in preview_html
     assert "Genesis 1:1-5" in preview_html
     assert 'href="https://biblia.com/books/esv/Gen1.1-5"' in preview_html
+    assert 'target="_blank"' in preview_html
 
 
 def test_service_option_preview_route_leaves_unparseable_lesson_override_plain_text(

@@ -109,14 +109,27 @@ def create_app():
 
     @lru_cache(maxsize=512)
     def _render_markdown_cached(value, safe_mode):
-        return markdown2.markdown(
+        html_text = markdown2.markdown(
             value or "",
             extras=extras,
             safe_mode=safe_mode,
         )
+        return _decorate_lesson_reference_links(html_text)
 
     def render_markdown(value, safe_mode=None):
         return _render_markdown_cached(value or "", safe_mode)
+
+    def _decorate_lesson_reference_links(value):
+        if not value:
+            return value
+        return re.sub(
+            r'<a href="(https://biblia\.com/books/[^"]+)">',
+            (
+                r'<a class="lesson-reference-link" href="\1" '
+                r'target="_blank" rel="noopener noreferrer">'
+            ),
+            value,
+        )
 
     @pass_context
     def markdown_template(context, value):

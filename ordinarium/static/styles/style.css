@@ -1997,6 +1997,17 @@ div#text, .propers-search-markdown {
 	}
 }
 
+#text a.lesson-reference-link,
+#text a.lesson-reference-link:visited,
+#text a.lesson-reference-link:hover,
+#text a.lesson-reference-link:active {
+	color: var(--body-color);
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: currentColor;
+	text-underline-offset: 0.12em;
+}
+
 .propers-search-controls {
 	display: flex;
 	flex-wrap: wrap;
