@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
-from flask import g
+from flask import g, request
 from flask_login import (
     LoginManager,
     UserMixin,
@@ -8,11 +9,13 @@ from flask_login import (
     login_required as flask_login_required,
 )
 
+from .db import get_db
 from .feature_flags import parse_feature_flags
 from .user_store import get_user_by_id
 from .user_settings import resolve_user_settings
 
 login_manager = LoginManager()
+ACCESS_UPDATE_WINDOW = timedelta(hours=1)
 
 
 @dataclass
@@ -26,6 +29,7 @@ class OrdinariumUser(UserMixin):
     default_bible_translation: str | None = None
     default_service_time: str | None = None
     feature_flags: dict | None = None
+    last_accessed_at: str | None = None
 
     @classmethod
     def from_row(cls, row):
@@ -45,6 +49,7 @@ class OrdinariumUser(UserMixin):
             default_bible_translation=settings["default_bible_translation"],
             default_service_time=settings["default_service_time"],
             feature_flags=parse_feature_flags(feature_value),
+            last_accessed_at=_row_value(row, "last_accessed_at"),
         )
 
     def __getitem__(self, key):
@@ -81,6 +86,7 @@ def register_user_context(bp):
     def load_logged_in_user():
         if current_user.is_authenticated:
             g.user = current_user._get_current_object()
+            _update_last_accessed_at(g.user)
         else:
             g.user = None
 
@@ -90,3 +96,37 @@ def register_user_context(bp):
 
 
 login_required = flask_login_required
+
+
+def _row_value(row, key):
+    if hasattr(row, "keys") and key in row.keys():
+        return row[key]
+    return None
+
+
+def _parse_timestamp(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _update_last_accessed_at(user):
+    if request.endpoint == "static":
+        return
+
+    now = datetime.utcnow()
+    last_accessed_at = _parse_timestamp(user.last_accessed_at)
+    if last_accessed_at and now - last_accessed_at < ACCESS_UPDATE_WINDOW:
+        return
+
+    now_value = now.isoformat()
+    db = get_db()
+    db.execute(
+        "update users set last_accessed_at=? where id=?",
+        (now_value, user["id"]),
+    )
+    db.commit()
+    user.last_accessed_at = now_value

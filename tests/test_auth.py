@@ -1,3 +1,7 @@
+import sqlite3
+from datetime import datetime, timedelta
+from pathlib import Path
+
 from ordinarium.db import get_db
 from flask.testing import FlaskClient
 
@@ -77,6 +81,125 @@ def test_login_rejects_invalid_credentials(client, user_factory):
     )
     assert response.status_code == 200
     assert b"Invalid email or password." in response.data
+
+
+def test_authenticated_request_sets_last_accessed_when_empty(app, auth_client):
+    client, user_id = auth_client
+
+    with app.app_context():
+        db = get_db()
+        db.execute("update users set last_accessed_at=null where id=?", (user_id,))
+        db.commit()
+
+    response = client.get("/services")
+    assert response.status_code == 200
+
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            "select last_accessed_at from users where id=? limit 1",
+            (user_id,),
+        ).fetchone()
+        assert row["last_accessed_at"] is not None
+
+
+def test_authenticated_request_does_not_rewrite_recent_last_accessed(app, auth_client):
+    client, user_id = auth_client
+    recent_value = (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set last_accessed_at=? where id=?",
+            (recent_value, user_id),
+        )
+        db.commit()
+
+    response = client.get("/services")
+    assert response.status_code == 200
+
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            "select last_accessed_at from users where id=? limit 1",
+            (user_id,),
+        ).fetchone()
+        assert row["last_accessed_at"] == recent_value
+
+
+def test_authenticated_request_rewrites_stale_last_accessed(app, auth_client):
+    client, user_id = auth_client
+    stale_value = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set last_accessed_at=? where id=?",
+            (stale_value, user_id),
+        )
+        db.commit()
+
+    response = client.get("/services")
+    assert response.status_code == 200
+
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            "select last_accessed_at from users where id=? limit 1",
+            (user_id,),
+        ).fetchone()
+        assert row["last_accessed_at"] != stale_value
+        assert datetime.fromisoformat(row["last_accessed_at"]) > datetime.fromisoformat(
+            stale_value
+        )
+
+
+def test_logged_out_request_does_not_write_last_accessed(app, client, user_factory):
+    user_id = user_factory(email="logged-out@example.com")
+
+    response = client.get("/login")
+    assert response.status_code == 200
+
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            "select last_accessed_at from users where id=? limit 1",
+            (user_id,),
+        ).fetchone()
+        assert row["last_accessed_at"] is None
+
+
+def test_last_access_migration_seeds_from_last_login(tmp_path):
+    db_path = tmp_path / "migration-test.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            create table users (
+              id integer primary key,
+              email text not null,
+              last_login_at text
+            )
+            """
+        )
+        conn.execute(
+            "insert into users (id, email, last_login_at) values (?, ?, ?)",
+            (1, "user@example.com", "2025-02-03T09:15:00"),
+        )
+        migration_path = (
+            Path(__file__).resolve().parents[1]
+            / "scripts"
+            / "migrations"
+            / "035_add_user_last_access_tracking.sql"
+        )
+        conn.executescript(migration_path.read_text(encoding="utf-8"))
+        row = conn.execute(
+            "select last_login_at, last_accessed_at from users where id=1"
+        ).fetchone()
+        assert row[0] == "2025-02-03T09:15:00"
+        assert row[1] == "2025-02-03T09:15:00"
+    finally:
+        conn.close()
 
 
 def test_account_update_persists_changes(app, auth_client):

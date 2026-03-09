@@ -27,6 +27,68 @@ def test_admin_allows_with_flag(app, auth_client):
     assert b"Users" in response.data
 
 
+def test_admin_displays_last_accessed_in_users_table(app, auth_client, user_factory):
+    client, admin_id = auth_client
+    user_id = user_factory(email="tracked-user@example.com")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set feature_flags=? where id=?",
+            ('{"admin": true}', admin_id),
+        )
+        db.execute(
+            """
+            update users
+            set last_login_at=?, last_accessed_at=?
+            where id=?
+            """,
+            (
+                "2024-01-01T08:00:00",
+                "2025-02-03T09:15:00",
+                user_id,
+            ),
+        )
+        db.commit()
+
+    response = client.get("/admin")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Last accessed" in html
+    assert "Last login" not in html
+    assert "2025-02-03" in html
+
+
+def test_admin_user_detail_displays_last_accessed(app, auth_client, user_factory):
+    client, admin_id = auth_client
+    user_id = user_factory(email="tracked-detail@example.com")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "update users set feature_flags=? where id=?",
+            ('{"admin": true}', admin_id),
+        )
+        db.execute(
+            """
+            update users
+            set last_login_at=?, last_accessed_at=?
+            where id=?
+            """,
+            (
+                "2024-01-01T08:00:00",
+                "2025-02-03T09:15:00",
+                user_id,
+            ),
+        )
+        db.commit()
+
+    response = client.get(f"/admin/users/{user_id}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Last accessed" in html
+    assert "Last login" not in html
+    assert "2025-02-03T09:15:00" in html
+
+
 def test_admin_table_uses_shared_pagination_config(app, auth_client):
     client, user_id = auth_client
     with app.app_context():

@@ -33,8 +33,8 @@
 				<th class="shared-table-sortable" data-sort-key="created_at" data-sort-dir="none" aria-sort="none">
 					<button class="shared-table-sort" type="button">Created</button>
 				</th>
-				<th class="shared-table-sortable" data-sort-key="last_login_at" data-sort-dir="none" aria-sort="none">
-					<button class="shared-table-sort" type="button">Last login</button>
+				<th class="shared-table-sortable" data-sort-key="last_accessed_at" data-sort-dir="none" aria-sort="none">
+					<button class="shared-table-sort" type="button">Last accessed</button>
 				</th>
 				<th class="shared-table-actions"></th>
 			</tr>
@@ -44,9 +44,9 @@
 				{% set full_name = (user.first_name ~ ' ' ~ user.last_name).strip() %}
 				{% set flags = user.feature_flags.keys()|list|join(', ') %}
 				{% set created_raw = (user.created_at or '') %}
-				{% set last_login_raw = (user.last_login_at or '') %}
+				{% set last_accessed_raw = (user.last_accessed_at or '') %}
 				{% set created_date = (created_raw.split('T')[0]).split(' ')[0] %}
-				{% set last_login_date = (last_login_raw.split('T')[0]).split(' ')[0] %}
+				{% set last_accessed_date = (last_accessed_raw.split('T')[0]).split(' ')[0] %}
 				<tr>
 					<td class="shared-table-select">
 						<input type="checkbox" form="admin-users-bulk" name="user_ids" value="{{ user.id }}" aria-label="Select user {{ full_name }}">
@@ -58,7 +58,7 @@
 					</td>
 					<td data-sort-value="{{ flags | lower }}">{{ flags or '—' }}</td>
 					<td data-sort-value="{{ created_date }}">{{ created_date or '—' }}</td>
-					<td data-sort-value="{{ last_login_date }}">{{ last_login_date or '—' }}</td>
+					<td data-sort-value="{{ last_accessed_date }}">{{ last_accessed_date or '—' }}</td>
 					<td class="shared-table-actions">
 						{% call dropdown_menu(
 							variant='icon',

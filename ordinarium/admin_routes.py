@@ -26,7 +26,7 @@ def register_admin_routes(bp):
         rows = db.execute(
             """
             select id, first_name, last_name, email, feature_flags,
-                   created_at, last_login_at
+                   created_at, last_accessed_at
             from users
             where deleted_at is null
             order by id asc
@@ -42,7 +42,7 @@ def register_admin_routes(bp):
                     "email": row["email"] or "",
                     "feature_flags": parse_feature_flags(row["feature_flags"]),
                     "created_at": row["created_at"],
-                    "last_login_at": row["last_login_at"],
+                    "last_accessed_at": row["last_accessed_at"],
                 }
             )
         return render_template("admin.html", users=users)
