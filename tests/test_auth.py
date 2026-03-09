@@ -21,7 +21,7 @@ def test_signup_creates_user_and_logs_in(app, client):
         },
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/services")
+    assert response.headers["Location"].endswith("/settings")
     with client.session_transaction() as session:
         assert session.get("_user_id")
     with app.app_context():
@@ -32,6 +32,25 @@ def test_signup_creates_user_and_logs_in(app, client):
         ).fetchone()
         assert user is not None
         assert user["first_name"] == "Ada"
+
+
+def test_signup_redirect_shows_settings_flash(app, client):
+    response = client.post(
+        "/signup",
+        data={
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada2@example.com",
+            "password": "strong-pass",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    assert b"<h2>Settings</h2>" in response.data
+    assert (
+        b"Your account is ready. Review your settings to match your needs, or keep the defaults."
+        in response.data
+    )
 
 
 def test_signup_rejects_missing_csrf(app):

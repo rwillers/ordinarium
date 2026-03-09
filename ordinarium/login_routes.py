@@ -124,7 +124,11 @@ def register_login_routes(bp):
                 user = get_user_by_email(email)
                 session.permanent = True
                 login_user(build_user(user))
-                return redirect(url_for("main.services"))
+                flash(
+                    "Your account is ready. Review your settings to match your needs, or keep the defaults.",
+                    "info",
+                )
+                return redirect(url_for("main.settings"))
         if error:
             flash(error, "error")
         return render_template(

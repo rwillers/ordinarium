@@ -26,7 +26,8 @@ def test_settings_renders_saved_defaults(auth_client):
     assert 'name="default_rite"' in body
     assert 'option value="Renewed Ancient Text" selected' in body
     assert 'option value="ESV" selected' in body
-    assert 'name="default_service_time"' not in body
+    assert 'name="default_service_time"' in body
+    assert 'value="10:00"' in body
 
 
 def test_settings_shows_integrations_section_when_pco_enabled(app, auth_client):
