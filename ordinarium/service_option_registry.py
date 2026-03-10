@@ -49,6 +49,14 @@ SERVICE_OPTION_DEFINITIONS = {
             {"value": "omit", "label": "Omit “and the Son”"},
         ],
     },
+    "prayers.ast.delivery": {
+        "label": "AST prayers delivery",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "responsive", "label": "Use responsive form"},
+            {"value": "straight_through", "label": "Read straight through"},
+        ],
+    },
     "comfortable_words.sentences": {
         "label": "Comfortable Words sentences",
         "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
@@ -291,6 +299,36 @@ SERVICE_OPTION_DEFINITIONS = {
         "choices": [
             {"value": "long", "label": "Long invitation"},
             {"value": "short", "label": "Short invitation"},
+        ],
+    },
+    "consecration.oblation_term": {
+        "label": "Consecration oblation term",
+        "rites": {"Anglican Standard Text"},
+        "choices": [
+            {"value": "oblation", "label": "Use oblation"},
+            {"value": "offering", "label": "Use offering"},
+        ],
+    },
+    "consecration.memorial_form": {
+        "label": "Consecration memorial form",
+        "rites": {"Anglican Standard Text"},
+        "choices": [
+            {"value": "current", "label": "Use current memorial text"},
+            {
+                "value": "alternate_acclamation",
+                "label": "Use alternate memorial acclamation",
+            },
+        ],
+    },
+    "humble_access.grace_intro": {
+        "label": "Humble Access grace intro",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "current", "label": "Use current wording"},
+            {
+                "value": "insert_apart_from_your_grace",
+                "label": "Insert “Apart from your grace,”",
+            },
         ],
     },
     "post_communion.form": {

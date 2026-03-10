@@ -93,7 +93,8 @@ def load_service_payload(db, service_id, user_id=None):
           services.offertory_sentence_id,
           services.proper_overrides,
           services.service_option_values,
-          users.default_bible_translation as owner_default_bible_translation
+          users.default_bible_translation as owner_default_bible_translation,
+          users.greeting_response_form as owner_greeting_response_form
         from services
         left join users on users.id=services.user_id
         where services.id=? {user_filter}
@@ -178,7 +179,8 @@ def load_service_for_text(service_id, user_id=None):
               services.offertory_sentence_id,
               services.proper_overrides,
               services.service_option_values,
-              users.default_bible_translation as owner_default_bible_translation
+              users.default_bible_translation as owner_default_bible_translation,
+              users.greeting_response_form as owner_greeting_response_form
             from services
             left join users on users.id=services.user_id
             where services.id=? and services.user_id=?
@@ -200,7 +202,8 @@ def load_service_for_text(service_id, user_id=None):
               services.offertory_sentence_id,
               services.proper_overrides,
               services.service_option_values,
-              users.default_bible_translation as owner_default_bible_translation
+              users.default_bible_translation as owner_default_bible_translation,
+              users.greeting_response_form as owner_greeting_response_form
             from services
             left join users on users.id=services.user_id
             where services.id=?
@@ -219,5 +222,6 @@ def load_service_for_text(service_id, user_id=None):
             saved_service["service_option_values"]
         ),
         "default_bible_translation": saved_service["owner_default_bible_translation"],
+        "greeting_response_form": saved_service["owner_greeting_response_form"],
     }
     return saved_service, saved_data

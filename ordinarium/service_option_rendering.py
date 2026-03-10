@@ -4,6 +4,24 @@ import re
 EASTER_ALLELUIA_SEASONS = {"Easter", "Ascension", "Pentecost"}
 
 
+def apply_greeting_response_preference(ordinaries, greeting_response_form):
+    if not isinstance(ordinaries, list) or not ordinaries:
+        return ordinaries
+    if greeting_response_form != "also_with_you":
+        return ordinaries
+
+    updated = []
+    for item in ordinaries:
+        output = dict(item)
+        if output.get("type") != "custom":
+            output["text"] = (output.get("text") or "").replace(
+                "**And with your spirit.**",
+                "**And also with you.**",
+            )
+        updated.append(output)
+    return updated
+
+
 def apply_service_option_overrides(ordinaries, service_option_values, season=None):
     if not isinstance(ordinaries, list) or not ordinaries:
         return ordinaries
@@ -36,11 +54,17 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
             text = _apply_comfortable_words_sentences(text, service_option_values)
         elif title == "the prayers of the people":
             text = _apply_prayers_bracket_clauses(text, service_option_values)
+            text = _apply_ast_prayers_delivery(text, service_option_values)
         elif title == "the confession and absolution of sin":
             text = _apply_confession_invitation_form(text, service_option_values)
+        elif title == "the prayer of consecration":
+            text = _apply_consecration_oblation_term(text, service_option_values)
+            text = _apply_consecration_memorial_form(text, service_option_values)
         elif title == "the fraction":
             text = _apply_fraction_form(text, service_option_values)
             text = _apply_fraction_alleluia_mode(text, service_option_values, season)
+        elif title == "the prayer of humble access":
+            text = _apply_humble_access_grace_intro(text, service_option_values)
         elif title == "the ministration of communion":
             text = _apply_communion_invitation_form(text, service_option_values)
             text = _apply_communion_clauses(text, service_option_values)
@@ -268,6 +292,21 @@ def _apply_prayers_bracket_clauses(text, service_option_values):
     return output
 
 
+def _apply_ast_prayers_delivery(text, service_option_values):
+    delivery = service_option_values.get("prayers.ast.delivery")
+    if delivery != "straight_through":
+        return text
+
+    output = text or ""
+    output = re.sub(r"\n\n\*Silence\*", "", output)
+    output = re.sub(
+        r"\n\n\*Reader\* Lord, in your mercy:\s*\n\*People\* \*\*Hear our prayer\.\*\*",
+        "",
+        output,
+    )
+    return output
+
+
 def _apply_ast_prayers_profile_substitutions(text, service_option_values):
     output = text or ""
     profile = _resolve_ast_profile(service_option_values)
@@ -298,6 +337,41 @@ def _apply_ast_prayers_profile_substitutions(text, service_option_values):
         count=1,
     )
     return output
+
+
+def _apply_consecration_oblation_term(text, service_option_values):
+    term = service_option_values.get("consecration.oblation_term")
+    if term != "offering":
+        return text
+    return re.sub(
+        r"\boblation\b",
+        "offering",
+        text or "",
+        count=2,
+    )
+
+
+def _apply_consecration_memorial_form(text, service_option_values):
+    form = service_option_values.get("consecration.memorial_form")
+    if form != "alternate_acclamation":
+        return text
+    source = (
+        "Therefore, O Lord and heavenly Father, according to the institution of your "
+        "dearly beloved Son our Savior Jesus Christ, we your humble servants celebrate "
+        "and make here before your divine Majesty, with these holy gifts, the memorial "
+        "your Son commanded us to make; remembering his blessed passion and precious "
+        "death, his mighty resurrection and glorious ascension, and his promise to come "
+        "again."
+    )
+    replacement = (
+        "*Celebrant*\n"
+        "Therefore we proclaim the mystery of faith:\n\n"
+        "*Celebrant and People*\n\n"
+        "    Christ has died.\n"
+        "    Christ is risen.\n"
+        "    Christ will come again."
+    )
+    return (text or "").replace(source, replacement, 1)
 
 
 def _apply_dismissal_form(text, service_option_values):
@@ -396,6 +470,17 @@ def _apply_communion_clauses(text, service_option_values):
         service_option_values,
     )
     return output
+
+
+def _apply_humble_access_grace_intro(text, service_option_values):
+    form = service_option_values.get("humble_access.grace_intro")
+    if form != "insert_apart_from_your_grace":
+        return text
+    return (text or "").replace(
+        "We are not worthy so much as to gather up",
+        "Apart from your grace, we are not worthy so much as to gather up",
+        1,
+    )
 
 
 def _apply_bracket_clause_with_text_option(

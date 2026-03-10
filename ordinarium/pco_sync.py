@@ -20,19 +20,21 @@ def _load_service_plan(service_id, user_id):
     saved = db.execute(
         """
         select
-          id,
-          rite,
-          text_order,
-          text_disabled,
-          season,
-          service_date,
-          observance_handle,
-          lesson_overrides,
-          offertory_sentence_id,
-          proper_overrides,
-          service_option_values
+          services.id,
+          services.rite,
+          services.text_order,
+          services.text_disabled,
+          services.season,
+          services.service_date,
+          services.observance_handle,
+          services.lesson_overrides,
+          services.offertory_sentence_id,
+          services.proper_overrides,
+          services.service_option_values,
+          users.greeting_response_form as owner_greeting_response_form
         from services
-        where id=? and user_id=?
+        left join users on users.id=services.user_id
+        where services.id=? and services.user_id=?
         limit 1
         """,
         (service_id, user_id),
@@ -45,6 +47,7 @@ def _load_service_plan(service_id, user_id):
         "offertory_sentence_id": saved["offertory_sentence_id"],
         "proper_overrides": parse_json_object(saved["proper_overrides"]),
         "service_option_values": parse_json_object(saved["service_option_values"]),
+        "greeting_response_form": saved["owner_greeting_response_form"],
     }
     ordinaries = build_rendered_ordinaries(
         service_id,

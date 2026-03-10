@@ -26,6 +26,8 @@ def test_settings_renders_saved_defaults(auth_client):
     assert 'name="default_rite"' in body
     assert 'option value="Renewed Ancient Text" selected' in body
     assert 'option value="ESV" selected' in body
+    assert 'name="greeting_response_form"' in body
+    assert 'option value="with_your_spirit" selected' in body
     assert 'name="default_service_time"' in body
     assert 'value="10:00"' in body
 
@@ -59,6 +61,7 @@ def test_settings_post_persists_valid_values(app, auth_client):
             "default_rite": "Anglican Standard Text",
             "default_bible_translation": "NIV",
             "default_service_time": "08:30",
+            "greeting_response_form": "also_with_you",
         },
     )
     assert response.status_code == 302
@@ -68,7 +71,11 @@ def test_settings_post_persists_valid_values(app, auth_client):
         db = get_db()
         row = db.execute(
             """
-            select default_rite, default_bible_translation, default_service_time
+            select
+              default_rite,
+              default_bible_translation,
+              default_service_time,
+              greeting_response_form
             from users
             where id=?
             """,
@@ -77,6 +84,7 @@ def test_settings_post_persists_valid_values(app, auth_client):
         assert row["default_rite"] == "Anglican Standard Text"
         assert row["default_bible_translation"] == "NIV"
         assert row["default_service_time"] == "08:30"
+        assert row["greeting_response_form"] == "also_with_you"
 
 
 def test_settings_post_rejects_invalid_rite(app, auth_client):
@@ -88,6 +96,7 @@ def test_settings_post_rejects_invalid_rite(app, auth_client):
             "default_rite": "Invalid Rite",
             "default_bible_translation": "NIV",
             "default_service_time": "08:30",
+            "greeting_response_form": "also_with_you",
         },
     )
     assert response.status_code == 200
@@ -97,7 +106,11 @@ def test_settings_post_rejects_invalid_rite(app, auth_client):
         db = get_db()
         row = db.execute(
             """
-            select default_rite, default_bible_translation, default_service_time
+            select
+              default_rite,
+              default_bible_translation,
+              default_service_time,
+              greeting_response_form
             from users
             where id=?
             """,
@@ -106,6 +119,7 @@ def test_settings_post_rejects_invalid_rite(app, auth_client):
         assert row["default_rite"] == "Renewed Ancient Text"
         assert row["default_bible_translation"] == "ESV"
         assert row["default_service_time"] == "10:00"
+        assert row["greeting_response_form"] == "with_your_spirit"
 
 
 def test_settings_post_rejects_invalid_translation(app, auth_client):
@@ -115,6 +129,7 @@ def test_settings_post_rejects_invalid_translation(app, auth_client):
         data={
             "default_rite": "Renewed Ancient Text",
             "default_bible_translation": "MSG",
+            "greeting_response_form": "with_your_spirit",
         },
     )
     assert response.status_code == 200
@@ -124,7 +139,11 @@ def test_settings_post_rejects_invalid_translation(app, auth_client):
         db = get_db()
         row = db.execute(
             """
-            select default_rite, default_bible_translation, default_service_time
+            select
+              default_rite,
+              default_bible_translation,
+              default_service_time,
+              greeting_response_form
             from users
             where id=?
             """,
@@ -133,6 +152,7 @@ def test_settings_post_rejects_invalid_translation(app, auth_client):
         assert row["default_rite"] == "Renewed Ancient Text"
         assert row["default_bible_translation"] == "ESV"
         assert row["default_service_time"] == "10:00"
+        assert row["greeting_response_form"] == "with_your_spirit"
 
 
 def test_settings_post_rejects_invalid_service_time(app, auth_client):
@@ -144,6 +164,7 @@ def test_settings_post_rejects_invalid_service_time(app, auth_client):
             "default_rite": "Renewed Ancient Text",
             "default_bible_translation": "ESV",
             "default_service_time": "25:61",
+            "greeting_response_form": "with_your_spirit",
         },
     )
     assert response.status_code == 200
@@ -153,7 +174,11 @@ def test_settings_post_rejects_invalid_service_time(app, auth_client):
         db = get_db()
         row = db.execute(
             """
-            select default_rite, default_bible_translation, default_service_time
+            select
+              default_rite,
+              default_bible_translation,
+              default_service_time,
+              greeting_response_form
             from users
             where id=?
             """,
@@ -162,3 +187,39 @@ def test_settings_post_rejects_invalid_service_time(app, auth_client):
         assert row["default_rite"] == "Renewed Ancient Text"
         assert row["default_bible_translation"] == "ESV"
         assert row["default_service_time"] == "10:00"
+        assert row["greeting_response_form"] == "with_your_spirit"
+
+
+def test_settings_post_rejects_invalid_greeting_response(app, auth_client):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    response = client.post(
+        "/settings",
+        data={
+            "default_rite": "Renewed Ancient Text",
+            "default_bible_translation": "ESV",
+            "default_service_time": "10:00",
+            "greeting_response_form": "invalid",
+        },
+    )
+    assert response.status_code == 200
+    assert b"Greeting response preference is invalid." in response.data
+
+    with app.app_context():
+        db = get_db()
+        row = db.execute(
+            """
+            select
+              default_rite,
+              default_bible_translation,
+              default_service_time,
+              greeting_response_form
+            from users
+            where id=?
+            """,
+            (user_id,),
+        ).fetchone()
+        assert row["default_rite"] == "Renewed Ancient Text"
+        assert row["default_bible_translation"] == "ESV"
+        assert row["default_service_time"] == "10:00"
+        assert row["greeting_response_form"] == "with_your_spirit"

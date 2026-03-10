@@ -185,10 +185,29 @@
 		</span>
 		{% endif %}
 	</h3>
-	<p id="plan-season-row" class="plan-meta">
-		Season: <span id="plan-season-display">{{ service.season or 'Auto-detect' }}</span>
-	</p>
-
+	<div id="plan-season-row" class="plan-meta plan-meta-inline">
+		<p class="plan-meta-copy">
+			Season: <span id="plan-season-display">{{ service.season or 'Auto-detect' }}</span>
+		</p>
+		<label class="plan-reorder-control">
+			<span>Reorder:</span>
+			<select data-plan-preset-select{% if not service.service_date %} disabled{% endif %}>
+				<option value="">Choose</option>
+				<option value="default">Default order</option>
+				<option value="penitential">Penitential Order</option>
+			</select>
+		</label>
+	</div>
+	{% if rubric_hints %}
+	<section class="plan-rubric-hints" aria-labelledby="plan-rubric-hints-title">
+		<h3 id="plan-rubric-hints-title">Rubric hints</h3>
+		<ul>
+			{% for hint in rubric_hints %}
+			<li>{{ hint }}</li>
+			{% endfor %}
+		</ul>
+	</section>
+	{% endif %}
 	<div class="plan-list-wrapper"{% if not service.service_date %} data-plan-locked="true"{% endif %}>
 		<p class="plan-locked-message"{% if service.service_date %} style="display: none;"{% endif %}>Service date is set when the service is created. Create a dated service to enable the full plan.</p>
 		<div class="shared-table-wrap">
@@ -246,8 +265,12 @@
 			{% set service_option_key = 'comfortable_words.sentences' %}
 		{% elif ordinary.title == 'The Prayers of the People' %}
 			{% set service_option_key = 'prayers.form' %}
+		{% elif ordinary.title == 'The Prayer of Consecration' and service.rite == 'Anglican Standard Text' %}
+			{% set service_option_key = 'consecration.oblation_term' %}
 		{% elif ordinary.title == 'The Fraction' %}
 			{% set service_option_key = 'fraction.form' %}
+		{% elif ordinary.title == 'The Prayer of Humble Access' %}
+			{% set service_option_key = 'humble_access.grace_intro' %}
 		{% elif ordinary.title == 'The Ministration of Communion' %}
 			{% set service_option_key = 'communion.invitation.form' %}
 		{% elif ordinary.title == 'The Dismissal' %}
@@ -284,7 +307,8 @@
 				{% set service_option_indicator_value = 'set' %}
 			{% endif %}
 			{% if ordinary.title == 'The Prayers of the People' and (
-				service_option_values.get('prayers.public_service.especially_clause')
+				service_option_values.get('prayers.ast.delivery')
+				or service_option_values.get('prayers.public_service.especially_clause')
 				or service_option_values.get('prayers.public_service.especially_names')
 				or service_option_values.get('prayers.adversity.especially_clause')
 				or service_option_values.get('prayers.adversity.especially_names')
@@ -298,6 +322,15 @@
 			or service_option_values.get('prayers.ast.clergy.name')
 			or service_option_values.get('prayers.ast.clergy.title')
 		) %}
+			{% set service_option_indicator_value = 'set' %}
+		{% endif %}
+		{% if ordinary.title == 'The Prayer of Consecration' and (
+			service_option_values.get('consecration.oblation_term')
+			or service_option_values.get('consecration.memorial_form')
+		) %}
+			{% set service_option_indicator_value = 'set' %}
+		{% endif %}
+		{% if ordinary.title == 'The Prayer of Humble Access' and service_option_values.get('humble_access.grace_intro') %}
 			{% set service_option_indicator_value = 'set' %}
 		{% endif %}
 		{% set checkbox_id = 'include-' ~ loop.index0 %}
@@ -690,6 +723,7 @@
 		const planSaveStatus = document.querySelector('#plan-save-status')
 		const planSaveError = document.querySelector('#plan-save-error')
 		const planList = document.querySelector('.plan-list')
+		const planPresetSelect = document.querySelector('[data-plan-preset-select]')
 		const kyriePlanRow = planList?.querySelector('.plan-row[data-ordinary-title="The Kyrie"]') || null
 		const trisagionPlanRow = planList?.querySelector('.plan-row[data-ordinary-title="The Trisagion"]') || null
 		let draggedRow = null
@@ -704,6 +738,92 @@
 				return
 			}
 			trisagionInput.checked = kyrieInput.checked
+		}
+
+		const getPlanRowCheckbox = (row) => row?.querySelector('input[type="checkbox"]') || null
+
+		const getRowDefaultOrder = (row) => {
+			const value = Number.parseInt(getPlanRowCheckbox(row)?.dataset?.defaultOrder || '', 10)
+			return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+		}
+
+		const isStockPlanRow = (row) => Boolean(row) && !row.hasAttribute('data-custom-id')
+
+		const getPenitentialOrderValue = (row) => {
+			const title = row?.getAttribute('data-ordinary-title') || ''
+			const sequence = {
+				'The Acclamation': 10,
+				'The Collect for Purity': 20,
+				'The Summary of the Law': 30,
+				'The Confession and Absolution of Sin': 40,
+				'The Comfortable Words': 50,
+				'The Kyrie': 60,
+				'The Trisagion': 70,
+				'The Collect of the Day': 80,
+			}
+			if (sequence[title] !== undefined) {
+				return sequence[title]
+			}
+			return 1000 + getRowDefaultOrder(row)
+		}
+
+		const reorderStockRows = (resolveOrderValue) => {
+			if (!planList) {
+				return false
+			}
+			const rows = Array.from(planList.querySelectorAll('.plan-row'))
+			const stockRows = rows.filter((row) => isStockPlanRow(row))
+			if (stockRows.length < 2) {
+				return false
+			}
+			const stockPositions = new Map(stockRows.map((row, index) => [row, index]))
+			const orderedStockRows = [...stockRows].sort((left, right) => {
+				const orderDiff = resolveOrderValue(left) - resolveOrderValue(right)
+				if (orderDiff !== 0) {
+					return orderDiff
+				}
+				return (stockPositions.get(left) || 0) - (stockPositions.get(right) || 0)
+			})
+			let stockIndex = 0
+			rows
+				.map((row) => (isStockPlanRow(row) ? orderedStockRows[stockIndex++] : row))
+				.forEach((row) => {
+					planList.appendChild(row)
+				})
+			syncPenitentialRowInputs()
+			return true
+		}
+
+		const applyPlanPreset = (preset) => {
+			if (!planServiceDate?.value) {
+				return
+			}
+			if (preset === 'penitential') {
+				if (!reorderStockRows(getPenitentialOrderValue)) {
+					return
+				}
+			} else if (!reorderStockRows(getRowDefaultOrder)) {
+				return
+			}
+			scheduleAutosave(0)
+		}
+
+		const confirmPlanPreset = (preset) => {
+			const presetLabel = preset === 'penitential' ? 'Penitential Order' : 'Default order'
+			return window.confirm(
+				`${presetLabel} will immediately reorder the stock rite rows for this service. ` +
+				`Included items and row options will not change, but this action cannot be automatically reversed. Continue?`
+			)
+		}
+
+		const updatePlanPresetAvailability = () => {
+			const isDisabled = !planServiceDate?.value
+			if (planPresetSelect) {
+				planPresetSelect.disabled = isDisabled
+				if (isDisabled) {
+					planPresetSelect.value = ''
+				}
+			}
 		}
 
 		const updatePlanInputs = () => {
@@ -871,6 +991,7 @@
 			setSaveStatus('Saved', 'saved')
 		}
 		syncPenitentialRowInputs()
+		updatePlanPresetAvailability()
 
 		if (planList) {
 			planList.addEventListener('dragstart', (event) => {
@@ -904,6 +1025,19 @@
 					syncPenitentialRowInputs()
 					scheduleAutosave()
 				}
+			})
+		}
+
+		if (planPresetSelect) {
+			planPresetSelect.addEventListener('change', () => {
+				const preset = planPresetSelect.value || ''
+				if (!preset) {
+					return
+				}
+				if (confirmPlanPreset(preset)) {
+					applyPlanPreset(preset)
+				}
+				planPresetSelect.value = ''
 			})
 		}
 
@@ -1602,9 +1736,16 @@
 				'The Confession and Absolution of Sin': [
 					{ title: 'Invitation', keys: ['confession.invitation_form'] },
 				],
+				'The Prayer of Consecration': [
+					{ title: 'Oblation term', keys: ['consecration.oblation_term'] },
+					{ title: 'Memorial acclamation', keys: ['consecration.memorial_form'] },
+				],
 				'The Fraction': [
 					{ title: 'Fraction text', keys: ['fraction.form'] },
 					{ title: 'Alleluia', keys: ['fraction.alleluia_mode'] },
+				],
+				'The Prayer of Humble Access': [
+					{ title: 'Opening sentence', keys: ['humble_access.grace_intro'] },
 				],
 				'The Ministration of Communion': [
 					{ title: 'Invitation form', keys: ['communion.invitation.form'] },
@@ -1630,6 +1771,7 @@
 				],
 				'The Prayers of the People': [
 					{ title: 'Form', keys: ['prayers.form'] },
+					{ title: 'AST delivery', keys: ['prayers.ast.delivery'] },
 					{
 						title: 'In need',
 						keys: ['prayers.adversity.especially_clause', 'prayers.adversity.especially_names'],

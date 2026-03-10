@@ -6,7 +6,10 @@ from flask import current_app, render_template, request
 from .db import get_db
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance
-from .service_option_rendering import apply_service_option_overrides
+from .service_option_rendering import (
+    apply_greeting_response_preference,
+    apply_service_option_overrides,
+)
 from .service_defaults import OFFERTORY_DEFAULT_PREFIX
 from .service_planning import (
     build_plan_items,
@@ -17,7 +20,10 @@ from .service_planning import (
     _resolve_offertory_sentence,
     _resolve_proper_override,
 )
-from .user_settings import resolve_default_bible_translation
+from .user_settings import (
+    resolve_default_bible_translation,
+    resolve_greeting_response_form,
+)
 
 RAT_RITE = "Renewed Ancient Text"
 AST_RITE = "Anglican Standard Text"
@@ -193,6 +199,12 @@ def build_rendered_ordinaries(
     )
     ordinaries = apply_service_option_overrides(
         ordinaries, saved_data.get("service_option_values"), season=season
+    )
+    ordinaries = apply_greeting_response_preference(
+        ordinaries,
+        resolve_greeting_response_form(
+            (saved_data or {}).get("greeting_response_form")
+        ),
     )
 
     acclamation = None

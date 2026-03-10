@@ -8,6 +8,7 @@ from .service_options import load_rite_options
 from .user_store import get_user_by_id
 from .user_settings import (
     BIBLE_TRANSLATION_OPTIONS,
+    GREETING_RESPONSE_OPTIONS,
     resolve_user_settings,
     validate_user_settings,
 )
@@ -33,6 +34,7 @@ def register_settings_routes(bp):
                 request.form.get("default_rite"),
                 request.form.get("default_bible_translation"),
                 posted_service_time,
+                request.form.get("greeting_response_form"),
                 rite_options,
             )
             if error:
@@ -48,6 +50,10 @@ def register_settings_routes(bp):
                         if pco_enabled
                         else settings_values["default_service_time"]
                     ),
+                    "greeting_response_form": (
+                        request.form.get("greeting_response_form") or ""
+                    ).strip()
+                    or settings_values["greeting_response_form"],
                 }
             else:
                 db.execute(
@@ -55,13 +61,15 @@ def register_settings_routes(bp):
                     update users
                     set default_rite=?,
                         default_bible_translation=?,
-                        default_service_time=?
+                        default_service_time=?,
+                        greeting_response_form=?
                     where id=?
                     """,
                     (
                         updated_settings["default_rite"],
                         updated_settings["default_bible_translation"],
                         updated_settings["default_service_time"],
+                        updated_settings["greeting_response_form"],
                         g.user["id"],
                     ),
                 )
@@ -76,6 +84,7 @@ def register_settings_routes(bp):
             "settings.html",
             rite_options=rite_options,
             bible_translation_options=BIBLE_TRANSLATION_OPTIONS,
+            greeting_response_options=GREETING_RESPONSE_OPTIONS,
             settings_values=settings_values,
             pco_enabled=pco_enabled,
             pco_connection=pco_connection,

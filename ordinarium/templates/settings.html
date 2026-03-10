@@ -29,6 +29,20 @@
 				</select>
 			</label></p>
 			<p><label class="plan-field">
+				<span>Greeting response</span>
+				<select name="greeting_response_form" required>
+					{% for response_value in greeting_response_options %}
+						<option value="{{ response_value }}"{% if response_value == settings_values.greeting_response_form %} selected{% endif %}>
+							{% if response_value == 'also_with_you' %}
+								Use “And also with you”
+							{% else %}
+								Use “And with your spirit”
+							{% endif %}
+						</option>
+					{% endfor %}
+				</select>
+			</label></p>
+			<p><label class="plan-field">
 				<span>Default service time</span>
 				<input type="time" name="default_service_time" value="{{ settings_values.default_service_time }}" required>
 			</label></p>

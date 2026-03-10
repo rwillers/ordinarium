@@ -560,6 +560,9 @@ def register_service_share_routes(bp):
                 "default_bible_translation": preview_data.get(
                     "owner_default_bible_translation"
                 ),
+                "greeting_response_form": preview_data.get(
+                    "owner_greeting_response_form"
+                ),
                 "service_option_values": preview_data.get("service_option_values")
                 or {},
             },

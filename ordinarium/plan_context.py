@@ -13,6 +13,7 @@ from .plan_offertory import (
     _offertory_default_row,
 )
 from .plan_propers import _load_collect_options, _load_proper_preface_options
+from .service_rubric_hints import resolve_service_rubric_hints
 from .service_option_registry import get_service_option_definitions_for_rite
 from .plan_tokens import parse_plan_tokens, parse_json_object
 
@@ -93,6 +94,7 @@ def build_plan_context(
         saved_plan["service_option_values"] if saved_plan else None
     )
     service_data["service_option_values"] = service_option_values
+    rubric_hints = resolve_service_rubric_hints(observance_handle)
     service_option_definitions = get_service_option_definitions_for_rite(effective_rite)
     proper_collect_options = _load_collect_options(db)
     proper_preface_options = _load_proper_preface_options(db)
@@ -136,6 +138,7 @@ def build_plan_context(
         "service_id": service_id,
         "service": service_data,
         "observance_title": observance_title,
+        "rubric_hints": rubric_hints,
         "can_share": bool(saved_plan and saved_plan["service_date"]),
         "custom_templates": load_custom_templates(user_id),
         "lesson_overrides": lesson_overrides,

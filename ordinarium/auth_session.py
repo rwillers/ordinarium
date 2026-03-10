@@ -28,6 +28,7 @@ class OrdinariumUser(UserMixin):
     default_rite: str | None = None
     default_bible_translation: str | None = None
     default_service_time: str | None = None
+    greeting_response_form: str | None = None
     feature_flags: dict | None = None
     last_accessed_at: str | None = None
 
@@ -48,6 +49,7 @@ class OrdinariumUser(UserMixin):
             default_rite=settings["default_rite"],
             default_bible_translation=settings["default_bible_translation"],
             default_service_time=settings["default_service_time"],
+            greeting_response_form=_row_value(row, "greeting_response_form"),
             feature_flags=parse_feature_flags(feature_value),
             last_accessed_at=_row_value(row, "last_accessed_at"),
         )
