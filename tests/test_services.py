@@ -457,6 +457,32 @@ def test_service_pco_modal_hides_sync_button_when_synced(
     assert "Remove link" in html
 
 
+def test_service_pco_prefill_uses_raw_observance_title(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=232,
+        service_date="2026-03-29",
+        title="Palm Sunday",
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    response = client.get(f"/service/{service_id}")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert 'data-observance-title="Palm Sunday"' in html
+    assert "(3/29/2026)" in html
+
+
 def test_service_delete_removes_related_rows(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(user_id=user_id, service_id=31)

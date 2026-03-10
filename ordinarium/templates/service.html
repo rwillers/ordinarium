@@ -144,7 +144,7 @@
 		{% endif %}
 	{% endif %}
 	<h3 id="plan-observance-row" class="plan-observance-row">
-		<span id="plan-observance-display">
+		<span id="plan-observance-display" data-observance-title="{{ observance_title or '' }}">
 			{% if observance_title %}
 				{{ observance_title }}
 			{% elif service.service_date %}
@@ -824,10 +824,11 @@
 					shareButtons.forEach((button) => {
 						button.style.display = data?.can_share ? '' : 'none'
 					})
-				if (pageWrapper) {
-					if (data?.service_title !== undefined) {
-						pageWrapper.dataset.serviceTitle = data.service_title || ''
-					}
+				if (pageWrapper && data?.service_title !== undefined) {
+					pageWrapper.dataset.serviceTitle = data.service_title || ''
+				}
+				if (planObservanceDisplay && data?.service_title !== undefined) {
+					planObservanceDisplay.dataset.observanceTitle = data.service_title || ''
 				}
 				updatePcoPlanDefaults()
 				setPcoPanelVisibility()
@@ -1223,7 +1224,7 @@
 					const selected = planObservanceSelect.selectedOptions?.[0]
 					observanceTitle = selected ? selected.textContent.replace(' (default)', '').trim() : ''
 				} else if (planObservanceDisplay) {
-					observanceTitle = planObservanceDisplay.textContent.trim()
+					observanceTitle = planObservanceDisplay.dataset.observanceTitle || ''
 				}
 				const candidate = observanceTitle || pageTitle
 				if (candidate) {
