@@ -49,6 +49,15 @@ SERVICE_OPTION_DEFINITIONS = {
             {"value": "omit", "label": "Omit “and the Son”"},
         ],
     },
+    "creed.form": {
+        "label": "Creed selection",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "nicene", "label": "Use Nicene Creed"},
+            {"value": "apostles", "label": "Use Apostles’ Creed"},
+            {"value": "athanasian", "label": "Use Athanasian Creed"},
+        ],
+    },
     "prayers.ast.delivery": {
         "label": "AST prayers delivery",
         "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
@@ -284,6 +293,17 @@ SERVICE_OPTION_DEFINITIONS = {
         "placeholder": "e.g., which was shed for you...",
         "max_length": 500,
     },
+    "communion.distribution.source_rite": {
+        "label": "Distribution wording source",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "own_rite", "label": "Use this rite’s distribution words"},
+            {
+                "value": "other_rite",
+                "label": "Use the other rite’s distribution words",
+            },
+        ],
+    },
     "dismissal.alleluia_mode": {
         "label": "Dismissal alleluia mode",
         "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
@@ -299,6 +319,18 @@ SERVICE_OPTION_DEFINITIONS = {
         "choices": [
             {"value": "long", "label": "Long invitation"},
             {"value": "short", "label": "Short invitation"},
+        ],
+    },
+    "confession.form": {
+        "label": "Confession text",
+        "rites": {"Renewed Ancient Text", "Anglican Standard Text"},
+        "choices": [
+            {"value": "own_rite", "label": "Use this rite’s confession"},
+            {"value": "other_rite", "label": "Use the other rite’s confession"},
+            {
+                "value": "morning_prayer",
+                "label": "Use Morning Prayer confession",
+            },
         ],
     },
     "consecration.oblation_term": {

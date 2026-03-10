@@ -260,7 +260,7 @@
 		{% elif ordinary.title == 'The Trisagion' %}
 			{% set service_option_key = 'penitential_song.mode' %}
 		{% elif ordinary.title == 'The Nicene Creed' %}
-			{% set service_option_key = 'creed.filioque_clause' %}
+			{% set service_option_key = 'creed.form' %}
 		{% elif ordinary.title == 'The Comfortable Words' %}
 			{% set service_option_key = 'comfortable_words.sentences' %}
 		{% elif ordinary.title == 'The Prayers of the People' %}
@@ -272,13 +272,13 @@
 		{% elif ordinary.title == 'The Prayer of Humble Access' %}
 			{% set service_option_key = 'humble_access.grace_intro' %}
 		{% elif ordinary.title == 'The Ministration of Communion' %}
-			{% set service_option_key = 'communion.invitation.form' %}
+			{% set service_option_key = 'communion.distribution.source_rite' %}
 		{% elif ordinary.title == 'The Dismissal' %}
 			{% set service_option_key = 'dismissal.form' %}
 		{% elif ordinary.title == 'The Post Communion Prayer' %}
 			{% set service_option_key = 'post_communion.form' %}
-		{% elif ordinary.title == 'The Confession and Absolution of Sin' and service.rite == 'Anglican Standard Text' %}
-			{% set service_option_key = 'confession.invitation_form' %}
+		{% elif ordinary.title == 'The Confession and Absolution of Sin' %}
+			{% set service_option_key = 'confession.form' %}
 		{% endif %}
 		{% if lesson_kind == 'psalm' %}
 			{% set service_option_key = 'psalm.gloria_patri' %}
@@ -296,8 +296,16 @@
 		{% if ordinary.title == 'The Fraction' and service_option_values.get('fraction.alleluia_mode') %}
 			{% set service_option_indicator_value = 'set' %}
 		{% endif %}
+		{% if ordinary.title == 'The Nicene Creed' and service_option_values.get('creed.filioque_clause') %}
+			{% set service_option_indicator_value = 'set' %}
+		{% endif %}
+		{% if ordinary.title == 'The Confession and Absolution of Sin' and service_option_values.get('confession.invitation_form') %}
+			{% set service_option_indicator_value = 'set' %}
+		{% endif %}
 			{% if ordinary.title == 'The Ministration of Communion' and (
-				service_option_values.get('communion.invitation.appended_clause')
+				service_option_values.get('communion.distribution.source_rite')
+				or service_option_values.get('communion.invitation.form')
+				or service_option_values.get('communion.invitation.appended_clause')
 				or service_option_values.get('communion.invitation.appended_text')
 				or service_option_values.get('communion.distribution.body_clause')
 				or service_option_values.get('communion.distribution.body_text')
@@ -1728,12 +1736,14 @@
 					{ title: "Form", keys: ['lords_prayer.form'] },
 				],
 				'The Nicene Creed': [
+					{ title: 'Creed selection', keys: ['creed.form'] },
 					{ title: 'Filioque', keys: ['creed.filioque_clause'] },
 				],
 				'The Comfortable Words': [
 					{ title: 'Sentences', keys: ['comfortable_words.sentences'] },
 				],
 				'The Confession and Absolution of Sin': [
+					{ title: 'Confession text', keys: ['confession.form'] },
 					{ title: 'Invitation', keys: ['confession.invitation_form'] },
 				],
 				'The Prayer of Consecration': [
@@ -1748,6 +1758,7 @@
 					{ title: 'Opening sentence', keys: ['humble_access.grace_intro'] },
 				],
 				'The Ministration of Communion': [
+					{ title: 'Distribution wording source', keys: ['communion.distribution.source_rite'] },
 					{ title: 'Invitation form', keys: ['communion.invitation.form'] },
 					{
 						title: 'Invitation clause',
@@ -1818,6 +1829,22 @@
 						return `Use this rite (${serviceRite}) form`
 					}
 					return `Use ${alternateRite} form`
+				}
+				if (optionKey === 'confession.form') {
+					if (choiceValue === 'own_rite') {
+						return `Use this rite (${serviceRite}) confession`
+					}
+					if (choiceValue === 'other_rite') {
+						return `Use ${alternateRite} confession`
+					}
+				}
+				if (optionKey === 'communion.distribution.source_rite') {
+					if (choiceValue === 'own_rite') {
+						return `Use this rite (${serviceRite}) distribution words`
+					}
+					if (choiceValue === 'other_rite') {
+						return `Use ${alternateRite} distribution words`
+					}
 				}
 				return fallbackLabel
 			}

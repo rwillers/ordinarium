@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import date, datetime
 
 from flask import current_app, render_template, request
@@ -27,7 +28,17 @@ from .user_settings import (
 
 RAT_RITE = "Renewed Ancient Text"
 AST_RITE = "Anglican Standard Text"
-_CROSS_RITE_TITLES = ("The Prayers of the People", "The Post Communion Prayer")
+_CROSS_RITE_TITLES = (
+    "The Prayers of the People",
+    "The Post Communion Prayer",
+    "The Confession and Absolution of Sin",
+    "The Ministration of Communion",
+)
+_OPTION_VARIANT_HANDLES = (
+    "creed.apostles",
+    "creed.athanasian",
+    "confession.morning_prayer",
+)
 
 
 def _other_rite_name(rite_name):
@@ -57,7 +68,31 @@ def _load_cross_rite_swap_texts(db, rite_name):
     return {row["title"]: row["text"] for row in rows}
 
 
-def _apply_cross_rite_swaps(ordinaries, rite_name, service_option_values, swap_texts):
+def _load_option_variant_texts(db):
+    placeholders = ",".join("?" for _ in _OPTION_VARIANT_HANDLES)
+    rows = db.execute(
+        f"""
+        select filter_content, title, text
+        from texts
+        where type=?
+          and filter_type=?
+          and filter_content in ({placeholders})
+        """,
+        ("ordinarium", "handle", *_OPTION_VARIANT_HANDLES),
+    ).fetchall()
+    return {
+        row["filter_content"]: {"title": row["title"], "text": row["text"]}
+        for row in rows
+    }
+
+
+def _apply_service_option_text_swaps(
+    ordinaries,
+    rite_name,
+    service_option_values,
+    swap_texts,
+    option_variant_texts,
+):
     if not isinstance(ordinaries, list) or not ordinaries:
         return ordinaries
     if not isinstance(service_option_values, dict):
@@ -73,8 +108,23 @@ def _apply_cross_rite_swaps(ordinaries, rite_name, service_option_values, swap_t
     swap_post_communion = (
         service_option_values.get("post_communion.form") == "other_rite"
     )
+    swap_confession = service_option_values.get("confession.form") == "other_rite"
+    swap_distribution_source = (
+        service_option_values.get("communion.distribution.source_rite") == "other_rite"
+    )
+    creed_form = service_option_values.get("creed.form")
+    confession_form = service_option_values.get("confession.form")
 
-    if not swap_prayers and not swap_post_communion:
+    if not any(
+        (
+            swap_prayers,
+            swap_post_communion,
+            swap_confession,
+            swap_distribution_source,
+            creed_form in {"apostles", "athanasian"},
+            confession_form == "morning_prayer",
+        )
+    ):
         return ordinaries
 
     updated = []
@@ -92,8 +142,50 @@ def _apply_cross_rite_swaps(ordinaries, rite_name, service_option_values, swap_t
             swapped = swap_texts.get("The Post Communion Prayer")
             if swapped:
                 output["text"] = swapped
+        elif title == "The Nicene Creed":
+            variant_handle = {
+                "apostles": "creed.apostles",
+                "athanasian": "creed.athanasian",
+            }.get(creed_form)
+            variant = (
+                option_variant_texts.get(variant_handle) if variant_handle else None
+            )
+            if variant:
+                output["title"] = variant["title"]
+                output["detailed_title"] = variant["title"]
+                output["text"] = variant["text"]
+        elif title == "The Confession and Absolution of Sin":
+            if confession_form == "morning_prayer":
+                variant = option_variant_texts.get("confession.morning_prayer")
+                if variant:
+                    output["text"] = variant["text"]
+            elif swap_confession:
+                swapped = swap_texts.get("The Confession and Absolution of Sin")
+                if swapped:
+                    output["text"] = swapped
+        elif title == "The Ministration of Communion" and swap_distribution_source:
+            swapped = swap_texts.get("The Ministration of Communion")
+            if swapped:
+                output["text"] = _swap_communion_distribution_formulas(
+                    output.get("text") or "",
+                    swapped,
+                )
         updated.append(output)
     return updated
+
+
+def _swap_communion_distribution_formulas(text, other_rite_text):
+    pattern = re.compile(
+        r"(?s)(.*\*The Bread and Cup are given to the communicants with these words\*\n\n)"
+        r"(The Body of our Lord Jesus Christ, \[.*?\]\n\n"
+        r"The Blood of our Lord Jesus Christ, \[.*?\])"
+        r"(\n\n\*During the ministration of Communion,.*)"
+    )
+    current_match = pattern.fullmatch(text or "")
+    other_match = pattern.fullmatch(other_rite_text or "")
+    if not current_match or not other_match:
+        return text
+    return f"{current_match.group(1)}{other_match.group(2)}{current_match.group(3)}"
 
 
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
@@ -191,11 +283,13 @@ def build_rendered_ordinaries(
 
     season = saved_service.get("season") or ""
     cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
-    ordinaries = _apply_cross_rite_swaps(
+    option_variant_texts = _load_option_variant_texts(db)
+    ordinaries = _apply_service_option_text_swaps(
         ordinaries,
         rite_name,
         saved_data.get("service_option_values"),
         cross_rite_swap_texts,
+        option_variant_texts,
     )
     ordinaries = apply_service_option_overrides(
         ordinaries, saved_data.get("service_option_values"), season=season
