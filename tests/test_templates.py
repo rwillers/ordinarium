@@ -78,6 +78,20 @@ def test_templates_edit_updates_content(app, auth_client):
         assert updated["text"] == "Updated"
 
 
+def test_templates_page_edit_button_carries_template_payload(app, auth_client):
+    client, user_id = auth_client
+    template_id = create_template(app, user_id, title="Old", text="Original")
+
+    response = client.get("/templates")
+
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert 'data-template-edit' in body
+    assert f'data-template-id="{template_id}"' in body
+    assert 'data-template-title="Old"' in body
+    assert 'data-template-text="Original"' in body
+
+
 def test_templates_delete_removes_template(app, auth_client):
     client, user_id = auth_client
     template_id = create_template(app, user_id, title="Delete Me", text="Remove")

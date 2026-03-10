@@ -47,7 +47,15 @@
 					toggle_classes='plan-menu-toggle',
 					layered=true
 				) %}
-					<button class="dropdown-menu-item" type="button" data-template-edit role="menuitem">{{ dropdown_item_icon('✎') }}Edit</button>
+					<button
+						class="dropdown-menu-item"
+						type="button"
+						data-template-edit
+						data-template-id="{{ template.id }}"
+						data-template-title="{{ template.title | e }}"
+						data-template-text="{{ template.text | e }}"
+						role="menuitem"
+					>{{ dropdown_item_icon('✎') }}Edit</button>
 					<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this template? This cannot be undone.')">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
@@ -182,15 +190,11 @@
 		if (templateEditButtons.length) {
 			templateEditButtons.forEach((button) => {
 				button.addEventListener('click', () => {
-					const row = button.closest('.plan-row')
-					if (!row) {
-						return
-					}
 					openTemplateModal({
 						type: 'edit',
-						id: row.getAttribute('data-template-id'),
-						title: row.getAttribute('data-template-title'),
-						text: row.getAttribute('data-template-text')
+						id: button.getAttribute('data-template-id'),
+						title: button.getAttribute('data-template-title'),
+						text: button.getAttribute('data-template-text')
 					})
 				})
 			})

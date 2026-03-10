@@ -387,15 +387,35 @@
 					</form>
 					{% endif %}
 					{% if lesson_kind or proper_key or is_offertory or service_option_key %}
-					<button class="plan-icon-button plan-row-action-icon plan-row-action-options" type="button" data-service-option-edit aria-label="Set options">⚙</button>
+					<button class="plan-icon-button plan-row-action-icon plan-row-action-options" type="button" data-service-option-edit aria-label="Set options">
+						<span class="plan-control-icon" aria-hidden="true">
+							<svg viewBox="0 0 24 24" focusable="false">
+								<circle cx="12" cy="12" r="3.1"></circle>
+								<path d="M12 2.9l1 .3.5 2.1a7.3 7.3 0 0 1 1.8.8l2-1 1.4 1.4-1 2a7.3 7.3 0 0 1 .8 1.8l2.1.5.3 1-.3 1-2.1.5a7.3 7.3 0 0 1-.8 1.8l1 2-1.4 1.4-2-1a7.3 7.3 0 0 1-1.8.8l-.5 2.1-1 .3-1-.3-.5-2.1a7.3 7.3 0 0 1-1.8-.8l-2 1-1.4-1.4 1-2a7.3 7.3 0 0 1-.8-1.8l-2.1-.5-.3-1 .3-1 2.1-.5a7.3 7.3 0 0 1 .8-1.8l-1-2 1.4-1.4 2 1a7.3 7.3 0 0 1 1.8-.8l.5-2.1 1-.3z"></path>
+							</svg>
+						</span>
+					</button>
 					{% endif %}
 				</div>
 			</td>
 				<td class="shared-table-actions plan-row-handle-cell">
 					<button class="plan-row-add-button" type="button" data-custom-add aria-label="Add custom element after this row">
-						<span aria-hidden="true">+</span>
+						<span class="plan-control-icon plan-control-icon-add" aria-hidden="true">
+							<svg viewBox="0 0 24 24" focusable="false">
+								<path d="M12 5v14"></path>
+								<path d="M5 12h14"></path>
+							</svg>
+						</span>
 					</button>
-					<span class="plan-handle shared-table-handle" aria-hidden="true">↕</span>
+					<span class="plan-handle shared-table-handle" aria-hidden="true">
+						<span class="plan-control-icon plan-control-icon-handle">
+							<svg viewBox="0 0 24 24" focusable="false">
+								<path d="M12 3v18"></path>
+								<path d="M8.5 6.5L12 3l3.5 3.5"></path>
+								<path d="M8.5 17.5L12 21l3.5-3.5"></path>
+							</svg>
+						</span>
+					</span>
 				</td>
 			</tr>
 	{% endfor %}
@@ -1255,7 +1275,7 @@
 		updatePcoTimezoneOffset()
 
 
-		const formatSyncDate = (value) => {
+			const formatSyncDate = (value) => {
 			if (!value) {
 				return ''
 			}
@@ -1375,13 +1395,66 @@
 			}
 		}
 
-		if (pcoSyncIndicator) {
+			if (pcoSyncIndicator) {
 			renderSyncStatus(
 				pcoSyncIndicator.dataset.pcoSyncState || '',
 				pcoSyncIndicator.dataset.pcoSyncAt || ''
 			)
 		}
-		setPcoPanelVisibility()
+			setPcoPanelVisibility()
+
+			const createPlanControlIcon = (type) => {
+				const wrap = document.createElement('span')
+				wrap.className =
+					type === 'add'
+						? 'plan-control-icon plan-control-icon-add'
+						: type === 'handle'
+							? 'plan-control-icon plan-control-icon-handle'
+							: 'plan-control-icon'
+				wrap.setAttribute('aria-hidden', 'true')
+
+				const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+				svg.setAttribute('viewBox', '0 0 24 24')
+				svg.setAttribute('focusable', 'false')
+
+				if (type === 'gear') {
+					const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+					circle.setAttribute('cx', '12')
+					circle.setAttribute('cy', '12')
+					circle.setAttribute('r', '3.1')
+					svg.appendChild(circle)
+
+					const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					path.setAttribute(
+						'd',
+						'M12 2.9l1 .3.5 2.1a7.3 7.3 0 0 1 1.8.8l2-1 1.4 1.4-1 2a7.3 7.3 0 0 1 .8 1.8l2.1.5.3 1-.3 1-2.1.5a7.3 7.3 0 0 1-.8 1.8l1 2-1.4 1.4-2-1a7.3 7.3 0 0 1-1.8.8l-.5 2.1-1 .3-1-.3-.5-2.1a7.3 7.3 0 0 1-1.8-.8l-2 1-1.4-1.4 1-2a7.3 7.3 0 0 1-.8-1.8l-2.1-.5-.3-1 .3-1 2.1-.5a7.3 7.3 0 0 1 .8-1.8l-1-2 1.4-1.4 2 1a7.3 7.3 0 0 1 1.8-.8l.5-2.1 1-.3z'
+					)
+					svg.appendChild(path)
+				} else if (type === 'add') {
+					const vertical = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					vertical.setAttribute('d', 'M12 5v14')
+					svg.appendChild(vertical)
+
+					const horizontal = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					horizontal.setAttribute('d', 'M5 12h14')
+					svg.appendChild(horizontal)
+				} else if (type === 'handle') {
+					const shaft = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					shaft.setAttribute('d', 'M12 3v18')
+					svg.appendChild(shaft)
+
+					const upArrow = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					upArrow.setAttribute('d', 'M8.5 6.5L12 3l3.5 3.5')
+					svg.appendChild(upArrow)
+
+					const downArrow = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+					downArrow.setAttribute('d', 'M8.5 17.5L12 21l3.5-3.5')
+					svg.appendChild(downArrow)
+				}
+
+				wrap.appendChild(svg)
+				return wrap
+			}
 
 		const openCustomModal = (mode) => {
 			if (!customModal) {
@@ -2987,11 +3060,11 @@
 			addButton.type = 'button'
 			addButton.setAttribute('data-custom-add', '')
 			addButton.setAttribute('aria-label', 'Add custom element after this row')
-			addButton.innerHTML = '<span aria-hidden="true">+</span>'
+			addButton.appendChild(createPlanControlIcon('add'))
 			const handle = document.createElement('span')
 			handle.className = 'plan-handle shared-table-handle'
 			handle.setAttribute('aria-hidden', 'true')
-			handle.textContent = '↕'
+			handle.appendChild(createPlanControlIcon('handle'))
 			handleCell.appendChild(addButton)
 			handleCell.appendChild(handle)
 

@@ -104,3 +104,28 @@ def test_service_page_disables_order_preset_controls_without_date(
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert 'data-plan-preset-select disabled' in body
+
+
+def test_service_page_uses_svg_row_controls_for_mobile_safe_icons(
+    auth_client, service_factory
+):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=315,
+        title="Lent I",
+        service_date="2026-02-22",
+        season="Lent",
+        observance_handle="LentI",
+    )
+
+    response = client.get(f"/service/{service_id}")
+
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert 'data-service-option-edit' in body
+    assert 'class="plan-control-icon"' in body
+    assert 'class="plan-control-icon plan-control-icon-handle"' in body
+    assert 'class="plan-control-icon plan-control-icon-add"' in body
+    assert ">⚙<" not in body
+    assert ">↕<" not in body

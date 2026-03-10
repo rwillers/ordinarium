@@ -2,7 +2,6 @@
 
 Remaining work and follow-ups.
 
-- [ ] Fix plan element icons on mobile.
 - [ ] Add remaining "Additional Directions" eucharistic option (see following section).
 - [ ] Add "live edit" mode, in which changes can be made within the service view mode.
 - [ ] PCO integration enhancements:
