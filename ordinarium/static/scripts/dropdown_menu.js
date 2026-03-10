@@ -5,21 +5,87 @@
 	const itemSelector = '.dropdown-menu-item, [data-dropdown-item]'
 	let activeMenu = null
 	let activeToggle = null
+	let menuIdCounter = 0
 
 	const listMenus = () => Array.from(document.querySelectorAll(menuSelector))
 
-	const getMenuItems = (menu) => {
+	const ensureMenuId = (menu) => {
 		if (!menu) {
+			return ''
+		}
+		if (!menu.dataset.dropdownId) {
+			menuIdCounter += 1
+			menu.dataset.dropdownId = `dropdown-menu-${menuIdCounter}`
+		}
+		return menu.dataset.dropdownId
+	}
+
+	const getPanelOwner = (panel) => {
+		const ownerId = panel?.dataset.dropdownOwnerId
+		if (!ownerId) {
+			return null
+		}
+		return listMenus().find((menu) => menu.dataset.dropdownId === ownerId) || null
+	}
+
+	const getMenuItems = (menu) => {
+		const panel = getPanel(menu)
+		if (!panel) {
 			return []
 		}
-		return Array.from(menu.querySelectorAll(itemSelector))
+		return Array.from(panel.querySelectorAll(itemSelector))
 	}
 
 	const getPanel = (menu) => {
 		if (!menu) {
 			return null
 		}
-		return menu.querySelector(panelSelector)
+		const attachedPanel = menu.querySelector(panelSelector)
+		if (attachedPanel) {
+			return attachedPanel
+		}
+		const menuId = menu.dataset.dropdownId
+		if (!menuId) {
+			return null
+		}
+		return Array.from(document.querySelectorAll(`${panelSelector}[data-dropdown-owner-id]`)).find(
+			(panel) => panel.dataset.dropdownOwnerId === menuId
+		) || null
+	}
+
+	const resetLayeredPosition = (panel) => {
+		if (!panel) {
+			return
+		}
+		panel.classList.remove('is-layered')
+		panel.style.removeProperty('left')
+		panel.style.removeProperty('top')
+	}
+
+	const syncPanelVariables = (menu, panel) => {
+		if (!menu || !panel) {
+			return
+		}
+		const computed = window.getComputedStyle(menu)
+		;['--dropdown-panel-min-width', '--dropdown-item-font-size'].forEach((property) => {
+			const value = computed.getPropertyValue(property).trim()
+			if (value) {
+				panel.style.setProperty(property, value)
+				return
+			}
+			panel.style.removeProperty(property)
+		})
+	}
+
+	const restorePanel = (menu) => {
+		const panel = getPanel(menu)
+		if (!panel || !menu) {
+			return
+		}
+		panel.dataset.dropdownOwnerId = ''
+		if (panel.parentElement !== menu) {
+			menu.appendChild(panel)
+		}
 	}
 
 	const setRowMenuState = (menu, isOpen) => {
@@ -34,9 +100,38 @@
 		if (!panel) {
 			return
 		}
-		panel.classList.remove('is-layered')
-		panel.style.removeProperty('left')
-		panel.style.removeProperty('top')
+		resetLayeredPosition(panel)
+		restorePanel(menu)
+	}
+
+	const movePanelToLayer = (menu) => {
+		const panel = getPanel(menu)
+		if (!panel || !menu) {
+			return null
+		}
+		ensureMenuId(menu)
+		panel.dataset.dropdownOwnerId = menu.dataset.dropdownId
+		panel.classList.toggle('is-shared-table-panel', menu.classList.contains('shared-table-menu'))
+		syncPanelVariables(menu, panel)
+		if (panel.parentElement !== document.body) {
+			document.body.appendChild(panel)
+		}
+		return panel
+	}
+
+	const getMenuFromNode = (node) => {
+		if (!(node instanceof Element)) {
+			return null
+		}
+		const menu = node.closest(menuSelector)
+		if (menu) {
+			return menu
+		}
+		const panel = node.closest(panelSelector)
+		if (!panel) {
+			return null
+		}
+		return getPanelOwner(panel)
 	}
 
 	const positionLayeredMenu = (menu, toggle) => {
@@ -47,11 +142,11 @@
 			clearLayeredPosition(menu)
 			return
 		}
-		const panel = getPanel(menu)
+		const panel = movePanelToLayer(menu)
 		if (!panel) {
 			return
 		}
-		clearLayeredPosition(menu)
+		resetLayeredPosition(panel)
 		panel.classList.add('is-layered')
 		const toggleRect = toggle.getBoundingClientRect()
 		const panelWidth = panel.offsetWidth || 184
@@ -150,14 +245,14 @@
 		}
 		const item = target.closest(itemSelector)
 		if (item) {
-			const menu = item.closest(menuSelector)
+			const menu = getMenuFromNode(item)
 			if (menu) {
 				const group = menu.dataset.dropdownGroup || null
 				closeMenus({ group })
 			}
 			return
 		}
-		if (!target.closest(menuSelector)) {
+		if (!getMenuFromNode(target)) {
 			closeMenus()
 		}
 	})

@@ -428,6 +428,14 @@ button:hover, input[type="submit"]:hover, .button:hover {
 	pointer-events: auto;
 	transform: translateY(0);
 }
+.dropdown-menu-panel.is-layered {
+	position: fixed;
+	right: auto;
+	z-index: 2100;
+	opacity: 1;
+	pointer-events: auto;
+	transform: translateY(0);
+}
 .dropdown-menu-panel form {
 	margin: 0;
 }
@@ -452,6 +460,11 @@ button:hover, input[type="submit"]:hover, .button:hover {
 	justify-content: flex-start;
 }
 .shared-table-menu .dropdown-menu-item {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	align-items: flex-start;
+}
+.dropdown-menu-panel.is-shared-table-panel .dropdown-menu-item {
 	white-space: normal;
 	overflow-wrap: anywhere;
 	align-items: flex-start;
@@ -1114,10 +1127,8 @@ div#page {
 		z-index: 1200;
 		max-width: min(22em, calc(100vw - 20px));
 	}
-	.shared-table .dropdown-menu-panel.is-layered {
-		position: fixed;
-		right: auto;
-		z-index: 2100;
+	.dropdown-menu-panel.is-shared-table-panel {
+		max-width: min(22em, calc(100vw - 20px));
 	}
 	.plan-row-content {
 		position: relative;
