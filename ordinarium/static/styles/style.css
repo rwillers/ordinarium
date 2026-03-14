@@ -67,61 +67,61 @@
 
 @media screen and (prefers-color-scheme: dark) {
 	:root {
-		--body-background-color: #181513;
-		--surface-background-color: #26201d;
-		--surface-background-alt-color: #312925;
-		--surface-background-muted-color: rgba(56, 46, 41, 0.78);
-		--surface-background-tint-color: rgba(49, 41, 37, 0.92);
-		--surface-border-color: rgba(232, 221, 214, 0.18);
-		--surface-border-subtle-color: rgba(232, 221, 214, 0.14);
-		--surface-transparent-hover-color: rgba(216, 179, 186, 0.12);
-		--surface-transparent-hover-strong-color: rgba(216, 179, 186, 0.18);
+		--body-background-color: #222;
+		--surface-background-color: #181818;
+		--surface-background-alt-color: #111;
+		--surface-background-muted-color: rgba(17, 17, 17, 0.72);
+		--surface-background-tint-color: rgba(24, 24, 24, 0.92);
+		--surface-border-color: #444;
+		--surface-border-subtle-color: #383838;
+		--surface-transparent-hover-color: rgba(204, 204, 204, 0.08);
+		--surface-transparent-hover-strong-color: rgba(204, 204, 204, 0.12);
 		--header-control-background-color: rgba(255, 255, 255, 0.08);
 		--overlay-background-color: rgba(8, 8, 8, 0.72);
 		--shadow-raised: 0 12px 24px rgba(0, 0, 0, 0.42);
 		--shadow-card: 0 12px 24px rgba(0, 0, 0, 0.28);
 		--shadow-modal: 0 18px 40px rgba(0, 0, 0, 0.5);
 
-		--body-color: #e8ddd6;
-		--body-color-strong: #f7eee9;
-		--body-color-muted: rgba(232, 221, 214, 0.82);
-		--body-color-soft: rgba(232, 221, 214, 0.72);
-		--body-color-disabled: rgba(232, 221, 214, 0.42);
-		--body-color-subtle: rgba(232, 221, 214, 0.62);
-		--rubric-color: #d8aeb6;
-		--rubric-visited-color: #c795a1;
-		--rubric-border-subtle-color: rgba(216, 174, 182, 0.24);
-		--rubric-border-color: rgba(216, 174, 182, 0.34);
-		--rubric-border-strong-color: rgba(216, 174, 182, 0.46);
-		--rubric-border-focus-color: rgba(216, 174, 182, 0.56);
-		--rubric-tint-subtle-color: rgba(216, 174, 182, 0.08);
-		--rubric-tint-color: rgba(216, 174, 182, 0.12);
-		--rubric-tint-strong-color: rgba(216, 174, 182, 0.18);
-		--focus-outline-color: rgba(216, 174, 182, 0.52);
+		--body-color: #ccc;
+		--body-color-strong: #eee;
+		--body-color-muted: rgba(204, 204, 204, 0.8);
+		--body-color-soft: rgba(204, 204, 204, 0.72);
+		--body-color-disabled: rgba(204, 204, 204, 0.38);
+		--body-color-subtle: #aaa;
+		--rubric-color: #caaeb5;
+		--rubric-visited-color: #b5969d;
+		--rubric-border-subtle-color: rgba(202, 174, 181, 0.2);
+		--rubric-border-color: rgba(202, 174, 181, 0.28);
+		--rubric-border-strong-color: rgba(202, 174, 181, 0.36);
+		--rubric-border-focus-color: rgba(202, 174, 181, 0.48);
+		--rubric-tint-subtle-color: rgba(202, 174, 181, 0.05);
+		--rubric-tint-color: rgba(202, 174, 181, 0.08);
+		--rubric-tint-strong-color: rgba(202, 174, 181, 0.12);
+		--focus-outline-color: rgba(202, 174, 181, 0.5);
 
-		--header-background-color: #221d1a;
-		--line-color: #4a403a;
+		--header-background-color: #111;
+		--line-color: #444;
 
-		--input-background-color: #201a18;
-		--input-border-color: rgba(232, 221, 214, 0.22);
-		--input-color: var(--body-color);
+		--input-background-color: #333;
+		--input-border-color: #555;
+		--input-color: #eee;
 
-		--control-background-color: #312925;
-		--control-border-color: #584b44;
-		--control-color: var(--body-color);
-		--control-hover-background-color: #3b312c;
-		--control-current-background-color: #3b312c;
-		--control-disabled-background-color: #2a2421;
-		--control-disabled-border-color: #4a403a;
-		--control-disabled-color: rgba(232, 221, 214, 0.42);
+		--control-background-color: #2a2a2a;
+		--control-border-color: #555;
+		--control-color: #eee;
+		--control-hover-background-color: #333;
+		--control-current-background-color: #333;
+		--control-disabled-background-color: #1a1a1a;
+		--control-disabled-border-color: #333;
+		--control-disabled-color: rgba(221, 221, 221, 0.42);
 
-		--status-success-color: #7fc18f;
-		--status-warning-color: #d7a369;
-		--status-error-color: #e09287;
-		--status-neutral-color: #c5bbb5;
-		--status-neutral-muted-color: rgba(232, 221, 214, 0.46);
-		--status-error-border-color: rgba(224, 146, 135, 0.4);
-		--status-error-background-color: rgba(224, 146, 135, 0.14);
+		--status-success-color: #9fcd9f;
+		--status-warning-color: #d7b374;
+		--status-error-color: #d59b9b;
+		--status-neutral-color: #aaa;
+		--status-neutral-muted-color: #777;
+		--status-error-border-color: rgba(213, 155, 155, 0.34);
+		--status-error-background-color: rgba(213, 155, 155, 0.1);
 	}
 	html {
 		color-scheme: dark;
