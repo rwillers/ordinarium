@@ -1,3 +1,5 @@
+import time
+
 from ordinarium.db import get_db
 
 
@@ -13,6 +15,29 @@ def _enable_pco_feature(app, user_id):
             (user_id, "token"),
         )
         db.commit()
+
+
+def _post_batch_sync_and_wait(client, payload):
+    response = client.post(
+        "/services/pco/batch-sync",
+        json=payload,
+        headers={"Accept": "application/json"},
+    )
+    assert response.status_code == 202
+    queued = response.get_json()
+    assert queued["ok"] is True
+    assert queued["job_id"]
+    assert queued["status_url"]
+    for _attempt in range(100):
+        status_response = client.get(
+            queued["status_url"], headers={"Accept": "application/json"}
+        )
+        assert status_response.status_code == 200
+        status_payload = status_response.get_json()
+        if status_payload["status"] in {"succeeded", "failed"}:
+            return queued, status_payload
+        time.sleep(0.02)
+    raise AssertionError("PCO batch sync job did not finish.")
 
 
 def test_services_pco_batch_sync_enforces_limit(app, auth_client):
@@ -115,9 +140,9 @@ def test_services_pco_batch_sync_handles_mixed_modes(
         "ordinarium.service_pco_routes.sync_service_plan", fake_sync_service_plan
     )
 
-    response = client.post(
-        "/services/pco/batch-sync",
-        json={
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
             "rows": [
                 {"service_id": 301, "mode": "sync_linked"},
                 {
@@ -137,11 +162,9 @@ def test_services_pco_batch_sync_handles_mixed_modes(
             "pco_plan_time": "10:00",
             "pco_plan_tz_offset": "0",
         },
-        headers={"Accept": "application/json"},
     )
-    assert response.status_code == 200
-    payload = response.get_json()
     assert payload["ok"] is True
+    assert payload["status"] == "succeeded"
     assert payload["summary"] == {"total": 3, "success": 3, "failed": 0, "skipped": 0}
     statuses = [row["status"] for row in payload["results"]]
     assert statuses == ["success", "success", "success"]
@@ -174,9 +197,9 @@ def test_services_pco_batch_sync_rejects_duplicate_plan_targets(
     _enable_pco_feature(app, user_id)
     service_factory(user_id=user_id, service_id=401, service_date="2099-02-01")
     service_factory(user_id=user_id, service_id=402, service_date="2099-02-08")
-    response = client.post(
-        "/services/pco/batch-sync",
-        json={
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
             "rows": [
                 {
                     "service_id": 401,
@@ -194,11 +217,9 @@ def test_services_pco_batch_sync_rejects_duplicate_plan_targets(
             "pco_plan_time": "10:00",
             "pco_plan_tz_offset": "0",
         },
-        headers={"Accept": "application/json"},
     )
-    assert response.status_code == 200
-    payload = response.get_json()
     assert payload["ok"] is True
+    assert payload["status"] == "succeeded"
     assert payload["summary"] == {"total": 2, "success": 0, "failed": 2, "skipped": 0}
     for row in payload["results"]:
         assert row["status"] == "failed"
@@ -209,9 +230,9 @@ def test_services_pco_batch_sync_limits_to_upcoming(app, auth_client, service_fa
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
     service_factory(user_id=user_id, service_id=501, service_date="2000-01-01")
-    response = client.post(
-        "/services/pco/batch-sync",
-        json={
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
             "rows": [
                 {
                     "service_id": 501,
@@ -222,11 +243,9 @@ def test_services_pco_batch_sync_limits_to_upcoming(app, auth_client, service_fa
             "pco_plan_time": "10:00",
             "pco_plan_tz_offset": "0",
         },
-        headers={"Accept": "application/json"},
     )
-    assert response.status_code == 200
-    payload = response.get_json()
     assert payload["ok"] is True
+    assert payload["status"] == "succeeded"
     assert payload["summary"] == {"total": 1, "success": 0, "failed": 1, "skipped": 0}
     assert payload["results"][0]["status"] == "failed"
     assert "not upcoming" in payload["results"][0]["error"]
@@ -247,3 +266,6 @@ def test_services_page_places_pco_batch_action_in_upcoming_section(
     assert toggle_index != -1
     assert past_index != -1
     assert toggle_index < past_index
+    assert "Apply this service type to all editable rows?" in body
+    assert 'id="service-pco-batch-service-type"' not in body
+    assert 'id="service-pco-batch-apply-type"' not in body

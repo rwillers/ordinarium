@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import hashlib
+import re
+import threading
+import time
 from urllib.parse import urlencode
 
 import requests
@@ -14,6 +18,10 @@ JSON_API_HEADERS = {
     "Accept": "application/vnd.api+json",
     "Content-Type": "application/vnd.api+json",
 }
+
+DEFAULT_RATE_LIMIT = 100
+DEFAULT_RATE_PERIOD_SECONDS = 20
+MAX_RATE_LIMIT_RETRIES = 3
 
 
 @dataclass
@@ -34,6 +42,132 @@ class PcoApiError(RuntimeError):
 
 class PcoAuthError(RuntimeError):
     pass
+
+
+@dataclass
+class _RateLimitBucket:
+    limit: int = DEFAULT_RATE_LIMIT
+    period_seconds: float = DEFAULT_RATE_PERIOD_SECONDS
+    count: int = 0
+    window_started_at: float = 0
+    blocked_until: float = 0
+
+
+class PcoRateLimiter:
+    def __init__(
+        self,
+        default_limit=DEFAULT_RATE_LIMIT,
+        default_period_seconds=DEFAULT_RATE_PERIOD_SECONDS,
+        sleep_func=time.sleep,
+        monotonic_func=time.monotonic,
+    ):
+        self.default_limit = default_limit
+        self.default_period_seconds = default_period_seconds
+        self.sleep = sleep_func
+        self.monotonic = monotonic_func
+        self._buckets = {}
+        self._lock = threading.Lock()
+
+    def wait_for_slot(self, token):
+        delay = self._reserve_delay(token)
+        if delay > 0:
+            self.sleep(delay)
+
+    def update_from_response(self, token, response):
+        headers = response.headers or {}
+        retry_after = _parse_retry_after(headers.get("Retry-After"))
+        limit = _parse_positive_int(headers.get("X-PCO-API-Request-Rate-Limit"))
+        count = _parse_positive_int(headers.get("X-PCO-API-Request-Rate-Count"))
+        period = _parse_rate_period(headers.get("X-PCO-API-Request-Rate-Period"))
+        now = self.monotonic()
+        with self._lock:
+            bucket = self._bucket_for_token(token)
+            if limit:
+                bucket.limit = limit
+            if period:
+                bucket.period_seconds = period
+            if count is not None:
+                if now - bucket.window_started_at >= bucket.period_seconds:
+                    bucket.window_started_at = now
+                bucket.count = max(bucket.count, count)
+            if response.status_code == 429:
+                wait_seconds = retry_after or bucket.period_seconds
+                bucket.blocked_until = max(bucket.blocked_until, now + wait_seconds)
+
+    def reset(self):
+        with self._lock:
+            self._buckets = {}
+
+    def _reserve_delay(self, token):
+        with self._lock:
+            now = self.monotonic()
+            bucket = self._bucket_for_token(token)
+            if not bucket.window_started_at:
+                bucket.window_started_at = now
+            window_age = now - bucket.window_started_at
+            if window_age >= bucket.period_seconds:
+                bucket.window_started_at = now
+                bucket.count = 0
+                window_age = 0
+            delay = max(0, bucket.blocked_until - now)
+            if bucket.count >= bucket.limit:
+                delay = max(delay, bucket.period_seconds - window_age)
+                bucket.window_started_at = now + delay
+                bucket.count = 0
+            bucket.count += 1
+            return delay
+
+    def _bucket_for_token(self, token):
+        key = _rate_limit_token_key(token)
+        if key not in self._buckets:
+            self._buckets[key] = _RateLimitBucket(
+                limit=self.default_limit,
+                period_seconds=self.default_period_seconds,
+            )
+        return self._buckets[key]
+
+
+rate_limiter = PcoRateLimiter()
+
+
+def _rate_limit_token_key(token):
+    if not token:
+        return "anonymous"
+    return hashlib.sha256(str(token).encode("utf-8")).hexdigest()
+
+
+def _parse_positive_int(value):
+    if value is None:
+        return None
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _parse_retry_after(value):
+    parsed = _parse_positive_int(value)
+    if parsed is None:
+        return None
+    return parsed
+
+
+def _parse_rate_period(value):
+    if value is None:
+        return None
+    match = re.search(r"(\d+(?:\.\d+)?)", str(value))
+    if not match:
+        return None
+    try:
+        seconds = float(match.group(1))
+    except ValueError:
+        return None
+    if seconds <= 0:
+        return None
+    return seconds
 
 
 def build_authorize_url(
@@ -134,14 +268,21 @@ def api_request(
     url = path if absolute_url else f"{base_url.rstrip('/')}/{path.lstrip('/')}"
     headers = dict(JSON_API_HEADERS)
     headers["Authorization"] = f"Bearer {access_token}"
-    response = requests.request(
-        method,
-        url,
-        headers=headers,
-        json=json,
-        params=params,
-        timeout=30,
-    )
+    retries = 0
+    while True:
+        rate_limiter.wait_for_slot(access_token)
+        response = requests.request(
+            method,
+            url,
+            headers=headers,
+            json=json,
+            params=params,
+            timeout=30,
+        )
+        rate_limiter.update_from_response(access_token, response)
+        if response.status_code != 429 or retries >= MAX_RATE_LIMIT_RETRIES:
+            break
+        retries += 1
     if response.status_code >= 400:
         try:
             payload = response.json()

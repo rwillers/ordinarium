@@ -402,6 +402,8 @@
 	const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 	const maxMultiServices = 10
 	const batchPlanCache = new Map()
+	const batchEditableServiceTypeModes = new Set(['link_existing', 'create_new'])
+	let pcoBatchServiceTypeApplyPromptShown = false
 
 	const filterCopyOptions = () => {
 		if (!serviceCopySelect) {
@@ -807,6 +809,12 @@
 		statusNode.dataset.state = state || 'pending'
 	}
 
+	const rowUsesEditableServiceType = (row) => {
+		const modeSelect = row ? row.querySelector('[data-batch-mode]') : null
+		const mode = modeSelect ? modeSelect.value : ''
+		return batchEditableServiceTypeModes.has(mode)
+	}
+
 	const updateBatchLinkedSummary = (row) => {
 		if (!row) {
 			return
@@ -1138,17 +1146,65 @@
 			} else {
 				chooseDefaultServiceType(serviceTypeSelect)
 			}
-			serviceTypeSelect?.addEventListener('change', () => {
+			serviceTypeSelect?.addEventListener('change', async () => {
 				setBatchResultStatus(clone, 'Pending', 'pending')
 				if (modeSelect && modeSelect.value === 'link_existing') {
-					loadBatchPlansForRow(clone, true)
+					await loadBatchPlansForRow(clone, true)
 				}
+				await maybePromptApplyBatchServiceType(clone)
 			})
 			const refreshButton = clone.querySelector('[data-batch-plan-refresh]')
 			refreshButton?.addEventListener('click', () => loadBatchPlansForRow(clone, true))
 			updateBatchRowControls(clone)
 			pcoBatchBody.appendChild(clone)
 		})
+	}
+
+	const applyBatchServiceTypeToRows = async (sourceRow, serviceTypeId, serviceTypeName) => {
+		if (!pcoBatchBody || !serviceTypeId) {
+			return
+		}
+		setPcoBatchError('')
+		const rows = Array.from(pcoBatchBody.querySelectorAll('[data-service-pco-batch-row]'))
+		for (const row of rows) {
+			if (row === sourceRow) {
+				continue
+			}
+			if (!rowUsesEditableServiceType(row)) {
+				continue
+			}
+			const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+			if (!serviceTypeSelect) {
+				continue
+			}
+			ensureSelectOption(serviceTypeSelect, serviceTypeId, serviceTypeName)
+			serviceTypeSelect.value = serviceTypeId
+			setBatchResultStatus(row, 'Pending', 'pending')
+			updateBatchRowControls(row)
+			const modeSelect = row.querySelector('[data-batch-mode]')
+			if (modeSelect && modeSelect.value === 'link_existing') {
+				await loadBatchPlansForRow(row, true)
+			}
+		}
+	}
+
+	const maybePromptApplyBatchServiceType = async (sourceRow) => {
+		if (pcoBatchServiceTypeApplyPromptShown || !sourceRow || !rowUsesEditableServiceType(sourceRow)) {
+			return
+		}
+		const serviceTypeSelect = sourceRow.querySelector('[data-batch-service-type]')
+		const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
+		if (!serviceTypeId) {
+			return
+		}
+		pcoBatchServiceTypeApplyPromptShown = true
+		const selectedOption = serviceTypeSelect.selectedOptions[0]
+		const serviceTypeName = selectedOption ? selectedOption.textContent.trim() : serviceTypeId
+		const confirmed = window.confirm('Apply this service type to all editable rows?')
+		if (!confirmed) {
+			return
+		}
+		await applyBatchServiceTypeToRows(sourceRow, serviceTypeId, serviceTypeName)
 	}
 
 	const collectBatchRowsForRequest = () => {
@@ -1239,6 +1295,56 @@
 		pcoBatchResults.style.display = ''
 	}
 
+	const updateBatchRowsFromResults = (results) => {
+		if (!Array.isArray(results)) {
+			return
+		}
+		results.forEach((rowResult) => {
+			const rowNode = pcoBatchBody?.querySelector(
+				`[data-service-pco-batch-row][data-service-id="${rowResult.service_id}"]`
+			)
+			if (!rowNode) {
+				return
+			}
+			if (rowResult.status === 'success') {
+				setBatchResultStatus(rowNode, 'Success', 'success')
+				return
+			}
+			if (rowResult.status === 'skipped') {
+				setBatchResultStatus(rowNode, 'Skipped', 'skipped')
+				return
+			}
+			if (rowResult.status === 'failed') {
+				setBatchResultStatus(rowNode, 'Failed', 'failed')
+				return
+			}
+			setBatchResultStatus(rowNode, 'Queued', 'pending')
+		})
+	}
+
+	const waitForBatchSyncJob = async (statusUrl, pollAfterMs = 1000) => {
+		let delayMs = pollAfterMs || 1000
+		while (statusUrl) {
+			await new Promise((resolve) => window.setTimeout(resolve, delayMs))
+			const response = await fetch(statusUrl, {
+				headers: { Accept: 'application/json' },
+			})
+			const payload = await response.json().catch(() => ({}))
+			if (!response.ok) {
+				throw new Error(payload?.error || 'Batch sync failed.')
+			}
+			updateBatchRowsFromResults(payload.results || [])
+			delayMs = payload.poll_after_ms || 1000
+			if (payload.status === 'succeeded') {
+				return payload
+			}
+			if (payload.status === 'failed') {
+				throw new Error(payload?.error || 'Batch sync failed.')
+			}
+		}
+		throw new Error('Batch sync status was not available.')
+	}
+
 	const applySuccessfulBatchLinksToTable = (results) => {
 		if (!upcomingTable || !Array.isArray(results)) {
 			return
@@ -1300,6 +1406,7 @@
 			pcoBatchResults.style.display = 'none'
 			pcoBatchResults.innerHTML = ''
 		}
+		pcoBatchServiceTypeApplyPromptShown = false
 		buildBatchRows()
 		pcoBatchModal.setAttribute('aria-hidden', 'false')
 		pcoBatchToggle?.setAttribute('aria-expanded', 'true')
@@ -1424,28 +1531,23 @@
 					setPcoBatchError(payload?.error || 'Batch sync failed.')
 					return
 				}
-				renderBatchResults(payload)
-				const results = Array.isArray(payload.results) ? payload.results : []
-				results.forEach((rowResult) => {
-					const rowNode = pcoBatchBody?.querySelector(
-						`[data-service-pco-batch-row][data-service-id="${rowResult.service_id}"]`
+				let finalPayload = payload
+				if (response.status === 202 && payload.status_url) {
+					updateBatchRowsFromResults(rows.map((row) => ({
+						service_id: row.service_id,
+						status: 'pending',
+					})))
+					finalPayload = await waitForBatchSyncJob(
+						payload.status_url,
+						payload.poll_after_ms || 1000
 					)
-					if (!rowNode) {
-						return
-					}
-					if (rowResult.status === 'success') {
-						setBatchResultStatus(rowNode, 'Success', 'success')
-						return
-					}
-					if (rowResult.status === 'skipped') {
-						setBatchResultStatus(rowNode, 'Skipped', 'skipped')
-						return
-					}
-					setBatchResultStatus(rowNode, 'Failed', 'failed')
-				})
+				}
+				renderBatchResults(finalPayload)
+				const results = Array.isArray(finalPayload.results) ? finalPayload.results : []
+				updateBatchRowsFromResults(results)
 				applySuccessfulBatchLinksToTable(results)
 			} catch (error) {
-				setPcoBatchError('Batch sync failed.')
+				setPcoBatchError(error?.message || 'Batch sync failed.')
 			} finally {
 				pcoBatchRunButton.disabled = false
 				pcoBatchRunButton.classList.remove('is-loading')
