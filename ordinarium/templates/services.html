@@ -312,7 +312,7 @@
 							<th>Service</th>
 							<th>Mode</th>
 							<th>Service type</th>
-							<th>Plan</th>
+							<th>Plan / Template</th>
 							<th>Status</th>
 						</tr>
 					</thead>
@@ -345,6 +345,12 @@
 							<button class="plan-icon-button" type="button" data-batch-plan-refresh aria-label="Refresh plans">↻</button>
 						</div>
 						<small data-batch-plan-status></small>
+						<div class="pco-plan-row" data-batch-template-row style="display: none;">
+							<select data-batch-template>
+								<option value="">No template</option>
+							</select>
+						</div>
+						<small data-batch-template-status></small>
 					</td>
 					<td><span class="service-pco-batch-status" data-batch-result-status>Pending</span></td>
 				</tr>
@@ -402,6 +408,7 @@
 	const emptyObservanceTooltip = 'No Sunday or feast day observance was found for this date. You may proceed with creating a service plan, but some elements (e.g., Collect of the Day) will not populate correctly.'
 	const maxMultiServices = 10
 	const batchPlanCache = new Map()
+	const batchTemplateCache = new Map()
 	const batchEditableServiceTypeModes = new Set(['link_existing', 'create_new'])
 	let pcoBatchServiceTypeApplyPromptShown = false
 
@@ -972,6 +979,7 @@
 		}
 		const cacheKey = `${serviceId}:${serviceTypeId}`
 		planSelect.innerHTML = '<option value="">Select a plan</option>'
+		planSelect.disabled = true
 		if (statusNode) {
 			statusNode.textContent = 'Loading plans...'
 		}
@@ -989,11 +997,13 @@
 				batchPlanCache.set(cacheKey, plans)
 			}
 			if (!plans.length) {
+				planSelect.innerHTML = '<option value="">No plan found</option>'
 				if (statusNode) {
-					statusNode.textContent = 'No plans match this service date.'
+					statusNode.textContent = ''
 				}
 				return
 			}
+			planSelect.disabled = false
 			plans.forEach((plan) => {
 				const option = document.createElement('option')
 				option.value = plan.id
@@ -1018,6 +1028,61 @@
 		}
 	}
 
+	const loadBatchTemplatesForRow = async (row, forceRefresh = false) => {
+		if (!row) {
+			return
+		}
+		const templateSelect = row.querySelector('[data-batch-template]')
+		const statusNode = row.querySelector('[data-batch-template-status]')
+		const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+		const serviceId = row.dataset.serviceId
+		const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
+		if (!templateSelect || !serviceId || !serviceTypeId) {
+			return
+		}
+		const cacheKey = `${serviceId}:${serviceTypeId}`
+		templateSelect.innerHTML = '<option value="">No template</option>'
+		templateSelect.disabled = true
+		if (statusNode) {
+			statusNode.textContent = 'Loading templates...'
+		}
+		try {
+			let templates = []
+			if (!forceRefresh && batchTemplateCache.has(cacheKey)) {
+				templates = batchTemplateCache.get(cacheKey)
+			} else {
+				const response = await fetch(`/service/${serviceId}/pco/templates?service_type_id=${encodeURIComponent(serviceTypeId)}`)
+				const payload = await response.json()
+				if (!response.ok || !payload.ok) {
+					throw new Error(payload?.error || 'Unable to load templates.')
+				}
+				templates = Array.isArray(payload.templates) ? payload.templates : []
+				batchTemplateCache.set(cacheKey, templates)
+			}
+			if (!templates.length) {
+				templateSelect.innerHTML = '<option value="">No template found</option>'
+				if (statusNode) {
+					statusNode.textContent = ''
+				}
+				return
+			}
+			templateSelect.disabled = false
+			templates.forEach((template) => {
+				const option = document.createElement('option')
+				option.value = template.id
+				option.textContent = template.name || 'Untitled template'
+				templateSelect.appendChild(option)
+			})
+			if (statusNode) {
+				statusNode.textContent = 'Optional template scaffolding.'
+			}
+		} catch (error) {
+			if (statusNode) {
+				statusNode.textContent = error?.message || 'Unable to load templates.'
+			}
+		}
+	}
+
 	const updateBatchRowControls = (row) => {
 		if (!row) {
 			return
@@ -1025,9 +1090,12 @@
 		const modeSelect = row.querySelector('[data-batch-mode]')
 		const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
 		const planSelect = row.querySelector('[data-batch-plan]')
+		const templateSelect = row.querySelector('[data-batch-template]')
 		const planRow = row.querySelector('[data-batch-plan-row]')
+		const templateRow = row.querySelector('[data-batch-template-row]')
 		const refreshButton = row.querySelector('[data-batch-plan-refresh]')
 		const statusNode = row.querySelector('[data-batch-plan-status]')
+		const templateStatusNode = row.querySelector('[data-batch-template-status]')
 		const linked = row.dataset.pcoLinked === '1'
 		const linkedServiceTypeId = row.dataset.pcoServiceTypeId || ''
 		const linkedServiceTypeName = row.dataset.pcoServiceTypeName || linkedServiceTypeId
@@ -1041,6 +1109,7 @@
 		}
 		if (serviceTypeSelect) {
 			serviceTypeSelect.disabled = !usesServiceType
+			serviceTypeSelect.style.display = mode === 'skip' ? 'none' : ''
 			if (mode === 'sync_linked' && linkedServiceTypeId) {
 				serviceTypeSelect.value = linkedServiceTypeId
 			}
@@ -1063,10 +1132,22 @@
 			}
 		}
 		if (planRow) {
-			planRow.style.display = mode === 'create_new' ? 'none' : ''
+			planRow.style.display = mode === 'create_new' || mode === 'skip' ? 'none' : ''
+		}
+		if (templateRow) {
+			templateRow.style.display = mode === 'create_new' ? '' : 'none'
+		}
+		if (templateSelect) {
+			templateSelect.disabled = mode !== 'create_new'
+			if (mode !== 'create_new') {
+				templateSelect.innerHTML = '<option value="">No template</option>'
+			}
 		}
 		if (refreshButton) {
 			refreshButton.disabled = !usesPlan
+		}
+		if (templateStatusNode && mode !== 'create_new') {
+			templateStatusNode.textContent = ''
 		}
 		if (!statusNode) {
 			return
@@ -1077,6 +1158,9 @@
 		}
 		if (mode === 'create_new') {
 			statusNode.textContent = ''
+			if (serviceTypeSelect && serviceTypeSelect.value) {
+				loadBatchTemplatesForRow(row)
+			}
 			return
 		}
 		if (mode === 'skip') {
@@ -1150,6 +1234,8 @@
 				setBatchResultStatus(clone, 'Pending', 'pending')
 				if (modeSelect && modeSelect.value === 'link_existing') {
 					await loadBatchPlansForRow(clone, true)
+				} else if (modeSelect && modeSelect.value === 'create_new') {
+					await loadBatchTemplatesForRow(clone, true)
 				}
 				await maybePromptApplyBatchServiceType(clone)
 			})
@@ -1184,6 +1270,8 @@
 			const modeSelect = row.querySelector('[data-batch-mode]')
 			if (modeSelect && modeSelect.value === 'link_existing') {
 				await loadBatchPlansForRow(row, true)
+			} else if (modeSelect && modeSelect.value === 'create_new') {
+				await loadBatchTemplatesForRow(row, true)
 			}
 		}
 	}
@@ -1218,12 +1306,14 @@
 			const modeSelect = row.querySelector('[data-batch-mode]')
 			const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
 			const planSelect = row.querySelector('[data-batch-plan]')
+			const templateSelect = row.querySelector('[data-batch-template]')
 			const mode = modeSelect ? modeSelect.value : 'skip'
 			const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
 			const serviceTypeName = serviceTypeSelect && serviceTypeSelect.selectedOptions[0]
 				? serviceTypeSelect.selectedOptions[0].textContent.trim()
 				: ''
 			const planId = planSelect ? planSelect.value : ''
+			const templateId = templateSelect ? templateSelect.value : ''
 			if (!serviceId || !mode) {
 				return { rows: [], error: 'Each row must include a valid service and mode.' }
 			}
@@ -1239,6 +1329,7 @@
 				pco_service_type_id: serviceTypeId,
 				pco_service_type_name: serviceTypeName,
 				pco_plan_id: planId,
+				pco_plan_template_id: templateId,
 			})
 		}
 		return { rows: payloadRows, error: '' }

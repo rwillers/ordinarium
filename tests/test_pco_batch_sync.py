@@ -1,6 +1,7 @@
 import time
 
 from ordinarium.db import get_db
+from ordinarium.pco_client import PcoApiError
 
 
 def _enable_pco_feature(app, user_id):
@@ -249,6 +250,158 @@ def test_services_pco_batch_sync_limits_to_upcoming(app, auth_client, service_fa
     assert payload["summary"] == {"total": 1, "success": 0, "failed": 1, "skipped": 0}
     assert payload["results"][0]["status"] == "failed"
     assert "not upcoming" in payload["results"][0]["error"]
+
+
+def test_services_pco_batch_sync_create_new_imports_selected_template(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(
+        user_id=user_id,
+        service_id=701,
+        service_date="2099-04-01",
+        title="Template service",
+    )
+    calls = []
+
+    def fake_create_plan(
+        _base_url, _access_token, service_type_id, title, _plan_date, _series_title
+    ):
+        calls.append(("create_plan", service_type_id, title))
+        return {"data": {"id": "created-template-plan", "attributes": {"title": title}}}
+
+    def fake_create_plan_time(*_args):
+        calls.append(("create_plan_time", _args[3]))
+
+    def fake_import_plan_template(
+        _base_url, _access_token, service_type_id, plan_id, template_id
+    ):
+        calls.append(("import_plan_template", service_type_id, plan_id, template_id))
+
+    def fake_sync_service_plan(
+        service_id,
+        _user_id,
+        _access_token,
+        _base_url,
+        service_type_id,
+        plan_id,
+    ):
+        calls.append(("sync_service_plan", service_id, service_type_id, plan_id))
+        return {"synced_at": "2099-04-01T10:00:00", "item_count": 1}
+
+    monkeypatch.setattr("ordinarium.service_pco_routes.create_plan", fake_create_plan)
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan_time", fake_create_plan_time
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.import_plan_template",
+        fake_import_plan_template,
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.sync_service_plan", fake_sync_service_plan
+    )
+
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
+            "rows": [
+                {
+                    "service_id": 701,
+                    "mode": "create_new",
+                    "pco_service_type_id": "type-created",
+                    "pco_service_type_name": "Created type",
+                    "pco_plan_template_id": "template-1",
+                }
+            ],
+            "pco_plan_time": "10:00",
+            "pco_plan_tz_offset": "0",
+        },
+    )
+
+    assert payload["ok"] is True
+    assert payload["summary"] == {"total": 1, "success": 1, "failed": 0, "skipped": 0}
+    assert payload["results"][0]["status"] == "success"
+    assert calls == [
+        ("create_plan", "type-created", "Template service"),
+        ("create_plan_time", "created-template-plan"),
+        (
+            "import_plan_template",
+            "type-created",
+            "created-template-plan",
+            "template-1",
+        ),
+        ("sync_service_plan", 701, "type-created", "created-template-plan"),
+    ]
+
+
+def test_services_pco_batch_sync_template_import_failure_does_not_link(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(
+        user_id=user_id,
+        service_id=702,
+        service_date="2099-04-08",
+        title="Template failure",
+    )
+    sync_calls = []
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan",
+        lambda *_args: {
+            "data": {
+                "id": "created-template-failure",
+                "attributes": {"title": "Template failure"},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan_time",
+        lambda *_args: None,
+    )
+
+    def fake_import_plan_template(*_args):
+        raise PcoApiError("Template import failed.", status_code=400)
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.import_plan_template",
+        fake_import_plan_template,
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.sync_service_plan",
+        lambda *args: sync_calls.append(args),
+    )
+
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
+            "rows": [
+                {
+                    "service_id": 702,
+                    "mode": "create_new",
+                    "pco_service_type_id": "type-created",
+                    "pco_plan_template_id": "template-1",
+                }
+            ],
+            "pco_plan_time": "10:00",
+            "pco_plan_tz_offset": "0",
+        },
+    )
+
+    assert payload["ok"] is True
+    assert payload["summary"] == {"total": 1, "success": 0, "failed": 1, "skipped": 0}
+    assert payload["results"][0]["status"] == "failed"
+    assert "Template import failed" in payload["results"][0]["error"]
+    assert sync_calls == []
+    with app.app_context():
+        db = get_db()
+        link = db.execute(
+            "select service_id from service_pco_links where service_id=?",
+            (702,),
+        ).fetchone()
+        assert link is None
 
 
 def test_services_page_places_pco_batch_action_in_upcoming_section(

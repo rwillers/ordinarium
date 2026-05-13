@@ -109,6 +109,10 @@
 								<option value="{{ service_type.id }}">{{ service_type.attributes.name }}</option>
 							{% endfor %}
 						</select>
+						<select name="pco_plan_template_id" data-pco-template-select>
+							<option value="">No template</option>
+						</select>
+						<small class="plan-field-value" data-pco-template-status>Choose a service type to load templates.</small>
 					<input type="text" name="pco_plan_title" placeholder="Plan title" value="{{ service.title or '' }}" required>
 					<input type="date" name="pco_plan_date" value="{{ service.service_date or '' }}" required>
 					<input type="time" name="pco_plan_time" value="{{ default_service_time }}" required>
@@ -1183,6 +1187,7 @@
 				return
 			}
 			planSelect.innerHTML = '<option value="">Select a plan</option>'
+			planSelect.disabled = true
 			const selectedId = select.value
 			if (!selectedId) {
 				if (status) {
@@ -1207,11 +1212,13 @@
 				}
 				const plans = payload.plans || []
 				if (!plans.length) {
+					planSelect.innerHTML = '<option value="">No plan found</option>'
 					if (status) {
-						status.textContent = 'No plans match this service date.'
+						status.textContent = ''
 					}
 					return
 				}
+				planSelect.disabled = false
 				plans.forEach((plan) => {
 					const option = document.createElement('option')
 					option.value = plan.id
@@ -1228,9 +1235,58 @@
 				}
 			}
 		}
+		const updateTemplates = async () => {
+			const templateSelect = select.form?.querySelector('[data-pco-template-select]')
+			const status = select.form?.querySelector('[data-pco-template-status]')
+			if (!templateSelect || !serviceId) {
+				return
+			}
+			templateSelect.innerHTML = '<option value="">No template</option>'
+			templateSelect.disabled = true
+			const selectedId = select.value
+			if (!selectedId) {
+				if (status) {
+					status.textContent = 'Choose a service type to load templates.'
+				}
+				return
+			}
+			if (status) {
+				status.textContent = 'Loading templates...'
+			}
+			try {
+				const response = await fetch(`/service/${serviceId}/pco/templates?service_type_id=${encodeURIComponent(selectedId)}`)
+				const payload = await response.json()
+				if (!response.ok || !payload.ok) {
+					throw new Error(payload.error || 'Unable to load templates.')
+				}
+				const templates = Array.isArray(payload.templates) ? payload.templates : []
+				if (!templates.length) {
+					templateSelect.innerHTML = '<option value="">No template found</option>'
+					if (status) {
+						status.textContent = ''
+					}
+					return
+				}
+				templateSelect.disabled = false
+				templates.forEach((template) => {
+					const option = document.createElement('option')
+					option.value = template.id
+					option.textContent = template.name || 'Untitled template'
+					templateSelect.appendChild(option)
+				})
+				if (status) {
+					status.textContent = 'Optional: import teams, needed positions, and notes from a template.'
+				}
+			} catch (error) {
+				if (status) {
+					status.textContent = error?.message || 'Unable to load templates.'
+				}
+			}
+		}
 		select.addEventListener('change', () => {
 			updateHidden()
 			updatePlans()
+			updateTemplates()
 		})
 		const refreshButton = select.form?.querySelector('[data-pco-plan-refresh]')
 		if (refreshButton) {
@@ -1241,6 +1297,7 @@
 			select.value = nonEmptyOptions[0].value
 			updateHidden()
 			updatePlans()
+			updateTemplates()
 		} else {
 			updateHidden()
 		}

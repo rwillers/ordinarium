@@ -29,7 +29,9 @@ from .pco_sync import (
     create_plan,
     create_plan_time,
     fetch_plan,
+    import_plan_template,
     list_plans_for_date,
+    list_plan_templates,
     sync_service_plan,
 )
 
@@ -48,6 +50,17 @@ def _parse_service_id(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _format_pco_template(template):
+    attributes = template.get("attributes") or {}
+    return {
+        "id": template.get("id"),
+        "name": attributes.get("name") or "Untitled template",
+        "item_count": attributes.get("item_count") or 0,
+        "team_count": attributes.get("team_count") or 0,
+        "note_count": attributes.get("note_count") or 0,
+    }
 
 
 def _load_batch_services(db, user_id, service_ids):
@@ -211,6 +224,7 @@ def _execute_pco_batch_sync(
             "pco_service_type_id": _to_text(raw.get("pco_service_type_id")),
             "pco_service_type_name": _to_text(raw.get("pco_service_type_name")),
             "pco_plan_id": _to_text(raw.get("pco_plan_id")),
+            "pco_plan_template_id": _to_text(raw.get("pco_plan_template_id")),
         }
         if not service_id:
             store_result(
@@ -390,6 +404,7 @@ def _execute_pco_batch_row(
             service,
             default_plan_time,
             tz_offset,
+            row["pco_plan_template_id"],
         )
         if error:
             result["status"] = "failed"
@@ -491,6 +506,7 @@ def _create_pco_plan_for_batch_row(
     service,
     default_plan_time,
     tz_offset,
+    plan_template_id=None,
 ):
     create_title = service_title or f"Service {service['service_date']}"
     create_date = service["service_date"]
@@ -525,6 +541,17 @@ def _create_pco_plan_for_batch_row(
         )
     except (PcoApiError, PcoSyncError) as exc:
         return None, None, str(exc)
+    if plan_template_id:
+        try:
+            import_plan_template(
+                base_url,
+                access_token,
+                service_type_id,
+                plan_id,
+                plan_template_id,
+            )
+        except PcoApiError as exc:
+            return None, None, str(exc)
     return plan_id, plan_title, None
 
 
@@ -609,6 +636,7 @@ def register_service_pco_routes(bp):
             plan_time = request.form.get("pco_plan_time")
             tz_offset = request.form.get("pco_plan_tz_offset")
             series_title = request.form.get("pco_series_title")
+            plan_template_id = _to_text(request.form.get("pco_plan_template_id"))
             if not plan_title:
                 return render_error("Plan title is required.", 400)
             if not plan_date:
@@ -644,6 +672,17 @@ def register_service_pco_routes(bp):
                 )
             except (PcoApiError, PcoSyncError) as exc:
                 return render_error(str(exc), 400)
+            if plan_template_id:
+                try:
+                    import_plan_template(
+                        base_url,
+                        connection["access_token"],
+                        service_type_id,
+                        plan_id,
+                        plan_template_id,
+                    )
+                except PcoApiError as exc:
+                    return render_error(str(exc), 400)
         else:
             plan_id = request.form.get("pco_plan_id")
             if not plan_id:
@@ -738,6 +777,45 @@ def register_service_pco_routes(bp):
         except PcoApiError as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
         return jsonify({"ok": True, "plans": plans})
+
+    @bp.route("/service/<int:service_id>/pco/templates")
+    @login_required
+    def service_pco_templates(service_id):
+        if not _pco_feature_enabled():
+            return jsonify({"ok": False, "error": "Not found."}), 404
+        db = get_db()
+        service_row = db.execute(
+            "select id from services where id=? and user_id=? limit 1",
+            (service_id, g.user["id"]),
+        ).fetchone()
+        if not service_row:
+            return jsonify({"ok": False, "error": "Service not found."}), 404
+        service_type_id = request.args.get("service_type_id")
+        if not service_type_id:
+            return (
+                jsonify({"ok": False, "error": "Service type is required."}),
+                400,
+            )
+        try:
+            connection = get_valid_pco_connection(g.user["id"], db)
+        except PcoAuthError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        if not connection:
+            return (
+                jsonify({"ok": False, "error": "Planning Center not connected."}),
+                400,
+            )
+        try:
+            templates = list_plan_templates(
+                current_app.config.get("PCO_API_BASE"),
+                connection["access_token"],
+                service_type_id,
+            )
+        except PcoApiError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+        return jsonify(
+            {"ok": True, "templates": [_format_pco_template(row) for row in templates]}
+        )
 
     @bp.route("/service/<int:service_id>/pco/sync", methods=["POST"])
     @login_required

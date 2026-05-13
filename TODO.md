@@ -2,7 +2,7 @@
 
 Remaining work and follow-ups.
 
-- [ ] PCO integration enhancement: Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
+- [x] PCO integration enhancement: Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
 - [ ] PCO integration enhancement: Investigate ability to delta update PCO services.
 - [ ] Add Bible text integration options (and tie into both standard text rendering as well as live preview modals).
 - [ ] Add remaining "Additional Directions" eucharistic option (see following section).

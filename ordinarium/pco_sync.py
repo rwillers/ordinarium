@@ -152,6 +152,21 @@ def list_service_types(base_url, access_token):
     return list_all_pages(fetch_page)
 
 
+def list_plan_templates(base_url, access_token, service_type_id):
+    path = f"/services/v2/service_types/{service_type_id}/plan_templates"
+
+    def fetch_page(next_url=None):
+        return api_request(
+            "GET",
+            base_url,
+            next_url or path,
+            access_token,
+            absolute_url=bool(next_url),
+        )
+
+    return list_all_pages(fetch_page)
+
+
 def list_plan_items(base_url, access_token, service_type_id, plan_id):
     path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items"
 
@@ -259,6 +274,19 @@ def create_plan_time(
         }
     }
     path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/plan_times"
+    return api_request("POST", base_url, path, access_token, json=payload)
+
+
+def import_plan_template(
+    base_url, access_token, service_type_id, plan_id, plan_template_id
+):
+    if not plan_template_id:
+        return None
+    payload = {"data": {"type": "PlanTemplate", "id": str(plan_template_id)}}
+    path = (
+        f"/services/v2/service_types/{service_type_id}/plans/"
+        f"{plan_id}/import_template"
+    )
     return api_request("POST", base_url, path, access_token, json=payload)
 
 

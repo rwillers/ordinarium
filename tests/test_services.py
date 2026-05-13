@@ -483,6 +483,250 @@ def test_service_pco_prefill_uses_raw_observance_title(
     assert "(3/29/2026)" in html
 
 
+def test_service_pco_templates_requires_service_type(app, auth_client, service_factory):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=233, service_date="2026-04-05")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    response = client.get("/service/233/pco/templates")
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Service type is required" in payload["error"]
+
+
+def test_service_pco_templates_requires_connection(app, auth_client, service_factory):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=234, service_date="2026-04-12")
+
+    response = client.get("/service/234/pco/templates?service_type_id=type-1")
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "not connected" in payload["error"].lower()
+
+
+def test_service_pco_templates_denies_other_user(
+    app, auth_client, service_factory, user_factory
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    other_user_id = user_factory(email="pco-template-other@example.com")
+    service_factory(user_id=other_user_id, service_id=235, service_date="2026-04-19")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    response = client.get("/service/235/pco/templates?service_type_id=type-1")
+
+    assert response.status_code == 404
+    payload = response.get_json()
+    assert payload["ok"] is False
+    assert "Service not found" in payload["error"]
+
+
+def test_service_pco_templates_returns_normalized_rows(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=236, service_date="2026-04-26")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    def fake_list_plan_templates(_base_url, _access_token, service_type_id):
+        assert service_type_id == "type-1"
+        return [
+            {
+                "id": "template-1",
+                "attributes": {
+                    "name": "Sunday teams",
+                    "item_count": 2,
+                    "team_count": 4,
+                    "note_count": 1,
+                },
+            }
+        ]
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.list_plan_templates",
+        fake_list_plan_templates,
+    )
+
+    response = client.get("/service/236/pco/templates?service_type_id=type-1")
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "ok": True,
+        "templates": [
+            {
+                "id": "template-1",
+                "name": "Sunday teams",
+                "item_count": 2,
+                "team_count": 4,
+                "note_count": 1,
+            }
+        ],
+    }
+
+
+def test_service_pco_create_and_link_imports_selected_template(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=237, service_date="2026-05-03")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    calls = []
+
+    def fake_create_plan(
+        _base_url, _access_token, service_type_id, title, plan_date, series_title
+    ):
+        calls.append(("create_plan", service_type_id, title, plan_date, series_title))
+        return {"data": {"id": "plan-237", "attributes": {"title": title}}}
+
+    def fake_create_plan_time(
+        _base_url,
+        _access_token,
+        service_type_id,
+        plan_id,
+        plan_date,
+        plan_time,
+        tz_offset,
+    ):
+        calls.append(
+            (
+                "create_plan_time",
+                service_type_id,
+                plan_id,
+                plan_date,
+                plan_time,
+                tz_offset,
+            )
+        )
+
+    def fake_import_plan_template(
+        _base_url, _access_token, service_type_id, plan_id, template_id
+    ):
+        calls.append(("import_plan_template", service_type_id, plan_id, template_id))
+
+    monkeypatch.setattr("ordinarium.service_pco_routes.create_plan", fake_create_plan)
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan_time", fake_create_plan_time
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.import_plan_template",
+        fake_import_plan_template,
+    )
+
+    response = client.post(
+        "/service/237/pco/link",
+        data={
+            "mode": "create",
+            "pco_service_type_id": "type-1",
+            "pco_service_type_name": "Sunday",
+            "pco_plan_template_id": "template-1",
+            "pco_plan_title": "Third Sunday of Easter",
+            "pco_plan_date": "2026-05-03",
+            "pco_plan_time": "10:00",
+            "pco_plan_tz_offset": "0",
+            "pco_series_title": "Easter",
+        },
+    )
+
+    assert response.status_code == 302
+    assert calls == [
+        (
+            "create_plan",
+            "type-1",
+            "Third Sunday of Easter",
+            "2026-05-03",
+            "Easter",
+        ),
+        ("create_plan_time", "type-1", "plan-237", "2026-05-03", "10:00", "0"),
+        ("import_plan_template", "type-1", "plan-237", "template-1"),
+    ]
+    with app.app_context():
+        db = get_db()
+        link = db.execute(
+            "select pco_service_type_id, pco_plan_id from service_pco_links where service_id=?",
+            (237,),
+        ).fetchone()
+        assert link["pco_service_type_id"] == "type-1"
+        assert link["pco_plan_id"] == "plan-237"
+
+
+def test_service_pco_create_and_link_without_template_preserves_existing_behavior(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=238, service_date="2026-05-10")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.commit()
+
+    import_calls = []
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan",
+        lambda *_args: {"data": {"id": "plan-238", "attributes": {"title": "Plan"}}},
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.create_plan_time",
+        lambda *_args: None,
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.import_plan_template",
+        lambda *_args: import_calls.append(_args),
+    )
+
+    response = client.post(
+        "/service/238/pco/link",
+        data={
+            "mode": "create",
+            "pco_service_type_id": "type-1",
+            "pco_plan_title": "Plan",
+            "pco_plan_date": "2026-05-10",
+            "pco_plan_time": "10:00",
+            "pco_plan_tz_offset": "0",
+        },
+    )
+
+    assert response.status_code == 302
+    assert import_calls == []
+
+
 def test_service_delete_removes_related_rows(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(user_id=user_id, service_id=31)
