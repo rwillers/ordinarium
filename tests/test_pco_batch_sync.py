@@ -420,5 +420,10 @@ def test_services_page_places_pco_batch_action_in_upcoming_section(
     assert past_index != -1
     assert toggle_index < past_index
     assert "Apply this service type to all editable rows?" in body
+    assert (
+        "Apply this template to all editable create-new rows with this service type?"
+        in body
+    )
+    assert "Optional template scaffolding." not in body
     assert 'id="service-pco-batch-service-type"' not in body
     assert 'id="service-pco-batch-apply-type"' not in body

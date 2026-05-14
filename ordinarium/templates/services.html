@@ -411,6 +411,7 @@
 	const batchTemplateCache = new Map()
 	const batchEditableServiceTypeModes = new Set(['link_existing', 'create_new'])
 	let pcoBatchServiceTypeApplyPromptShown = false
+	let pcoBatchTemplateApplyPromptShown = false
 
 	const filterCopyOptions = () => {
 		if (!serviceCopySelect) {
@@ -822,6 +823,12 @@
 		return batchEditableServiceTypeModes.has(mode)
 	}
 
+	const rowUsesEditableTemplate = (row) => {
+		const modeSelect = row ? row.querySelector('[data-batch-mode]') : null
+		const mode = modeSelect ? modeSelect.value : ''
+		return mode === 'create_new'
+	}
+
 	const updateBatchLinkedSummary = (row) => {
 		if (!row) {
 			return
@@ -1074,7 +1081,7 @@
 				templateSelect.appendChild(option)
 			})
 			if (statusNode) {
-				statusNode.textContent = 'Optional template scaffolding.'
+				statusNode.textContent = ''
 			}
 		} catch (error) {
 			if (statusNode) {
@@ -1241,6 +1248,11 @@
 			})
 			const refreshButton = clone.querySelector('[data-batch-plan-refresh]')
 			refreshButton?.addEventListener('click', () => loadBatchPlansForRow(clone, true))
+			const templateSelect = clone.querySelector('[data-batch-template]')
+			templateSelect?.addEventListener('change', async () => {
+				setBatchResultStatus(clone, 'Pending', 'pending')
+				await maybePromptApplyBatchTemplate(clone)
+			})
 			updateBatchRowControls(clone)
 			pcoBatchBody.appendChild(clone)
 		})
@@ -1293,6 +1305,58 @@
 			return
 		}
 		await applyBatchServiceTypeToRows(sourceRow, serviceTypeId, serviceTypeName)
+	}
+
+	const applyBatchTemplateToRows = async (sourceRow, serviceTypeId, templateId, templateName) => {
+		if (!pcoBatchBody || !serviceTypeId || !templateId) {
+			return
+		}
+		setPcoBatchError('')
+		const rows = Array.from(pcoBatchBody.querySelectorAll('[data-service-pco-batch-row]'))
+		for (const row of rows) {
+			if (row === sourceRow || !rowUsesEditableTemplate(row)) {
+				continue
+			}
+			const serviceTypeSelect = row.querySelector('[data-batch-service-type]')
+			if (!serviceTypeSelect || serviceTypeSelect.value !== serviceTypeId) {
+				continue
+			}
+			const templateSelect = row.querySelector('[data-batch-template]')
+			if (!templateSelect) {
+				continue
+			}
+			ensureSelectOption(templateSelect, templateId, templateName)
+			templateSelect.disabled = false
+			templateSelect.value = templateId
+			const templateStatusNode = row.querySelector('[data-batch-template-status]')
+			if (templateStatusNode) {
+				templateStatusNode.textContent = ''
+			}
+			setBatchResultStatus(row, 'Pending', 'pending')
+		}
+	}
+
+	const maybePromptApplyBatchTemplate = async (sourceRow) => {
+		if (pcoBatchTemplateApplyPromptShown || !sourceRow || !rowUsesEditableTemplate(sourceRow)) {
+			return
+		}
+		const serviceTypeSelect = sourceRow.querySelector('[data-batch-service-type]')
+		const serviceTypeId = serviceTypeSelect ? serviceTypeSelect.value : ''
+		const templateSelect = sourceRow.querySelector('[data-batch-template]')
+		const templateId = templateSelect ? templateSelect.value : ''
+		if (!serviceTypeId || !templateId) {
+			return
+		}
+		pcoBatchTemplateApplyPromptShown = true
+		const selectedOption = templateSelect.selectedOptions[0]
+		const templateName = selectedOption ? selectedOption.textContent.trim() : templateId
+		const confirmed = window.confirm(
+			'Apply this template to all editable create-new rows with this service type?'
+		)
+		if (!confirmed) {
+			return
+		}
+		await applyBatchTemplateToRows(sourceRow, serviceTypeId, templateId, templateName)
 	}
 
 	const collectBatchRowsForRequest = () => {
@@ -1498,6 +1562,7 @@
 			pcoBatchResults.innerHTML = ''
 		}
 		pcoBatchServiceTypeApplyPromptShown = false
+		pcoBatchTemplateApplyPromptShown = false
 		buildBatchRows()
 		pcoBatchModal.setAttribute('aria-hidden', 'false')
 		pcoBatchToggle?.setAttribute('aria-expanded', 'true')
