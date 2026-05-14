@@ -70,6 +70,35 @@ def test_import_plan_template_calls_import_action(monkeypatch):
             "https://example.test",
             "/services/v2/service_types/service-type-1/plans/plan-1/import_template",
             "token",
-            {"data": {"type": "PlanTemplate", "id": "template-1"}},
+            {
+                "data": {
+                    "attributes": {
+                        "plan_id": "template-1",
+                        "copy_items": False,
+                        "copy_people": True,
+                        "copy_notes": True,
+                    }
+                }
+            },
         )
     ]
+
+
+def test_import_plan_template_sends_numeric_template_id_as_integer(monkeypatch):
+    calls = []
+
+    def fake_api_request(method, base_url, path, access_token, json=None):
+        calls.append(json)
+        return {"data": {"id": "imported"}}
+
+    monkeypatch.setattr(pco_sync, "api_request", fake_api_request)
+
+    pco_sync.import_plan_template(
+        "https://example.test",
+        "token",
+        "service-type-1",
+        "plan-1",
+        "123",
+    )
+
+    assert calls[0]["data"]["attributes"]["plan_id"] == 123

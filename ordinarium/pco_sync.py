@@ -282,7 +282,19 @@ def import_plan_template(
 ):
     if not plan_template_id:
         return None
-    payload = {"data": {"type": "PlanTemplate", "id": str(plan_template_id)}}
+    source_plan_id = str(plan_template_id)
+    if source_plan_id.isdigit():
+        source_plan_id = int(source_plan_id)
+    payload = {
+        "data": {
+            "attributes": {
+                "plan_id": source_plan_id,
+                "copy_items": False,
+                "copy_people": True,
+                "copy_notes": True,
+            }
+        }
+    }
     path = (
         f"/services/v2/service_types/{service_type_id}/plans/"
         f"{plan_id}/import_template"
