@@ -1,4 +1,3 @@
-import json
 from datetime import date
 
 from flask import current_app, g, redirect, render_template, request, url_for
@@ -8,11 +7,17 @@ from .db import get_db
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance, resolve_season
 from .service_defaults import DEFAULT_RITE, OFFERTORY_DEFAULT_PREFIX
-from .service_planning import build_plan_context, parse_plan_tokens, _parse_json_object
+from .service_planning import build_plan_context
 from .service_formatting import format_services
 from .service_options import load_rite_options
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
-from .service_store import blank_service_payload, create_service, update_service_columns
+from .service_copy import (
+    create_service_from_copy,
+    load_service_copy_source,
+    overwrite_service_from_copy,
+    service_copy_rite,
+)
+from .service_store import blank_service_payload, create_service, load_service_payload
 from .pco_auth import get_valid_pco_connection
 from .pco_sync_status import resolve_pco_sync_state
 from .pco_store import get_service_pco_link
@@ -145,14 +150,7 @@ def register_service_overview_routes(bp):
         add_mode = request.form.get("add_mode", "single")
         rite = request.form.get("rite") or user_settings["default_rite"]
 
-        source = None
-        custom_rows = []
-        source_order_tokens = []
-        source_disabled_tokens = []
-        source_lesson_overrides = None
-        source_offertory_sentence_id = None
-        source_proper_overrides = None
-        source_service_option_values = None
+        source_copy = None
 
         if mode == "copy":
             raw_source_id = request.form.get("from_service_id")
@@ -162,37 +160,11 @@ def register_service_overview_routes(bp):
                 source_id = None
             if not source_id:
                 return render_error("Select a service to copy.", 400)
-            source = db.execute(
-                """
-                select
-                  rite,
-                  text_order,
-                  text_disabled,
-                  lesson_overrides,
-                  offertory_sentence_id,
-                  proper_overrides,
-                  service_option_values
-                from services
-                where id=? and user_id=? limit 1
-                """,
-                (source_id, g.user["id"]),
-            ).fetchone()
-            if not source:
+            source_copy = load_service_copy_source(db, source_id, g.user["id"])
+            if not source_copy:
                 return render_error("Service not found.", 404)
-            if source["rite"] != rite:
+            if service_copy_rite(source_copy) != rite:
                 return render_error("Service rite does not match.", 400)
-            custom_rows = db.execute(
-                "select id, title, text, created_at from service_custom_elements where service_id=? and user_id=? order by created_at, id",
-                (source_id, g.user["id"]),
-            ).fetchall()
-            source_order_tokens = parse_plan_tokens(source["text_order"])
-            source_disabled_tokens = parse_plan_tokens(source["text_disabled"])
-            source_lesson_overrides = _parse_json_object(source["lesson_overrides"])
-            source_offertory_sentence_id = source["offertory_sentence_id"]
-            source_proper_overrides = _parse_json_object(source["proper_overrides"])
-            source_service_option_values = _parse_json_object(
-                source["service_option_values"]
-            )
 
         def build_base_payload(raw_date, handle):
             if not raw_date:
@@ -217,50 +189,11 @@ def register_service_overview_routes(bp):
                 None,
             )
 
-        def remap_tokens(tokens, custom_id_map):
-            remapped = []
-            for token in tokens:
-                if token.startswith("custom:"):
-                    try:
-                        old_id = int(token.split(":", 1)[1])
-                    except (IndexError, ValueError):
-                        continue
-                    new_id = custom_id_map.get(old_id)
-                    if new_id:
-                        remapped.append(f"custom:{new_id}")
-                    continue
-                remapped.append(token)
-            return remapped
-
         def create_service_from_payload(base_payload):
             if mode == "copy":
-                payload = blank_service_payload(
-                    g.user["id"], source["rite"] or DEFAULT_RITE
+                return create_service_from_copy(
+                    db, g.user["id"], source_copy, base_payload
                 )
-                payload.update(base_payload)
-                new_service_id = create_service(db, payload)
-                custom_id_map = {}
-                for row in custom_rows:
-                    cursor = db.execute(
-                        "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
-                        (new_service_id, g.user["id"], row["title"], row["text"]),
-                    )
-                    custom_id_map[row["id"]] = cursor.lastrowid
-                order_tokens = remap_tokens(source_order_tokens, custom_id_map)
-                disabled_tokens = remap_tokens(source_disabled_tokens, custom_id_map)
-                payload["rite"] = source["rite"] or DEFAULT_RITE
-                payload["text_order"] = json.dumps(order_tokens)
-                payload["text_disabled"] = json.dumps(disabled_tokens)
-                if source_lesson_overrides:
-                    payload["lesson_overrides"] = source_lesson_overrides
-                if source_offertory_sentence_id is not None:
-                    payload["offertory_sentence_id"] = source_offertory_sentence_id
-                if source_proper_overrides:
-                    payload["proper_overrides"] = source_proper_overrides
-                if source_service_option_values:
-                    payload["service_option_values"] = source_service_option_values
-                update_service_columns(db, new_service_id, payload)
-                return new_service_id
 
             payload = blank_service_payload(g.user["id"], rite)
             payload.update(base_payload)
@@ -329,6 +262,26 @@ def register_service_overview_routes(bp):
         context = build_plan_context(
             service_id, rite, g.user["id"], OFFERTORY_DEFAULT_PREFIX
         )
+        today = date.today().isoformat()
+        copy_target_rows = db.execute(
+            """
+            select id, title, season, service_date, rite, observance_handle
+            from services
+            where user_id=?
+              and id<>?
+              and service_date is not null
+              and service_date >= ?
+              and coalesce(rite, ?) = ?
+            order by service_date asc
+            """,
+            (
+                g.user["id"],
+                service_id,
+                today,
+                DEFAULT_RITE,
+                context["service"]["rite"] or DEFAULT_RITE,
+            ),
+        ).fetchall()
         pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         pco_connection = None
         pco_service_types = []
@@ -365,9 +318,64 @@ def register_service_overview_routes(bp):
                 "pco_sync_state": pco_sync_state,
                 "pco_sync_at": pco_sync_at,
                 "default_service_time": user_settings["default_service_time"],
+                "copy_target_services": format_services(copy_target_rows),
             }
         )
         return render_template("service.html", **context)
+
+    @bp.route("/service/<int:service_id>/copy-elements", methods=["POST"])
+    @login_required
+    def service_copy_elements(service_id):
+        raw_ids = request.form.getlist("service_ids")
+        target_ids = []
+        for raw_id in raw_ids:
+            try:
+                target_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if target_id not in target_ids:
+                target_ids.append(target_id)
+
+        if not target_ids:
+            return render_error("Select at least one service to copy to.", 400)
+        if service_id in target_ids:
+            return render_error("Cannot copy a service to itself.", 400)
+
+        db = get_db()
+        source_copy = load_service_copy_source(db, service_id, g.user["id"])
+        if not source_copy:
+            return render_error("Service not found.", 404)
+
+        placeholders = ",".join(["?"] * len(target_ids))
+        target_rows = db.execute(
+            f"""
+            select id, rite, service_date
+            from services
+            where user_id=? and id in ({placeholders})
+            """,
+            [g.user["id"], *target_ids],
+        ).fetchall()
+        if len(target_rows) != len(target_ids):
+            return render_error("Service not found.", 404)
+
+        today = date.today().isoformat()
+        source_rite = service_copy_rite(source_copy)
+        for row in target_rows:
+            target_rite = row["rite"] or DEFAULT_RITE
+            if target_rite != source_rite:
+                return render_error("Service rite does not match.", 400)
+            if not row["service_date"] or row["service_date"] < today:
+                return render_error("Select future services only.", 400)
+
+        for target_id in target_ids:
+            target_payload = load_service_payload(db, target_id, g.user["id"])
+            if not target_payload:
+                return render_error("Service not found.", 404)
+            overwrite_service_from_copy(
+                db, g.user["id"], source_copy, target_id, target_payload
+            )
+        db.commit()
+        return redirect(url_for("main.service", service_id=service_id))
 
     @bp.route("/service/<int:service_id>/delete", methods=["POST"])
     @login_required

@@ -175,6 +175,375 @@ def test_services_new_copies_service_template(app, auth_client, service_factory)
         assert f"custom:{new_custom_id}" in disabled_tokens
 
 
+def test_service_copy_modal_lists_only_future_same_rite_targets(
+    auth_client, service_factory, user_factory
+):
+    client, user_id = auth_client
+    other_user_id = user_factory(email="copy-target-other@example.com")
+    today = date.today()
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=5200,
+        title="Source service",
+        service_date=today.isoformat(),
+        rite="Renewed Ancient Text",
+    )
+    service_factory(
+        user_id=user_id,
+        service_id=5201,
+        title="Eligible future target",
+        service_date=(today + timedelta(days=7)).isoformat(),
+        rite="Renewed Ancient Text",
+    )
+    service_factory(
+        user_id=user_id,
+        service_id=5202,
+        title="Past target",
+        service_date=(today - timedelta(days=7)).isoformat(),
+        rite="Renewed Ancient Text",
+    )
+    service_factory(
+        user_id=user_id,
+        service_id=5203,
+        title="Wrong rite target",
+        service_date=(today + timedelta(days=14)).isoformat(),
+        rite="Anglican Standard Text",
+    )
+    service_factory(
+        user_id=other_user_id,
+        service_id=5204,
+        title="Other user target",
+        service_date=(today + timedelta(days=21)).isoformat(),
+        rite="Renewed Ancient Text",
+    )
+
+    response = client.get(f"/service/{source_id}")
+
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "Copy elements to..." in body
+    assert "Eligible future target" in body
+    assert "Past target" not in body
+    assert "Wrong rite target" not in body
+    assert "Other user target" not in body
+
+
+def test_service_copy_elements_overwrites_targets_and_preserves_metadata(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    today = date.today()
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=5300,
+        service_date=today.isoformat(),
+        rite="Renewed Ancient Text",
+        text_order=json.dumps(["text:68"]),
+        text_disabled=json.dumps([]),
+    )
+    target_id = service_factory(
+        user_id=user_id,
+        service_id=5301,
+        title="Target title",
+        season="Target season",
+        service_date=(today + timedelta(days=7)).isoformat(),
+        rite="Renewed Ancient Text",
+        text_order=json.dumps(["text:70"]),
+        text_disabled=json.dumps(["text:70"]),
+        observance_handle="target-handle",
+        lesson_overrides={"old": "lesson"},
+        service_option_values={"old.option": "old"},
+    )
+    second_target_id = service_factory(
+        user_id=user_id,
+        service_id=5302,
+        service_date=(today + timedelta(days=14)).isoformat(),
+        rite="Renewed Ancient Text",
+        text_order=json.dumps(["text:71"]),
+    )
+    with app.app_context():
+        db = get_db()
+        collect_row, preface_row = _service_proper_override_rows(db)
+        offertory_row = db.execute(
+            "select id from texts where type=? order by id limit 1",
+            ("offertory_sentence",),
+        ).fetchone()
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (source_id, user_id, "Copied Custom", "Copied custom text"),
+        )
+        source_custom = db.execute(
+            "select id from service_custom_elements where service_id=? limit 1",
+            (source_id,),
+        ).fetchone()
+        db.execute(
+            """
+            update services
+            set text_order=?,
+                text_disabled=?,
+                lesson_overrides=?,
+                offertory_sentence_id=?,
+                proper_overrides=?,
+                service_option_values=?
+            where id=?
+            """,
+            (
+                json.dumps(["text:68", f"custom:{source_custom['id']}", "text:69"]),
+                json.dumps([f"custom:{source_custom['id']}"]),
+                json.dumps({"gospel": "John 1:1-5"}),
+                offertory_row["id"],
+                json.dumps(
+                    {
+                        "collect_of_the_day": collect_row["id"],
+                        "proper_preface": preface_row["id"],
+                    }
+                ),
+                json.dumps({"lords_prayer.form": "contemporary"}),
+                source_id,
+            ),
+        )
+        db.execute(
+            "insert into service_custom_elements (service_id, user_id, title, text) values (?, ?, ?, ?)",
+            (target_id, user_id, "Old Custom", "Old custom text"),
+        )
+        db.execute(
+            "insert into service_shares (service_id, share_uuid) values (?, ?)",
+            (target_id, "copy-share-uuid"),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (target_id, "type-1", "plan-1"),
+        )
+        db.execute(
+            """
+            insert into service_pco_item_links (
+              service_id,
+              ordinarium_token,
+              pco_item_id
+            ) values (?, ?, ?)
+            """,
+            (target_id, "text:70", "pco-stale"),
+        )
+        db.commit()
+
+    response = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(target_id), str(second_target_id)]},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith(f"/service/{source_id}")
+    with app.app_context():
+        db = get_db()
+        target = db.execute(
+            """
+            select title,
+                   season,
+                   service_date,
+                   rite,
+                   observance_handle,
+                   text_order,
+                   text_disabled,
+                   lesson_overrides,
+                   offertory_sentence_id,
+                   proper_overrides,
+                   service_option_values
+            from services
+            where id=?
+            """,
+            (target_id,),
+        ).fetchone()
+        assert target["title"] == "Target title"
+        assert target["season"] == "Target season"
+        assert target["service_date"] == (today + timedelta(days=7)).isoformat()
+        assert target["rite"] == "Renewed Ancient Text"
+        assert target["observance_handle"] == "target-handle"
+        assert json.loads(target["lesson_overrides"]) == {"gospel": "John 1:1-5"}
+        assert target["offertory_sentence_id"] == offertory_row["id"]
+        assert json.loads(target["proper_overrides"]) == {
+            "collect_of_the_day": collect_row["id"],
+            "proper_preface": preface_row["id"],
+        }
+        assert json.loads(target["service_option_values"]) == {
+            "lords_prayer.form": "contemporary"
+        }
+        target_customs = db.execute(
+            """
+            select id, title, text
+            from service_custom_elements
+            where service_id=?
+            order by id
+            """,
+            (target_id,),
+        ).fetchall()
+        assert len(target_customs) == 1
+        assert target_customs[0]["title"] == "Copied Custom"
+        assert target_customs[0]["text"] == "Copied custom text"
+        copied_custom_token = f"custom:{target_customs[0]['id']}"
+        assert json.loads(target["text_order"]) == [
+            "text:68",
+            copied_custom_token,
+            "text:69",
+        ]
+        assert json.loads(target["text_disabled"]) == [copied_custom_token]
+        assert (
+            db.execute(
+                "select count(*) from service_shares where service_id=?",
+                (target_id,),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            db.execute(
+                "select count(*) from service_pco_links where service_id=?",
+                (target_id,),
+            ).fetchone()[0]
+            == 1
+        )
+        assert (
+            db.execute(
+                "select count(*) from service_pco_item_links where service_id=?",
+                (target_id,),
+            ).fetchone()[0]
+            == 0
+        )
+        second_custom_count = db.execute(
+            "select count(*) from service_custom_elements where service_id=?",
+            (second_target_id,),
+        ).fetchone()[0]
+        assert second_custom_count == 1
+
+
+def test_service_copy_elements_clears_empty_source_customizations(
+    app, auth_client, service_factory
+):
+    client, user_id = auth_client
+    today = date.today()
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=5400,
+        service_date=today.isoformat(),
+        rite="Renewed Ancient Text",
+        text_order=json.dumps(["text:68"]),
+        text_disabled=json.dumps([]),
+    )
+    target_id = service_factory(
+        user_id=user_id,
+        service_id=5401,
+        service_date=(today + timedelta(days=7)).isoformat(),
+        rite="Renewed Ancient Text",
+        lesson_overrides={"old": "lesson"},
+        service_option_values={"old.option": "old"},
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """
+            update services
+            set proper_overrides=?,
+                offertory_sentence_id=?
+            where id=?
+            """,
+            (json.dumps({"collect_of_the_day": 1}), 48, target_id),
+        )
+        db.commit()
+
+    response = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(target_id)]},
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        target = db.execute(
+            """
+            select lesson_overrides,
+                   proper_overrides,
+                   service_option_values,
+                   offertory_sentence_id
+            from services
+            where id=?
+            """,
+            (target_id,),
+        ).fetchone()
+        assert json.loads(target["lesson_overrides"]) == {}
+        assert json.loads(target["proper_overrides"]) == {}
+        assert json.loads(target["service_option_values"]) == {}
+        assert target["offertory_sentence_id"] is None
+
+
+def test_service_copy_elements_rejects_invalid_targets(
+    auth_client, service_factory, user_factory
+):
+    client, user_id = auth_client
+    other_user_id = user_factory(email="invalid-copy-target@example.com")
+    today = date.today()
+    source_id = service_factory(
+        user_id=user_id,
+        service_id=5500,
+        service_date=today.isoformat(),
+        rite="Renewed Ancient Text",
+    )
+    past_id = service_factory(
+        user_id=user_id,
+        service_id=5501,
+        service_date=(today - timedelta(days=1)).isoformat(),
+        rite="Renewed Ancient Text",
+    )
+    wrong_rite_id = service_factory(
+        user_id=user_id,
+        service_id=5502,
+        service_date=(today + timedelta(days=1)).isoformat(),
+        rite="Anglican Standard Text",
+    )
+    other_user_service_id = service_factory(
+        user_id=other_user_id,
+        service_id=5503,
+        service_date=(today + timedelta(days=1)).isoformat(),
+        rite="Renewed Ancient Text",
+    )
+
+    no_selection = client.post(f"/service/{source_id}/copy-elements", data={})
+    self_copy = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(source_id)]},
+    )
+    past = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(past_id)]},
+    )
+    wrong_rite = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(wrong_rite_id)]},
+    )
+    missing = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": ["999999"]},
+    )
+    other_user = client.post(
+        f"/service/{source_id}/copy-elements",
+        data={"service_ids": [str(other_user_service_id)]},
+    )
+
+    assert no_selection.status_code == 400
+    assert b"Select at least one service" in no_selection.data
+    assert self_copy.status_code == 400
+    assert b"Cannot copy a service to itself" in self_copy.data
+    assert past.status_code == 400
+    assert b"Select future services only" in past.data
+    assert wrong_rite.status_code == 400
+    assert b"Service rite does not match" in wrong_rite.data
+    assert missing.status_code == 404
+    assert other_user.status_code == 404
+
+
 def test_services_new_rejects_mismatched_rite(auth_client, service_factory):
     client, user_id = auth_client
     source_id = service_factory(

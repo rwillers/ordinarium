@@ -1963,6 +1963,10 @@ div#page {
 	width: min(960px, 94vw);
 	max-width: min(960px, 94vw);
 }
+.service-copy-card {
+	width: min(760px, 94vw);
+	max-width: min(760px, 94vw);
+}
 .service-pco-batch-card small {
 	display: block;
 }

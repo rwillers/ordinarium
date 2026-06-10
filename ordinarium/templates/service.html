@@ -20,6 +20,7 @@
 						<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_export_pdf', service_id=service_id) }}">Export to PDF</a>
 						<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.service_export_docx', service_id=service_id) }}">Export to Word</a>
 						<button class="dropdown-menu-item" role="menuitem" type="button" data-share-url="{{ url_for('main.service_share', service_id=service_id) }}"{% if not can_share %} style="display: none;"{% endif %}>Share service link</button>
+						<button class="dropdown-menu-item" role="menuitem" type="button" data-service-copy-open{% if not copy_target_services %} disabled title="No eligible future services."{% endif %}>Copy elements to...</button>
 						<a class="dropdown-menu-item service-header-actions-item-mobile-only" role="menuitem" href="{{ url_for('main.services') }}">Back to services</a>
 					{% endcall %}
 					<a class="button service-header-back-desktop" href="{{ url_for('main.services') }}">Back to services</a>
@@ -41,6 +42,63 @@
 			<div class="share-modal-actions">
 				<button type="button" class="plan-submit" data-share-close>Close</button>
 			</div>
+		</div>
+	</div>
+	<div class="share-modal" id="service-copy-modal" aria-hidden="true">
+		<div class="share-modal-backdrop" data-service-copy-close></div>
+		<div class="share-modal-card service-copy-card" role="dialog" aria-modal="true" aria-labelledby="service-copy-title">
+			<h3 id="service-copy-title">Copy elements to...</h3>
+			<form
+				class="plan-custom-form"
+				action="{{ url_for('main.service_copy_elements', service_id=service_id) }}"
+				method="post"
+				data-bulk-actions
+				data-bulk-target="#service-copy-target-table"
+				data-bulk-confirm="Copy elements to the selected services? Existing elements on those services will be overwritten."
+			>
+				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+				{% if copy_target_services %}
+				<p class="plan-meta-copy">Selected services will keep their own dates and propers, but their current elements will be overwritten.</p>
+				<div class="shared-table-wrap">
+					<table class="shared-table" id="service-copy-target-table" data-pagination="true" data-page-size="10" data-page-size-options="10,25,50">
+						<thead>
+							<tr>
+								<th class="shared-table-select"></th>
+								<th class="shared-table-sortable" data-sort-key="date" data-sort-dir="asc" aria-sort="ascending">
+									<button class="shared-table-sort" type="button">Date</button>
+								</th>
+								<th class="shared-table-sortable" data-sort-key="title" data-sort-dir="none" aria-sort="none">
+									<button class="shared-table-sort" type="button">Title</button>
+								</th>
+								<th class="shared-table-sortable" data-sort-key="season" data-sort-dir="none" aria-sort="none">
+									<button class="shared-table-sort" type="button">Season</button>
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							{% for target_service in copy_target_services %}
+							<tr>
+								<td class="shared-table-select">
+									<input type="checkbox" name="service_ids" value="{{ target_service.id }}" aria-label="Select service {{ target_service.title }}">
+								</td>
+								<td data-sort-value="{{ target_service.service_date }}">{{ target_service.display_date }}</td>
+								<td class="shared-table-title" data-sort-value="{{ target_service.title | lower }}">
+									<a href="{{ url_for('main.service', service_id=target_service.id) }}">{{ target_service.title }}</a>
+								</td>
+								<td data-sort-value="{{ target_service.season | lower }}">{{ target_service.season or '—' }}</td>
+							</tr>
+							{% endfor %}
+						</tbody>
+					</table>
+				</div>
+				{% else %}
+				<p>No eligible future services.</p>
+				{% endif %}
+				<div class="plan-custom-actions">
+					<button class="plan-submit" type="button" data-service-copy-close>Cancel</button>
+					<button class="plan-submit" type="submit" data-bulk-submit disabled>Copy elements</button>
+				</div>
+			</form>
 		</div>
 	</div>
 	{% if pco_connected %}
@@ -618,6 +676,8 @@
 			const shareModalUrl = document.querySelector('#share-modal-url')
 			const shareCopyButton = document.querySelector('#share-copy-button')
 		const shareCopyFeedback = document.querySelector('#share-copy-feedback')
+		const serviceCopyButtons = document.querySelectorAll('[data-service-copy-open]')
+		const serviceCopyModal = document.querySelector('#service-copy-modal')
 		const pcoModal = document.querySelector('#pco-modal')
 		const pageWrapper = document.querySelector('#page')
 		const pcoSyncIndicator = document.querySelector('[data-pco-sync-indicator]')
@@ -643,6 +703,23 @@
 			shareModal.setAttribute('aria-hidden', 'false')
 			document.body.classList.add('is-modal-open')
 			shareModalUrl.select()
+		}
+
+		const openServiceCopyModal = () => {
+			if (!serviceCopyModal) {
+				return
+			}
+			serviceCopyModal.setAttribute('aria-hidden', 'false')
+			document.body.classList.add('is-modal-open')
+			closeServiceDropdownMenus()
+		}
+
+		const closeServiceCopyModal = () => {
+			if (!serviceCopyModal) {
+				return
+			}
+			serviceCopyModal.setAttribute('aria-hidden', 'true')
+			document.body.classList.remove('is-modal-open')
 		}
 
 		const closeShareModal = () => {
@@ -718,6 +795,25 @@
 				})
 			}
 
+		if (serviceCopyButtons.length) {
+			serviceCopyButtons.forEach((button) => {
+				button.addEventListener('click', () => {
+					if (button.disabled) {
+						return
+					}
+					openServiceCopyModal()
+				})
+			})
+		}
+
+		if (serviceCopyModal) {
+			serviceCopyModal.addEventListener('click', (event) => {
+				if (event.target && event.target.matches('[data-service-copy-close]')) {
+					closeServiceCopyModal()
+				}
+			})
+		}
+
 		if (shareCopyButton && shareModalUrl) {
 			shareCopyButton.addEventListener('click', async () => {
 				let copied = false
@@ -741,6 +837,9 @@
 			}
 			if (shareModal && shareModal.getAttribute('aria-hidden') === 'false') {
 				closeShareModal()
+			}
+			if (serviceCopyModal && serviceCopyModal.getAttribute('aria-hidden') === 'false') {
+				closeServiceCopyModal()
 			}
 			if (pcoModal && pcoModal.getAttribute('aria-hidden') === 'false') {
 				closePcoModal()
