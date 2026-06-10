@@ -118,12 +118,21 @@
 					<p class="plan-error">Last sync error: {{ pco_link.last_sync_error }}</p>
 				{% endif %}
 				<div class="auth-actions">
-					{% if pco_sync_state == 'unsynced' %}
 					<form action="{{ url_for('main.service_pco_sync', service_id=service_id) }}" method="post">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-						<button class="plan-submit" type="submit">Sync service</button>
+						<input type="hidden" name="pco_sync_mode" value="delta">
+						<button class="plan-submit" type="submit">Sync linked items</button>
 					</form>
-					{% endif %}
+					<form action="{{ url_for('main.service_pco_sync', service_id=service_id) }}" method="post" onsubmit="return confirm('Adopt unmatched Planning Center items as custom elements in this service?');">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="pco_sync_mode" value="adopt">
+						<button class="plan-submit" type="submit">Adopt PCO items</button>
+					</form>
+					<form action="{{ url_for('main.service_pco_sync', service_id=service_id) }}" method="post" onsubmit="return confirm('Reset will delete all Planning Center plan items for this plan and recreate them from Ordinarium. This cannot be automatically reversed. Continue?');">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="pco_sync_mode" value="reset">
+						<button class="plan-submit" type="submit">Reset PCO items</button>
+					</form>
 					<form action="{{ url_for('main.service_pco_unlink', service_id=service_id) }}" method="post" onsubmit="return confirm('Remove the Planning Center link for this service?');">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="plan-submit" type="submit">Remove link</button>

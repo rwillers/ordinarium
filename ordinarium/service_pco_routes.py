@@ -36,7 +36,15 @@ from .pco_sync import (
 )
 
 BATCH_SYNC_LIMIT = 25
-BATCH_SYNC_MODES = {"sync_linked", "link_existing", "create_new", "skip"}
+BATCH_SYNC_MODES = {
+    "sync_linked",
+    "adopt_linked",
+    "reset_linked",
+    "link_existing",
+    "reset_existing",
+    "create_new",
+    "skip",
+}
 
 
 def _to_text(value):
@@ -113,6 +121,7 @@ def _run_service_sync(
     service_type_id,
     plan_id,
     db,
+    sync_mode="delta",
 ):
     try:
         result = sync_service_plan(
@@ -122,6 +131,7 @@ def _run_service_sync(
             base_url,
             service_type_id,
             plan_id,
+            sync_mode=sync_mode,
         )
     except Exception as exc:
         failed_at = datetime.utcnow().isoformat()
@@ -315,11 +325,11 @@ def _duplicate_batch_target_indexes(
         if not service:
             continue
         target = None
-        if mode == "sync_linked":
+        if mode in {"sync_linked", "adopt_linked", "reset_linked"}:
             link = links_by_id.get(row["service_id"])
             if link:
                 target = (link["pco_service_type_id"], link["pco_plan_id"])
-        elif mode == "link_existing":
+        elif mode in {"link_existing", "reset_existing"}:
             service_type_id = row["pco_service_type_id"]
             plan_id = row["pco_plan_id"]
             if service_type_id and plan_id:
@@ -374,7 +384,7 @@ def _execute_pco_batch_row(
             "Multiple rows target the same Planning Center plan in this batch."
         )
         return result
-    if mode == "sync_linked":
+    if mode in {"sync_linked", "adopt_linked", "reset_linked"}:
         return _execute_pco_linked_batch_row(
             result, service_id, user_id, access_token, base_url, db, links_by_id
         )
@@ -387,7 +397,7 @@ def _execute_pco_batch_row(
     service_type_name = row["pco_service_type_name"] or None
     plan_id = None
     plan_title = None
-    if mode == "link_existing":
+    if mode in {"link_existing", "reset_existing"}:
         plan_id, plan_title, error = _resolve_existing_pco_plan(
             base_url, access_token, service_type_id, row["pco_plan_id"]
         )
@@ -425,6 +435,11 @@ def _execute_pco_batch_row(
         "pco_plan_id": plan_id,
         "pco_plan_title": plan_title,
     }
+    sync_mode = "delta"
+    if mode == "link_existing":
+        sync_mode = "adopt"
+    elif mode == "reset_existing":
+        sync_mode = "reset"
     ok, sync_data = _run_service_sync(
         service_id,
         user_id,
@@ -433,6 +448,7 @@ def _execute_pco_batch_row(
         service_type_id,
         plan_id,
         db,
+        sync_mode=sync_mode,
     )
     result.update(
         {
@@ -467,6 +483,7 @@ def _execute_pco_linked_batch_row(
         link["pco_service_type_id"],
         link["pco_plan_id"],
         db,
+        sync_mode=_sync_mode_for_linked_batch_mode(result.get("mode")),
     )
     result.update(
         {
@@ -483,6 +500,14 @@ def _execute_pco_linked_batch_row(
     result["status"] = "failed"
     result["error"] = sync_data.get("error") or "PCO sync failed."
     return result
+
+
+def _sync_mode_for_linked_batch_mode(mode):
+    if mode == "adopt_linked":
+        return "adopt"
+    if mode == "reset_linked":
+        return "reset"
+    return "delta"
 
 
 def _resolve_existing_pco_plan(base_url, access_token, service_type_id, plan_id):
@@ -876,6 +901,9 @@ def register_service_pco_routes(bp):
                 )
             return render_error("Planning Center plan not linked.", 400)
         try:
+            sync_mode = request.form.get("pco_sync_mode") or "delta"
+            if sync_mode not in {"delta", "adopt", "reset"}:
+                sync_mode = "delta"
             result = sync_service_plan(
                 service_id,
                 g.user["id"],
@@ -883,6 +911,7 @@ def register_service_pco_routes(bp):
                 current_app.config.get("PCO_API_BASE"),
                 link["pco_service_type_id"],
                 link["pco_plan_id"],
+                sync_mode=sync_mode,
             )
         except PcoAuthError as exc:
             failed_at = datetime.utcnow().isoformat()

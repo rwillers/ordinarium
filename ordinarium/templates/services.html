@@ -409,7 +409,8 @@
 	const maxMultiServices = 10
 	const batchPlanCache = new Map()
 	const batchTemplateCache = new Map()
-	const batchEditableServiceTypeModes = new Set(['link_existing', 'create_new'])
+	const batchEditableServiceTypeModes = new Set(['link_existing', 'reset_existing', 'create_new'])
+	const batchLinkedPlanModes = new Set(['sync_linked', 'adopt_linked', 'reset_linked'])
 	let pcoBatchServiceTypeApplyPromptShown = false
 	let pcoBatchTemplateApplyPromptShown = false
 
@@ -921,13 +922,17 @@
 		select.innerHTML = ''
 		const options = linked
 			? [
-				{ value: 'sync_linked', label: 'Sync linked' },
-				{ value: 'link_existing', label: 'Override with existing' },
-				{ value: 'create_new', label: 'Override with new' },
+				{ value: 'sync_linked', label: 'Sync linked items' },
+				{ value: 'adopt_linked', label: 'Adopt PCO items' },
+				{ value: 'reset_linked', label: 'Reset PCO items' },
+				{ value: 'link_existing', label: 'Adopt different existing' },
+				{ value: 'reset_existing', label: 'Reset different existing' },
+				{ value: 'create_new', label: 'Create new' },
 				{ value: 'skip', label: 'Skip' },
 			]
 			: [
-				{ value: 'link_existing', label: 'Link existing' },
+				{ value: 'link_existing', label: 'Adopt existing' },
+				{ value: 'reset_existing', label: 'Reset existing' },
 				{ value: 'create_new', label: 'Create new' },
 				{ value: 'skip', label: 'Skip' },
 			]
@@ -1109,15 +1114,16 @@
 		const linkedPlanId = row.dataset.pcoPlanId || ''
 		const linkedPlanTitle = row.dataset.pcoPlanTitle || linkedPlanId || 'Linked plan'
 		const mode = modeSelect ? modeSelect.value : 'skip'
-		const usesServiceType = mode === 'link_existing' || mode === 'create_new'
-		const usesPlan = mode === 'link_existing'
+		const usesLinkedPlan = batchLinkedPlanModes.has(mode)
+		const usesServiceType = mode === 'link_existing' || mode === 'reset_existing' || mode === 'create_new'
+		const usesPlan = mode === 'link_existing' || mode === 'reset_existing'
 		if (linked && serviceTypeSelect && linkedServiceTypeId) {
 			ensureSelectOption(serviceTypeSelect, linkedServiceTypeId, linkedServiceTypeName)
 		}
 		if (serviceTypeSelect) {
 			serviceTypeSelect.disabled = !usesServiceType
 			serviceTypeSelect.style.display = mode === 'skip' ? 'none' : ''
-			if (mode === 'sync_linked' && linkedServiceTypeId) {
+			if (usesLinkedPlan && linkedServiceTypeId) {
 				serviceTypeSelect.value = linkedServiceTypeId
 			}
 			if (usesServiceType) {
@@ -1130,7 +1136,7 @@
 		}
 		if (planSelect) {
 			planSelect.disabled = !usesPlan
-			if (mode === 'sync_linked' && linked && linkedPlanId) {
+			if (usesLinkedPlan && linked && linkedPlanId) {
 				planSelect.innerHTML = ''
 				ensureSelectOption(planSelect, linkedPlanId, linkedPlanTitle)
 				planSelect.value = linkedPlanId
@@ -1159,7 +1165,7 @@
 		if (!statusNode) {
 			return
 		}
-		if (mode === 'sync_linked') {
+		if (usesLinkedPlan) {
 			statusNode.textContent = ''
 			return
 		}
@@ -1239,7 +1245,7 @@
 			}
 			serviceTypeSelect?.addEventListener('change', async () => {
 				setBatchResultStatus(clone, 'Pending', 'pending')
-				if (modeSelect && modeSelect.value === 'link_existing') {
+				if (modeSelect && (modeSelect.value === 'link_existing' || modeSelect.value === 'reset_existing')) {
 					await loadBatchPlansForRow(clone, true)
 				} else if (modeSelect && modeSelect.value === 'create_new') {
 					await loadBatchTemplatesForRow(clone, true)
@@ -1280,7 +1286,7 @@
 			setBatchResultStatus(row, 'Pending', 'pending')
 			updateBatchRowControls(row)
 			const modeSelect = row.querySelector('[data-batch-mode]')
-			if (modeSelect && modeSelect.value === 'link_existing') {
+			if (modeSelect && (modeSelect.value === 'link_existing' || modeSelect.value === 'reset_existing')) {
 				await loadBatchPlansForRow(row, true)
 			} else if (modeSelect && modeSelect.value === 'create_new') {
 				await loadBatchTemplatesForRow(row, true)
@@ -1381,11 +1387,11 @@
 			if (!serviceId || !mode) {
 				return { rows: [], error: 'Each row must include a valid service and mode.' }
 			}
-			if ((mode === 'link_existing' || mode === 'create_new') && !serviceTypeId) {
+			if ((mode === 'link_existing' || mode === 'reset_existing' || mode === 'create_new') && !serviceTypeId) {
 				return { rows: [], error: 'Choose a service type for each row that links or creates a plan.' }
 			}
-			if (mode === 'link_existing' && !planId) {
-				return { rows: [], error: 'Choose a plan for each row in link existing mode.' }
+			if ((mode === 'link_existing' || mode === 'reset_existing') && !planId) {
+				return { rows: [], error: 'Choose a plan for each row that uses an existing plan.' }
 			}
 			payloadRows.push({
 				service_id: serviceId,
@@ -1660,8 +1666,11 @@
 				setPcoBatchError('Select at least one upcoming service.')
 				return
 			}
+			const hasReset = rows.some((row) => row.mode === 'reset_linked' || row.mode === 'reset_existing')
 			const confirmed = window.confirm(
-				'This will replace all plan items in Planning Center for each selected service. Continue?'
+				hasReset
+					? 'Reset will delete all Planning Center plan items for affected plans and recreate them from Ordinarium. Other selected rows will sync or adopt according to their selected mode. Continue?'
+					: 'This will sync linked Planning Center items. Adopt modes will import unmatched Planning Center items as custom elements before syncing. Continue?'
 			)
 			if (!confirmed) {
 				return

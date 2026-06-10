@@ -780,11 +780,13 @@ def test_service_pco_modal_shows_sync_button_when_unsynced(
     response = client.get(f"/service/{service_id}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Sync service" in html
+    assert "Sync linked items" in html
+    assert "Adopt PCO items" in html
+    assert "Reset PCO items" in html
     assert "Remove link" in html
 
 
-def test_service_pco_modal_hides_sync_button_when_synced(
+def test_service_pco_modal_shows_linked_item_actions_when_synced(
     app, auth_client, service_factory
 ):
     client, user_id = auth_client
@@ -822,7 +824,9 @@ def test_service_pco_modal_hides_sync_button_when_synced(
     response = client.get(f"/service/{service_id}")
     assert response.status_code == 200
     html = response.get_data(as_text=True)
-    assert "Sync service" not in html
+    assert "Sync linked items" in html
+    assert "Adopt PCO items" in html
+    assert "Reset PCO items" in html
     assert "Remove link" in html
 
 
@@ -1276,6 +1280,64 @@ def test_service_pco_sync_route_stores_delta_item_links(
         assert status["last_sync_status"] == "success"
 
 
+def test_service_pco_sync_route_passes_requested_sync_mode(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id, service_id=242, service_date="2026-06-07"
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (service_id, "type-1", "plan-1"),
+        )
+        db.commit()
+
+    calls = []
+
+    def fake_sync_service_plan(
+        service_id_arg,
+        _user_id,
+        _access_token,
+        _base_url,
+        service_type_id,
+        plan_id,
+        sync_mode="delta",
+    ):
+        calls.append((service_id_arg, service_type_id, plan_id, sync_mode))
+        return {"synced_at": "2099-05-01T10:00:00", "item_count": 0}
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.sync_service_plan", fake_sync_service_plan
+    )
+
+    for mode in ("adopt", "reset"):
+        response = client.post(
+            f"/service/{service_id}/pco/sync",
+            data={"pco_sync_mode": mode},
+            headers={"Accept": "application/json"},
+        )
+        assert response.status_code == 200
+
+    assert calls == [
+        (service_id, "type-1", "plan-1", "adopt"),
+        (service_id, "type-1", "plan-1", "reset"),
+    ]
+
+
 def test_service_delete_removes_related_rows(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(user_id=user_id, service_id=31)
@@ -1577,6 +1639,41 @@ def test_text_renders_for_saved_service(auth_client, service_factory):
     response = client.get("/service/14/view")
     assert response.status_code == 200
     assert b"Holy Eucharist" in response.data
+
+
+def test_text_view_escapes_custom_element_html(app, auth_client, service_factory):
+    client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=115,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    malicious_title = '<img src=x onerror="alert(1)">'
+    malicious_text = '<script>alert(2)</script><img src=x onerror="alert(3)">'
+    with app.app_context():
+        db = get_db()
+        cursor = db.execute(
+            """
+            insert into service_custom_elements (service_id, user_id, title, text)
+            values (?, ?, ?, ?)
+            """,
+            (service_id, user_id, malicious_title, malicious_text),
+        )
+        db.execute(
+            "update services set text_order=? where id=?",
+            (json.dumps([f"custom:{cursor.lastrowid}"]), service_id),
+        )
+        db.commit()
+
+    response = client.get(f"/service/{service_id}/view")
+
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "<script>alert(2)</script>" not in body
+    assert '<img src=x onerror="alert(3)">' not in body
+    assert "&lt;script&gt;alert(2)&lt;/script&gt;" in body
+    assert "&lt;img src=x onerror=" in body
 
 
 def test_text_renders_biblia_link_for_lesson_override(auth_client, service_factory):
@@ -2468,6 +2565,51 @@ def test_build_text_export_context_keeps_lesson_references_plain_text(
     assert lesson_row is not None
     assert "Genesis 1:1-5" in lesson_row["body_html"]
     assert "<a " not in lesson_row["body_html"]
+
+
+def test_build_text_export_context_escapes_custom_element_html(
+    app, auth_client, service_factory
+):
+    _client, user_id = auth_client
+    service_id = service_factory(
+        user_id=user_id,
+        service_id=340,
+        service_date="2026-01-04",
+        rite="Renewed Ancient Text",
+    )
+    with app.app_context():
+        db = get_db()
+        cursor = db.execute(
+            """
+            insert into service_custom_elements (service_id, user_id, title, text)
+            values (?, ?, ?, ?)
+            """,
+            (
+                service_id,
+                user_id,
+                '<img src=x onerror="alert(1)">',
+                '<script>alert(2)</script><img src=x onerror="alert(3)">',
+            ),
+        )
+        db.execute(
+            "update services set text_order=? where id=?",
+            (json.dumps([f"custom:{cursor.lastrowid}"]), service_id),
+        )
+        db.commit()
+        saved_service, saved_data = load_service_for_text(service_id, user_id)
+        context = build_text_export_context(
+            service_id,
+            saved_service,
+            saved_data,
+            user_id=user_id,
+        )
+
+    assert context is not None
+    custom_row = context["ordinaries"][0]
+    assert "<script>alert(2)</script>" not in custom_row["body_html"]
+    assert '<img src=x onerror="alert(3)">' not in custom_row["body_html"]
+    assert "&lt;script&gt;alert(2)&lt;/script&gt;" in custom_row["body_html"]
+    assert "&lt;img src=x onerror=" in custom_row["body_html"]
 
 
 def test_format_lesson_reference_with_biblia_links_structured_psalm_reference():

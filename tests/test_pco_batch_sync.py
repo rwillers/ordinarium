@@ -128,8 +128,9 @@ def test_services_pco_batch_sync_handles_mixed_modes(
         _base_url,
         service_type_id,
         plan_id,
+        sync_mode="delta",
     ):
-        sync_calls.append((service_id, service_type_id, plan_id))
+        sync_calls.append((service_id, service_type_id, plan_id, sync_mode))
         return {"synced_at": "2099-01-01T10:00:00", "item_count": 1}
 
     monkeypatch.setattr("ordinarium.service_pco_routes.create_plan", fake_create_plan)
@@ -169,8 +170,8 @@ def test_services_pco_batch_sync_handles_mixed_modes(
     assert payload["summary"] == {"total": 3, "success": 3, "failed": 0, "skipped": 0}
     statuses = [row["status"] for row in payload["results"]]
     assert statuses == ["success", "success", "success"]
-    assert (301, "type-linked", "plan-linked") in sync_calls
-    assert (303, "type-override", "plan-override") in sync_calls
+    assert (301, "type-linked", "plan-linked", "delta") in sync_calls
+    assert (303, "type-override", "plan-override", "adopt") in sync_calls
     with app.app_context():
         db = get_db()
         links = db.execute(
@@ -189,6 +190,86 @@ def test_services_pco_batch_sync_handles_mixed_modes(
         assert link_map[302]["last_sync_status"] == "success"
         assert link_map[303]["pco_plan_id"] == "plan-override"
         assert link_map[303]["last_sync_status"] == "success"
+
+
+def test_services_pco_batch_sync_passes_adopt_and_reset_modes(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_factory(user_id=user_id, service_id=801, service_date="2099-02-01")
+    service_factory(user_id=user_id, service_id=802, service_date="2099-02-08")
+    service_factory(user_id=user_id, service_id=803, service_date="2099-02-15")
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (801, "type-linked", "plan-adopt-linked"),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (802, "type-linked", "plan-reset-linked"),
+        )
+        db.commit()
+
+    def fake_fetch_plan(_base_url, _access_token, _service_type_id, plan_id):
+        return {"data": {"id": plan_id, "attributes": {"title": f"Plan {plan_id}"}}}
+
+    sync_calls = []
+
+    def fake_sync_service_plan(
+        service_id,
+        _user_id,
+        _access_token,
+        _base_url,
+        service_type_id,
+        plan_id,
+        sync_mode="delta",
+    ):
+        sync_calls.append((service_id, service_type_id, plan_id, sync_mode))
+        return {"synced_at": "2099-02-01T10:00:00", "item_count": 1}
+
+    monkeypatch.setattr("ordinarium.service_pco_routes.fetch_plan", fake_fetch_plan)
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.sync_service_plan", fake_sync_service_plan
+    )
+
+    _queued, payload = _post_batch_sync_and_wait(
+        client,
+        {
+            "rows": [
+                {"service_id": 801, "mode": "adopt_linked"},
+                {"service_id": 802, "mode": "reset_linked"},
+                {
+                    "service_id": 803,
+                    "mode": "reset_existing",
+                    "pco_service_type_id": "type-reset-existing",
+                    "pco_plan_id": "plan-reset-existing",
+                },
+            ],
+            "pco_plan_time": "10:00",
+            "pco_plan_tz_offset": "0",
+        },
+    )
+
+    assert payload["summary"] == {"total": 3, "success": 3, "failed": 0, "skipped": 0}
+    assert sync_calls == [
+        (801, "type-linked", "plan-adopt-linked", "adopt"),
+        (802, "type-linked", "plan-reset-linked", "reset"),
+        (803, "type-reset-existing", "plan-reset-existing", "reset"),
+    ]
 
 
 def test_services_pco_batch_sync_rejects_duplicate_plan_targets(
@@ -286,8 +367,11 @@ def test_services_pco_batch_sync_create_new_imports_selected_template(
         _base_url,
         service_type_id,
         plan_id,
+        sync_mode="delta",
     ):
-        calls.append(("sync_service_plan", service_id, service_type_id, plan_id))
+        calls.append(
+            ("sync_service_plan", service_id, service_type_id, plan_id, sync_mode)
+        )
         return {"synced_at": "2099-04-01T10:00:00", "item_count": 1}
 
     monkeypatch.setattr("ordinarium.service_pco_routes.create_plan", fake_create_plan)
@@ -331,7 +415,7 @@ def test_services_pco_batch_sync_create_new_imports_selected_template(
             "created-template-plan",
             "template-1",
         ),
-        ("sync_service_plan", 701, "type-created", "created-template-plan"),
+        ("sync_service_plan", 701, "type-created", "created-template-plan", "delta"),
     ]
 
 
