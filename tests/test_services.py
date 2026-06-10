@@ -727,6 +727,186 @@ def test_service_pco_create_and_link_without_template_preserves_existing_behavio
     assert import_calls == []
 
 
+def test_service_pco_relink_clears_stale_item_links(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id, service_id=239, service_date="2026-05-17"
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (service_id, "type-old", "plan-old"),
+        )
+        db.execute(
+            """
+            insert into service_pco_item_links (
+              service_id,
+              ordinarium_token,
+              pco_item_id,
+              last_content_hash,
+              last_position
+            ) values (?, ?, ?, ?, ?)
+            """,
+            (service_id, "text:1", "pco-old", "hash", 0),
+        )
+        db.commit()
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.fetch_plan",
+        lambda *_args: {
+            "data": {"id": "plan-new", "attributes": {"title": "New plan"}}
+        },
+    )
+
+    response = client.post(
+        f"/service/{service_id}/pco/link",
+        data={
+            "mode": "existing",
+            "pco_service_type_id": "type-new",
+            "pco_service_type_name": "New service type",
+            "pco_plan_id": "plan-new",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        item_count = db.execute(
+            "select count(*) from service_pco_item_links where service_id=?",
+            (service_id,),
+        ).fetchone()[0]
+        link = db.execute(
+            "select pco_service_type_id, pco_plan_id from service_pco_links where service_id=?",
+            (service_id,),
+        ).fetchone()
+        assert item_count == 0
+        assert link["pco_service_type_id"] == "type-new"
+        assert link["pco_plan_id"] == "plan-new"
+
+
+def test_service_pco_unlink_clears_item_links(app, auth_client, service_factory):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id, service_id=240, service_date="2026-05-24"
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (service_id, "type-1", "plan-1"),
+        )
+        db.execute(
+            """
+            insert into service_pco_item_links (
+              service_id,
+              ordinarium_token,
+              pco_item_id
+            ) values (?, ?, ?)
+            """,
+            (service_id, "text:1", "pco-1"),
+        )
+        db.commit()
+
+    response = client.post(f"/service/{service_id}/pco/unlink")
+
+    assert response.status_code == 302
+    with app.app_context():
+        db = get_db()
+        link_count = db.execute(
+            "select count(*) from service_pco_links where service_id=?",
+            (service_id,),
+        ).fetchone()[0]
+        item_count = db.execute(
+            "select count(*) from service_pco_item_links where service_id=?",
+            (service_id,),
+        ).fetchone()[0]
+        assert link_count == 0
+        assert item_count == 0
+
+
+def test_service_pco_sync_route_stores_delta_item_links(
+    app, auth_client, service_factory, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    service_id = service_factory(
+        user_id=user_id, service_id=241, service_date="2026-05-31"
+    )
+    with app.app_context():
+        db = get_db()
+        db.execute(
+            "insert into pco_connections (user_id, access_token) values (?, ?)",
+            (user_id, "token"),
+        )
+        db.execute(
+            """
+            insert into service_pco_links (
+              service_id,
+              pco_service_type_id,
+              pco_plan_id
+            ) values (?, ?, ?)
+            """,
+            (service_id, "type-1", "plan-1"),
+        )
+        db.commit()
+
+    monkeypatch.setattr(
+        "ordinarium.pco_sync._load_service_plan",
+        lambda *_args: (
+            {"id": service_id},
+            [{"token": "text:1", "title": "Collect", "text": "Route sync text."}],
+        ),
+    )
+    monkeypatch.setattr("ordinarium.pco_sync.list_plan_items", lambda *_args: [])
+    monkeypatch.setattr(
+        "ordinarium.pco_sync.create_plan_item",
+        lambda *_args: {"data": {"id": "created-route-item"}},
+    )
+
+    response = client.post(
+        f"/service/{service_id}/pco/sync",
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["ok"] is True
+    assert payload["sync_status"] == "success"
+    with app.app_context():
+        db = get_db()
+        link = db.execute(
+            "select pco_item_id from service_pco_item_links where service_id=? and ordinarium_token=?",
+            (service_id, "text:1"),
+        ).fetchone()
+        status = db.execute(
+            "select last_sync_status from service_pco_links where service_id=?",
+            (service_id,),
+        ).fetchone()
+        assert link["pco_item_id"] == "created-route-item"
+        assert status["last_sync_status"] == "success"
+
+
 def test_service_delete_removes_related_rows(app, auth_client, service_factory):
     client, user_id = auth_client
     service_id = service_factory(user_id=user_id, service_id=31)

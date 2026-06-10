@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime, time, timedelta, timezone
 from html.parser import HTMLParser
 
@@ -8,6 +10,11 @@ from flask import current_app
 from .db import get_db
 from .plan_tokens import parse_json_object
 from .pco_client import api_request, list_all_pages, PcoApiError
+from .pco_store import (
+    delete_service_pco_item_link,
+    list_service_pco_item_links,
+    upsert_service_pco_item_link,
+)
 from .text_rendering import build_rendered_ordinaries
 
 
@@ -61,22 +68,41 @@ def _load_service_plan(service_id, user_id):
 
 def build_pco_item_payloads(items):
     payloads = []
-    for item in items:
+    for position, item in enumerate(items):
         title = item.get("detailed_title") or item.get("title") or "Untitled"
         text = item.get("text") or ""
         html_details = _render_markdown_html(text)
+        attributes = {
+            "title": title,
+            "html_details": html_details,
+        }
+        content_hash = _pco_item_content_hash(attributes)
         payloads.append(
             {
-                "data": {
-                    "type": "Item",
-                    "attributes": {
-                        "title": title,
-                        "html_details": html_details,
+                "token": item.get("token"),
+                "position": position,
+                "content_hash": content_hash,
+                "payload": {
+                    "data": {
+                        "type": "Item",
+                        "attributes": attributes,
                     },
-                }
+                },
             }
         )
     return payloads
+
+
+def _pco_item_content_hash(attributes):
+    normalized = json.dumps(
+        {
+            "title": attributes.get("title") or "",
+            "html_details": attributes.get("html_details") or "",
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def _render_markdown_html(value):
@@ -237,6 +263,15 @@ def create_plan_item(base_url, access_token, service_type_id, plan_id, payload):
     return api_request("POST", base_url, path, access_token, json=payload)
 
 
+def update_plan_item(
+    base_url, access_token, service_type_id, plan_id, item_id, payload
+):
+    path = (
+        f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items/{item_id}"
+    )
+    return api_request("PATCH", base_url, path, access_token, json=payload)
+
+
 def fetch_plan(base_url, access_token, service_type_id, plan_id):
     path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}"
     return api_request("GET", base_url, path, access_token)
@@ -342,18 +377,187 @@ def sync_service_plan(
         raise PcoSyncError("Service not found.")
     payloads = build_pco_item_payloads(items)
     try:
-        existing_items = list_plan_items(
-            base_url, access_token, service_type_id, plan_id
+        _sync_pco_item_delta(
+            service_id,
+            base_url,
+            access_token,
+            service_type_id,
+            plan_id,
+            payloads,
         )
-        for item in existing_items:
-            delete_plan_item(
-                base_url, access_token, service_type_id, plan_id, item["id"]
-            )
-        for payload in payloads:
-            create_plan_item(base_url, access_token, service_type_id, plan_id, payload)
     except PcoApiError as exc:
         raise PcoSyncError(str(exc)) from exc
     return {
         "synced_at": datetime.utcnow().isoformat(),
         "item_count": len(payloads),
     }
+
+
+def _sync_pco_item_delta(
+    service_id,
+    base_url,
+    access_token,
+    service_type_id,
+    plan_id,
+    payloads,
+):
+    db = get_db()
+    existing_items = list_plan_items(base_url, access_token, service_type_id, plan_id)
+    existing_item_ids = {
+        str(item.get("id")) for item in existing_items if item.get("id") is not None
+    }
+    linked_rows = list_service_pco_item_links(service_id, db=db)
+    linked_by_token = {row["ordinarium_token"]: row for row in linked_rows}
+    desired_tokens = [payload["token"] for payload in payloads if payload.get("token")]
+
+    if _requires_order_rebuild(payloads, linked_by_token, existing_item_ids):
+        _rebuild_linked_plan_items(
+            service_id,
+            base_url,
+            access_token,
+            service_type_id,
+            plan_id,
+            payloads,
+            linked_by_token,
+            existing_item_ids,
+            db,
+        )
+        return
+
+    for row in linked_rows:
+        token = row["ordinarium_token"]
+        pco_item_id = str(row["pco_item_id"])
+        if token in desired_tokens:
+            continue
+        if pco_item_id in existing_item_ids:
+            delete_plan_item(
+                base_url, access_token, service_type_id, plan_id, pco_item_id
+            )
+        delete_service_pco_item_link(service_id, token, db=db)
+
+    for payload in payloads:
+        token = payload.get("token")
+        if not token:
+            continue
+        linked = linked_by_token.get(token)
+        pco_item_id = str(linked["pco_item_id"]) if linked else ""
+        if linked and pco_item_id in existing_item_ids:
+            if linked.get("last_content_hash") != payload["content_hash"]:
+                update_plan_item(
+                    base_url,
+                    access_token,
+                    service_type_id,
+                    plan_id,
+                    pco_item_id,
+                    payload["payload"],
+                )
+            upsert_service_pco_item_link(
+                service_id,
+                token,
+                pco_item_id,
+                last_content_hash=payload["content_hash"],
+                last_position=payload["position"],
+                db=db,
+            )
+            continue
+        created = create_plan_item(
+            base_url,
+            access_token,
+            service_type_id,
+            plan_id,
+            payload["payload"],
+        )
+        created_id = _extract_pco_item_id(created)
+        if not created_id:
+            raise PcoSyncError("PCO item creation failed.")
+        upsert_service_pco_item_link(
+            service_id,
+            token,
+            created_id,
+            last_content_hash=payload["content_hash"],
+            last_position=payload["position"],
+            db=db,
+        )
+
+
+def _requires_order_rebuild(payloads, linked_by_token, existing_item_ids):
+    desired_linked = [
+        payload
+        for payload in payloads
+        if payload.get("token")
+        and payload.get("token") in linked_by_token
+        and str(linked_by_token[payload["token"]]["pco_item_id"]) in existing_item_ids
+    ]
+    if len(desired_linked) < 2:
+        return any(
+            linked_by_token[payload["token"]]["last_position"] != payload["position"]
+            for payload in desired_linked
+        )
+    previous_order = sorted(
+        desired_linked,
+        key=lambda payload: (
+            linked_by_token[payload["token"]]["last_position"]
+            if linked_by_token[payload["token"]]["last_position"] is not None
+            else payload["position"]
+        ),
+    )
+    if [payload["token"] for payload in previous_order] != [
+        payload["token"] for payload in desired_linked
+    ]:
+        return True
+    return any(
+        linked_by_token[payload["token"]]["last_position"] != payload["position"]
+        for payload in desired_linked
+    )
+
+
+def _rebuild_linked_plan_items(
+    service_id,
+    base_url,
+    access_token,
+    service_type_id,
+    plan_id,
+    payloads,
+    linked_by_token,
+    existing_item_ids,
+    db,
+):
+    for row in linked_by_token.values():
+        pco_item_id = str(row["pco_item_id"])
+        if pco_item_id in existing_item_ids:
+            delete_plan_item(
+                base_url, access_token, service_type_id, plan_id, pco_item_id
+            )
+        delete_service_pco_item_link(service_id, row["ordinarium_token"], db=db)
+    for payload in payloads:
+        token = payload.get("token")
+        if not token:
+            continue
+        created = create_plan_item(
+            base_url,
+            access_token,
+            service_type_id,
+            plan_id,
+            payload["payload"],
+        )
+        created_id = _extract_pco_item_id(created)
+        if not created_id:
+            raise PcoSyncError("PCO item creation failed.")
+        upsert_service_pco_item_link(
+            service_id,
+            token,
+            created_id,
+            last_content_hash=payload["content_hash"],
+            last_position=payload["position"],
+            db=db,
+        )
+
+
+def _extract_pco_item_id(payload):
+    data = payload.get("data") if payload else None
+    if not data:
+        return None
+    item_id = data.get("id")
+    if item_id is None:
+        return None
+    return str(item_id)

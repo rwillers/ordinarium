@@ -92,6 +92,19 @@ def clear_upcoming_service_pco_links_for_user(user_id, on_or_after_date, db=None
     db = db or get_db()
     db.execute(
         """
+        delete from service_pco_item_links
+        where service_id in (
+          select id
+          from services
+          where user_id=?
+            and service_date is not null
+            and service_date >= ?
+        )
+        """,
+        (user_id, on_or_after_date),
+    )
+    db.execute(
+        """
         delete from service_pco_links
         where service_id in (
           select id
@@ -142,6 +155,12 @@ def upsert_service_pco_link(
     if not service_id:
         return
     db = db or get_db()
+    existing = get_service_pco_link(service_id, db=db)
+    if existing and (
+        existing["pco_service_type_id"] != pco_service_type_id
+        or existing["pco_plan_id"] != pco_plan_id
+    ):
+        clear_service_pco_item_links(service_id, db=db)
     db.execute(
         """
         insert into service_pco_links (
@@ -174,7 +193,93 @@ def clear_service_pco_link(service_id, db=None):
     if not service_id:
         return
     db = db or get_db()
+    clear_service_pco_item_links(service_id, db=db)
     db.execute("delete from service_pco_links where service_id=?", (service_id,))
+
+
+def list_service_pco_item_links(service_id, db=None):
+    if not service_id:
+        return []
+    db = db or get_db()
+    rows = db.execute(
+        """
+        select
+          id,
+          service_id,
+          ordinarium_token,
+          pco_item_id,
+          last_content_hash,
+          last_position,
+          created_at,
+          updated_at
+        from service_pco_item_links
+        where service_id=?
+        order by last_position, id
+        """,
+        (service_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def upsert_service_pco_item_link(
+    service_id,
+    ordinarium_token,
+    pco_item_id,
+    last_content_hash=None,
+    last_position=None,
+    db=None,
+):
+    if not service_id or not ordinarium_token or not pco_item_id:
+        return
+    db = db or get_db()
+    db.execute(
+        """
+        insert into service_pco_item_links (
+          service_id,
+          ordinarium_token,
+          pco_item_id,
+          last_content_hash,
+          last_position,
+          created_at,
+          updated_at
+        ) values (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        on conflict(service_id, ordinarium_token) do update set
+          pco_item_id=excluded.pco_item_id,
+          last_content_hash=excluded.last_content_hash,
+          last_position=excluded.last_position,
+          updated_at=CURRENT_TIMESTAMP
+        """,
+        (
+            service_id,
+            ordinarium_token,
+            pco_item_id,
+            last_content_hash,
+            last_position,
+        ),
+    )
+
+
+def delete_service_pco_item_link(service_id, ordinarium_token, db=None):
+    if not service_id or not ordinarium_token:
+        return
+    db = db or get_db()
+    db.execute(
+        """
+        delete from service_pco_item_links
+        where service_id=? and ordinarium_token=?
+        """,
+        (service_id, ordinarium_token),
+    )
+
+
+def clear_service_pco_item_links(service_id, db=None):
+    if not service_id:
+        return
+    db = db or get_db()
+    db.execute(
+        "delete from service_pco_item_links where service_id=?",
+        (service_id,),
+    )
 
 
 def update_service_pco_sync_status(
