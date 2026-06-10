@@ -4,6 +4,7 @@ Remaining work and follow-ups.
 
 - [x] PCO integration enhancement: Investigate ability to use PCO templates when creating PCO services (for teams, non-order elements).
 - [x] PCO integration enhancement: Investigate ability to delta update PCO services.
+- [ ] Review and rationalize/update service update options between /service "Actions" menu, /services table-level actions, and /services row-level actions for consistency and clarity.
 - [ ] Add Bible text integration options (and tie into both standard text rendering as well as live preview modals).
 - [ ] Add remaining "Additional Directions" eucharistic option (see following section).
 - [ ] Add "live edit" mode, in which changes can be made within the service view mode.
