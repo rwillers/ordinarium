@@ -9,10 +9,11 @@
 .vscode
 Source Liturgies
 __pycache__
-cloudflare/node_modules
-cloudflare/.wrangler
+cloudflare
 instance
 python_modules
+scripts/cloudflare/verify_phase2_images.sh
+scripts/cloudflare/verify_phase3_http.py
 tests
 venv
 worker

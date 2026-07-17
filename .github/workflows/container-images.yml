@@ -6,9 +6,12 @@ on:
       - ".dockerignore"
       - ".github/workflows/container-images.yml"
       - "app.py"
+      - "container_role_apps.py"
       - "containers/**"
+      - "document_rendering/**"
       - "ordinarium/**"
       - "requirements.txt"
+      - "scripts/cloudflare/**"
   push:
     branches:
       - main
@@ -16,9 +19,12 @@ on:
       - ".dockerignore"
       - ".github/workflows/container-images.yml"
       - "app.py"
+      - "container_role_apps.py"
       - "containers/**"
+      - "document_rendering/**"
       - "ordinarium/**"
       - "requirements.txt"
+      - "scripts/cloudflare/**"
   workflow_dispatch:
 
 permissions:

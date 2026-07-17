@@ -67,7 +67,7 @@ docker exec "${PREFIX}-documents" python -c \
 docker exec "${PREFIX}-documents" python -c \
     "from docx import Document; document=Document(); document.add_paragraph('ok'); assert document.paragraphs[0].text == 'ok'"
 docker exec "${PREFIX}-web" python -c \
-    "import importlib.util; assert importlib.util.find_spec('weasyprint') is None; assert importlib.util.find_spec('docx') is None"
+    "import importlib.util, requests; from jinja2 import Template; from werkzeug.security import check_password_hash, generate_password_hash; assert Template('{{ value }}').render(value='ok') == 'ok'; assert check_password_hash(generate_password_hash('phase3'), 'phase3'); assert requests.Session; assert importlib.util.find_spec('weasyprint') is None; assert importlib.util.find_spec('docx') is None"
 docker exec "${PREFIX}-jobs" python -c \
     "import cryptography, httpx, requests; import importlib.util; assert importlib.util.find_spec('weasyprint') is None; assert importlib.util.find_spec('docx') is None"
 

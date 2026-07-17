@@ -86,6 +86,13 @@ def create_app():
         PCO_CLIENT_SECRET=os.environ.get("PCO_CLIENT_SECRET"),
         PCO_OAUTH_REDIRECT_URI=os.environ.get("PCO_OAUTH_REDIRECT_URI"),
         PCO_OAUTH_SCOPES=os.environ.get("PCO_OAUTH_SCOPES", "services"),
+        DOCUMENT_SERVICE_URL=os.environ.get("DOCUMENT_SERVICE_URL"),
+        DOCUMENT_SERVICE_TIMEOUT_SECONDS=float(
+            os.environ.get("DOCUMENT_SERVICE_TIMEOUT_SECONDS", "120")
+        ),
+        DOCUMENT_SERVICE_MAX_BYTES=int(
+            os.environ.get("DOCUMENT_SERVICE_MAX_BYTES", str(25 * 1024 * 1024))
+        ),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
         SESSION_COOKIE_SECURE=_config_bool(
