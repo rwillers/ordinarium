@@ -4,6 +4,7 @@ from flask import current_app, g, send_file
 
 from .auth_session import login_required
 from .db import get_db
+from .document_service_client import render_document
 from .error_pages import render_error
 from .service_store import load_service_for_text
 from .text_rendering import render_text_page
@@ -35,7 +36,7 @@ def register_text_routes(bp):
         if not context:
             return render_error("Service ID required to generate text.", 400)
         try:
-            docx_bytes = render_docx_bytes(context)
+            docx_bytes = _render_docx_export(context)
         except RuntimeError as exc:
             return render_error(str(exc), 503)
         filename = build_export_filename(context, "docx")
@@ -57,7 +58,7 @@ def register_text_routes(bp):
             if not context:
                 return render_error("Service ID required to generate text.", 400)
             html_text = render_text_export_html(context)
-            pdf_bytes = render_pdf_bytes(html_text, base_url=current_app.root_path)
+            pdf_bytes = _render_pdf_export(html_text)
         except RuntimeError as exc:
             current_app.logger.exception(
                 "PDF export runtime error for service %s", service_id
@@ -89,3 +90,15 @@ def register_text_routes(bp):
         if not saved_service:
             return render_error("Service not found.", 404)
         return render_text_page(share["service_id"], saved_service, saved_data)
+
+
+def _render_docx_export(context):
+    if current_app.config.get("DOCUMENT_SERVICE_URL"):
+        return render_document("docx", {"context": context})
+    return render_docx_bytes(context)
+
+
+def _render_pdf_export(html_text):
+    if current_app.config.get("DOCUMENT_SERVICE_URL"):
+        return render_document("pdf", {"html": html_text})
+    return render_pdf_bytes(html_text, base_url=current_app.root_path)
