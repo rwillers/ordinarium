@@ -1,12 +1,20 @@
-name: Deploy
+name: Deploy legacy AWS production
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: legacy-aws-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Deploy legacy AWS production
+    if: ${{ vars.ENABLE_LEGACY_AWS_DEPLOY == 'true' }}
     runs-on: ubuntu-latest
+    environment: legacy-aws-production
+    permissions:
+      contents: read
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.0
