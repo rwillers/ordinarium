@@ -4,6 +4,9 @@
 .editorconfig
 .vscode/
 .env
+.dev.vars
+cloudflare/node_modules/
+cloudflare/.wrangler/
 Source\ Liturgies/
 instance/ordinarium.db
 instance/ordinarium.db.bak.db

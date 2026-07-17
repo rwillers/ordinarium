@@ -1,0 +1,59 @@
+name: Container images
+
+on:
+  pull_request:
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/container-images.yml"
+      - "app.py"
+      - "containers/**"
+      - "ordinarium/**"
+      - "requirements.txt"
+  push:
+    branches:
+      - main
+    paths:
+      - ".dockerignore"
+      - ".github/workflows/container-images.yml"
+      - "app.py"
+      - "containers/**"
+      - "ordinarium/**"
+      - "requirements.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: container-images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.role }} image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        role:
+          - web
+          - documents
+          - jobs
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: containers/${{ matrix.role }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          tags: ordinarium-${{ matrix.role }}:ci
+          cache-from: type=gha,scope=${{ matrix.role }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.role }}
