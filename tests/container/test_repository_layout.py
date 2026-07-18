@@ -68,3 +68,16 @@ def test_wrangler_config_matches_target_sizing():
     assert containers["PcoJobsContainer"]["max_instances"] == 1
     assert containers["EmailJobsContainer"]["max_instances"] == 2
     assert all(item["image_build_context"] == ".." for item in containers.values())
+
+
+def test_document_container_has_an_isolated_runtime_environment():
+    worker = (REPOSITORY_ROOT / "cloudflare" / "src" / "index.ts").read_text()
+    document_block = worker.split("export class DocumentContainer", 1)[1].split(
+        "export class PcoJobsContainer", 1
+    )[0]
+
+    assert "DOCUMENT_SERVICE_AUTH_TOKEN" in document_block
+    assert "DOCUMENT_RENDER_TIMEOUT_SECONDS" in document_block
+    assert "D1_SERVICE_URL" not in document_block
+    assert "PCO_TOKEN_ENCRYPTION_KEYS" not in document_block
+    assert "SECRET_KEY" not in document_block

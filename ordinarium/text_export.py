@@ -237,6 +237,27 @@ def render_text_export_html(context):
     return render_template("export_text.html", export_css=EXPORT_TEXT_CSS, **context)
 
 
+def build_docx_render_context(context):
+    scalar_keys = (
+        "title",
+        "rite",
+        "service_title",
+        "service_date_display",
+        "generated_at_display",
+    )
+    document_context = {key: context.get(key) for key in scalar_keys}
+    document_context["ordinaries"] = [
+        {
+            "type": ordinary.get("type"),
+            "title_inline_html": ordinary.get("title_inline_html", ""),
+            "body_html": ordinary.get("body_html", ""),
+            "show_title": bool(ordinary.get("show_title")),
+        }
+        for ordinary in context.get("ordinaries", [])
+    ]
+    return document_context
+
+
 def build_export_filename(context, extension):
     base_parts = []
     service_date = context.get("service_date")

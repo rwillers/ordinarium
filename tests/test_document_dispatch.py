@@ -42,4 +42,13 @@ def test_docx_export_dispatches_context_to_document_service(
     assert response.status_code == 200
     assert response.data.startswith(b"PK\x03\x04")
     assert captured["format"] == "docx"
-    assert captured["payload"]["context"]["service_id"] == service_id
+    document_context = captured["payload"]["context"]
+    assert "service_id" not in document_context
+    assert set(document_context) == {
+        "generated_at_display",
+        "ordinaries",
+        "rite",
+        "service_date_display",
+        "service_title",
+        "title",
+    }
