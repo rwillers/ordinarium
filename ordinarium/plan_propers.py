@@ -128,22 +128,23 @@ def _resolve_proper_override(db, proper_overrides, proper_key):
     text_id = _parse_override_id(proper_overrides.get(proper_key))
     if not text_id:
         return None
-    return db.execute(
+    return db.fetch_one(
         "select id, text from texts where id=? and type=? limit 1",
         (text_id, text_type),
-    ).fetchone()
+    )
 
 
 def _load_collect_options(db):
-    rows = db.execute(
-        """
+    sql = """
         select id, filter_content, text, default_order
         from texts
         where type=? and filter_type=?
         order by id
-        """,
-        ("collect", "proper"),
-    ).fetchall()
+        """
+    if hasattr(db, "fetch_all"):
+        rows = db.fetch_all(sql, ("collect", "proper"))
+    else:
+        rows = db.execute(sql, ("collect", "proper")).fetchall()
     sorted_rows = sorted(rows, key=_collect_option_sort_key)
     return [
         {
@@ -158,7 +159,7 @@ def _load_collect_options(db):
 
 
 def _load_proper_preface_options(db):
-    rows = db.execute(
+    rows = db.fetch_all(
         """
         select id, filter_type, filter_content, text
         from texts
@@ -166,7 +167,7 @@ def _load_proper_preface_options(db):
         order by filter_type, filter_content, id
         """,
         ("proper_preface",),
-    ).fetchall()
+    )
     return [
         {
             "id": row["id"],
@@ -182,15 +183,15 @@ def _load_proper_preface_options(db):
 def _resolve_seasonal_text(db, text_type, season):
     row = None
     if season:
-        row = db.execute(
+        row = db.fetch_one(
             "select text from texts where type=? and filter_type=? and filter_content=? order by random() limit 1",
             (text_type, "season", season),
-        ).fetchone()
+        )
     if not row:
-        row = db.execute(
+        row = db.fetch_one(
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             (text_type, "other", "At Any Time", "day", "The Lord’s Day"),
-        ).fetchone()
+        )
     return row["text"] if row else None
 
 
@@ -198,8 +199,8 @@ def _resolve_collect_text(db, propers_list):
     if not propers_list:
         return None
     propers_json = json.dumps(propers_list)
-    collect_text = db.execute(
+    collect_text = db.fetch_one(
         "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
         (propers_json, "collect", "proper"),
-    ).fetchone()
+    )
     return collect_text["text"] if collect_text else None

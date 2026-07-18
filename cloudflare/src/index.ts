@@ -2,6 +2,7 @@ import { Container, ContainerProxy } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
 import { handleD1Request } from "./d1_bridge";
+import { handleEdgeRoute } from "./edge_routes";
 
 export { ContainerProxy };
 
@@ -19,6 +20,9 @@ declare global {
       APP_DB: D1Database;
       SECRET_KEY: string;
       DEPLOYMENT_ENV: string;
+      OPS_HEALTH_TOKEN?: string;
+      PCO_TOKEN_ENCRYPTION_KEYS: string;
+      PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION?: string;
     }
   }
 }
@@ -35,6 +39,10 @@ export class WebContainer extends Container {
     ORDINARIUM_DISPOSABLE_SQLITE: "true",
     DOCUMENT_SERVICE_URL: "http://documents.internal/render",
     D1_SERVICE_URL: "http://d1.internal/query",
+    DATABASE_GATEWAY_BACKEND: "d1",
+    PCO_TOKEN_ENCRYPTION_KEYS: env.PCO_TOKEN_ENCRYPTION_KEYS,
+    PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION:
+      env.PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION || "v1",
   };
 
   override onStart() {
@@ -85,6 +93,10 @@ export class EmailJobsContainer extends Container {
 
 const worker: ExportedHandler<Cloudflare.Env> = {
   fetch: async (request, environment): Promise<Response> => {
+    const edgeResponse = await handleEdgeRoute(request, environment);
+    if (edgeResponse) {
+      return edgeResponse;
+    }
     try {
       const webContainer = environment.WEB_CONTAINER.getByName(WEB_INSTANCE_NAME);
       return await webContainer.fetch(request);

@@ -4,7 +4,7 @@ from pathlib import Path
 import click
 from flask import current_app, g
 
-from .infrastructure import D1HttpGateway, SQLiteGateway
+from .infrastructure import D1HttpGateway, GatewayConnection, SQLiteGateway
 
 
 def get_db():
@@ -21,6 +21,11 @@ def get_db():
 
 def get_database_gateway():
     if "database_gateway" in g:
+        return g.database_gateway
+
+    factory = current_app.config.get("DATABASE_GATEWAY_FACTORY")
+    if factory is not None:
+        g.database_gateway = factory()
         return g.database_gateway
 
     backend = current_app.config.get("DATABASE_GATEWAY_BACKEND", "sqlite")
@@ -40,8 +45,17 @@ def get_database_gateway():
     raise RuntimeError(f"Unknown database gateway backend: {backend}")
 
 
+def get_gateway_connection():
+    if "gateway_connection" not in g:
+        g.gateway_connection = GatewayConnection(get_database_gateway())
+    return g.gateway_connection
+
+
 def close_db(_exception=None):
-    g.pop("database_gateway", None)
+    g.pop("gateway_connection", None)
+    gateway = g.pop("database_gateway", None)
+    if gateway is not None and hasattr(gateway, "close"):
+        gateway.close()
     db = g.pop("db", None)
     if db is not None:
         db.close()

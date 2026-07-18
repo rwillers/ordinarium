@@ -1,4 +1,3 @@
-from .pco_store import clear_service_pco_item_links
 from .plan_tokens import parse_json_object, parse_plan_tokens
 from .service_defaults import DEFAULT_RITE
 from .service_store import blank_service_payload, create_service, update_service_columns
@@ -7,7 +6,7 @@ from .service_store import blank_service_payload, create_service, update_service
 def load_service_copy_source(db, source_id, user_id):
     if not source_id:
         return None
-    source = db.execute(
+    source = db.fetch_one(
         """
         select
           id,
@@ -22,10 +21,10 @@ def load_service_copy_source(db, source_id, user_id):
         where id=? and user_id=? limit 1
         """,
         (source_id, user_id),
-    ).fetchone()
+    )
     if not source:
         return None
-    custom_rows = db.execute(
+    custom_rows = db.fetch_all(
         """
         select id, title, text, created_at
         from service_custom_elements
@@ -33,7 +32,7 @@ def load_service_copy_source(db, source_id, user_id):
         order by created_at, id
         """,
         (source_id, user_id),
-    ).fetchall()
+    )
     return {
         "service": dict(source),
         "custom_rows": custom_rows,
@@ -66,7 +65,10 @@ def overwrite_service_from_copy(db, user_id, source_copy, target_id, target_payl
         """,
         (target_id, user_id),
     )
-    clear_service_pco_item_links(target_id, db=db)
+    db.execute(
+        "delete from service_pco_item_links where service_id=?",
+        (target_id,),
+    )
     _apply_source_copy(db, user_id, source_copy, target_id, target_payload)
 
 
@@ -88,14 +90,15 @@ def _apply_source_copy(db, user_id, source_copy, target_id, payload):
 def _copy_custom_elements(db, user_id, custom_rows, target_id):
     custom_id_map = {}
     for row in custom_rows:
-        cursor = db.execute(
+        custom_id = db.allocate_id("service_custom_elements")
+        db.execute(
             """
-            insert into service_custom_elements (service_id, user_id, title, text)
-            values (?, ?, ?, ?)
+            insert into service_custom_elements (id, service_id, user_id, title, text)
+            values (?, ?, ?, ?, ?)
             """,
-            (target_id, user_id, row["title"], row["text"]),
+            (custom_id, target_id, user_id, row["title"], row["text"]),
         )
-        custom_id_map[row["id"]] = cursor.lastrowid
+        custom_id_map[row["id"]] = custom_id
     return custom_id_map
 
 

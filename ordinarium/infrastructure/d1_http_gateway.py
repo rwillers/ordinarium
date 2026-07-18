@@ -73,6 +73,9 @@ class D1HttpGateway:
             raise D1GatewayError("D1 bridge returned an invalid allocated ID.")
         return allocated_id
 
+    def close(self):
+        self._session.close()
+
     def _request(self, operation: str, **values):
         body = {"operation": operation, **values}
         if "params" in body:

@@ -1,5 +1,6 @@
 from ordinarium.db import get_db
 from ordinarium.pco_client import PcoToken
+from ordinarium.pco_store import get_pco_connection
 
 
 def _enable_pco_feature(app, user_id):
@@ -220,11 +221,14 @@ def test_pco_callback_stores_org_name(app, auth_client, monkeypatch):
             (user_id,),
         ).fetchone()
         assert row is not None
-        assert row["access_token"] == "fresh-token"
-        assert row["refresh_token"] == "fresh-refresh"
+        assert row["access_token"].startswith("aesgcm:v1:")
+        assert row["refresh_token"].startswith("aesgcm:v1:")
         assert row["token_type"] == "bearer"
         assert row["scope"] == "services"
         assert row["pco_account_name"] == "St. Mark Church"
+        connection = get_pco_connection(user_id)
+        assert connection["access_token"] == "fresh-token"
+        assert connection["refresh_token"] == "fresh-refresh"
 
 
 def test_pco_callback_allows_org_lookup_failure(app, auth_client, monkeypatch):

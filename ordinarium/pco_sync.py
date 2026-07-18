@@ -8,7 +8,7 @@ from html.parser import HTMLParser
 
 from flask import current_app
 
-from .db import get_db
+from .db import get_gateway_connection
 from .plan_tokens import parse_json_object, parse_plan_tokens
 from .pco_client import api_request, list_all_pages, PcoApiError
 from .pco_store import (
@@ -25,7 +25,7 @@ class PcoSyncError(RuntimeError):
 
 
 def _load_service_plan(service_id, user_id):
-    db = get_db()
+    db = get_gateway_connection()
     saved = db.execute(
         """
         select
@@ -435,7 +435,7 @@ def _sync_pco_item_delta(
     plan_id,
     payloads,
 ):
-    db = get_db()
+    db = get_gateway_connection()
     existing_items = list_plan_items(base_url, access_token, service_type_id, plan_id)
     existing_item_ids = {
         str(item.get("id")) for item in existing_items if item.get("id") is not None
@@ -524,7 +524,7 @@ def _adopt_pco_plan_items(
     plan_id,
     payloads,
 ):
-    db = get_db()
+    db = get_gateway_connection()
     existing_items = list_plan_items(base_url, access_token, service_type_id, plan_id)
     if not existing_items:
         return
@@ -729,7 +729,7 @@ def _reset_pco_plan_items(
     plan_id,
     payloads,
 ):
-    db = get_db()
+    db = get_gateway_connection()
     existing_items = list_plan_items(base_url, access_token, service_type_id, plan_id)
     for item in existing_items:
         item_id = _extract_pco_item_id({"data": item})

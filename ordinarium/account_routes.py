@@ -1,10 +1,9 @@
 from flask import flash, g, redirect, render_template, request, url_for
 from flask_login import logout_user
-from werkzeug.security import generate_password_hash
 
 from .auth_session import login_required
-from .db import get_db
-from .user_store import get_user_by_email, get_user_by_id
+from .password_security import hash_password
+from .user_store import get_user_by_email, get_user_by_id, update_user_profile
 
 
 def register_account_routes(bp):
@@ -35,17 +34,14 @@ def register_account_routes(bp):
             if not error:
                 password_hash = user["password_hash"] if user else None
                 if password:
-                    password_hash = generate_password_hash(password)
-                db = get_db()
-                db.execute(
-                    """
-                    update users
-                    set first_name=?, last_name=?, email=?, password_hash=?
-                    where id=?
-                    """,
-                    (first_name, last_name, email, password_hash, g.user["id"]),
+                    password_hash = hash_password(password)
+                update_user_profile(
+                    g.user["id"],
+                    first_name,
+                    last_name,
+                    email,
+                    password_hash,
                 )
-                db.commit()
                 return redirect(url_for("main.account"))
         if error:
             flash(error, "error")

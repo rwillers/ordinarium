@@ -1,6 +1,6 @@
 import json
 
-from .db import get_db
+from .db import get_database_gateway
 from .infrastructure import DatabaseGateway
 from .service_defaults import DEFAULT_RITE
 from .service_planning import _parse_json_object
@@ -24,40 +24,7 @@ def blank_service_payload(user_id, rite=DEFAULT_RITE):
 
 
 def create_service(db, payload):
-    serialized = serialize_service_payload(payload)
-    cursor = db.execute(
-        """
-        insert into services (
-          user_id,
-          title,
-          rite,
-          text_order,
-          text_disabled,
-          season,
-          service_date,
-          observance_handle,
-          lesson_overrides,
-          offertory_sentence_id,
-          proper_overrides,
-          service_option_values
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            serialized["user_id"],
-            serialized["title"],
-            serialized["rite"],
-            serialized["text_order"],
-            serialized["text_disabled"],
-            serialized["season"],
-            serialized["service_date"],
-            serialized["observance_handle"],
-            serialized["lesson_overrides"],
-            serialized["offertory_sentence_id"],
-            serialized["proper_overrides"],
-            serialized["service_option_values"],
-        ),
-    )
-    return cursor.lastrowid
+    return create_service_record(db, payload)
 
 
 def create_service_record(gateway: DatabaseGateway, payload):
@@ -166,7 +133,7 @@ def load_service_payload(db, service_id, user_id=None):
     if user_id:
         user_filter = "and services.user_id=?"
         params.append(user_id)
-    row = db.execute(query.format(user_filter=user_filter), params).fetchone()
+    row = db.fetch_one(query.format(user_filter=user_filter), params)
     if not row:
         return None
     payload = dict(row)
@@ -225,9 +192,9 @@ def dump_json_value(value):
 def load_service_for_text(service_id, user_id=None):
     if not service_id:
         return None, {}
-    db = get_db()
+    db = get_database_gateway()
     if user_id:
-        saved_service = db.execute(
+        saved_service = db.fetch_one(
             """
             select
               services.text_order,
@@ -248,9 +215,9 @@ def load_service_for_text(service_id, user_id=None):
             limit 1
             """,
             (service_id, user_id),
-        ).fetchone()
+        )
     else:
-        saved_service = db.execute(
+        saved_service = db.fetch_one(
             """
             select
               services.text_order,
@@ -271,7 +238,7 @@ def load_service_for_text(service_id, user_id=None):
             limit 1
             """,
             (service_id,),
-        ).fetchone()
+        )
     if not saved_service:
         return None, {}
     saved_data = {

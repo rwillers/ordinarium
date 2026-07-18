@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from .db import get_db
+from .db import get_database_gateway
 
 
 def _parse_int(value, default=0):
@@ -19,10 +19,10 @@ def _parse_propers(value):
 @lru_cache(maxsize=1)
 def _load_holidays():
     holidays = []
-    db = get_db()
-    rows = db.execute(
+    db = get_database_gateway()
+    rows = db.fetch_all(
         "select id, handle, date_rule, style, priority, propers, name, alternative_name from holidays order by id"
-    ).fetchall()
+    )
     for row in rows:
         holidays.append(
             {
@@ -42,10 +42,10 @@ def _load_holidays():
 @lru_cache(maxsize=1)
 def _load_fragments():
     fragments = []
-    db = get_db()
-    rows = db.execute(
+    db = get_database_gateway()
+    rows = db.fetch_all(
         "select date_rule, behaviour, propers from fragments order by id"
-    ).fetchall()
+    )
     for row in rows:
         fragments.append(
             {
@@ -60,10 +60,10 @@ def _load_fragments():
 @lru_cache(maxsize=1)
 def _load_subcycles():
     subcycles = []
-    db = get_db()
-    rows = db.execute(
+    db = get_database_gateway()
+    rows = db.fetch_all(
         "select handle, epoch, order_value, full_cycle from subcycles order by id"
-    ).fetchall()
+    )
     for row in rows:
         subcycles.append(
             {

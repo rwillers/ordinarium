@@ -12,12 +12,16 @@ from flask import (
     url_for,
 )
 from flask_login import login_user
-from werkzeug.security import check_password_hash, generate_password_hash
-
 from .auth_rate_limit import limiter
 from .auth_session import build_user
+from .password_security import hash_password, verify_password
 from .turnstile import turnstile_enabled, verify_turnstile_response
-from .user_store import create_user, get_user_by_email, record_user_login
+from .user_store import (
+    create_user,
+    get_user_by_email,
+    record_user_login,
+    update_user_password,
+)
 
 
 def register_login_routes(bp):
@@ -38,10 +42,13 @@ def register_login_routes(bp):
                     error = "Invalid email or password."
                 else:
                     password_hash = user["password_hash"]
-                    if not password_hash or not check_password_hash(
-                        password_hash, password
-                    ):
+                    password_verification = verify_password(password_hash, password)
+                    if not password_verification.valid:
                         error = "Invalid email or password."
+                    elif password_verification.replacement_hash:
+                        update_user_password(
+                            user["id"], password_verification.replacement_hash
+                        )
             if not error and turnstile_enabled():
                 token = request.form.get("cf-turnstile-response")
                 verified, _ = verify_turnstile_response(token, request.remote_addr)
@@ -96,7 +103,7 @@ def register_login_routes(bp):
                     first_name,
                     last_name,
                     email,
-                    generate_password_hash(password),
+                    hash_password(password),
                     now,
                 )
                 session.permanent = True

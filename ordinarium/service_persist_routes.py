@@ -4,7 +4,7 @@ from datetime import date
 from flask import flash, g, jsonify, redirect, render_template, request, url_for
 
 from .auth_session import login_required
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance, resolve_season
 from .service_defaults import DEFAULT_RITE, OFFERTORY_DEFAULT_PREFIX
@@ -48,7 +48,7 @@ def register_service_persist_routes(bp):
                     disabled_tokens.append(token)
         disabled_json = json.dumps(disabled_tokens)
 
-        db = get_db()
+        db = get_database_gateway()
         existing_data = load_service_payload(db, service_id, g.user["id"])
         if not existing_data:
             if is_autosave:
@@ -121,7 +121,6 @@ def register_service_persist_routes(bp):
             payload["season"] = None
 
         update_service_columns(db, service_id, payload)
-        db.commit()
         if is_autosave:
             return jsonify(
                 {

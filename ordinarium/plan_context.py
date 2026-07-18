@@ -1,6 +1,6 @@
 from datetime import date
 
-from .db import get_db
+from .db import get_database_gateway
 from .plan_customizations import load_custom_templates
 from .plan_items import build_plan_items
 from .plan_lessons import (
@@ -24,8 +24,8 @@ def build_plan_context(
     user_id,
     offertory_default_prefix,
 ):
-    db = get_db()
-    saved_plan = db.execute(
+    db = get_database_gateway()
+    saved_plan = db.fetch_one(
         """
         select
           text_order,
@@ -44,7 +44,7 @@ def build_plan_context(
         where id=? and user_id=? limit 1
         """,
         (service_id, user_id),
-    ).fetchone()
+    )
     effective_rite = saved_plan["rite"] if saved_plan and saved_plan["rite"] else rite
     rite_slug = effective_rite.replace(" ", "_").lower()
     order_tokens = parse_plan_tokens(saved_plan["text_order"]) if saved_plan else []

@@ -1,7 +1,7 @@
 from flask import flash, g, redirect, render_template, request, url_for
 
 from .auth_session import login_required
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .service_planning import load_custom_templates
 
@@ -23,12 +23,12 @@ def register_service_template_routes(bp):
                 except (TypeError, ValueError):
                     template_id = None
             if not error:
-                db = get_db()
+                db = get_database_gateway()
                 if template_id:
-                    existing = db.execute(
+                    existing = db.fetch_one(
                         "select id from service_custom_templates where id=? and user_id=? limit 1",
                         (template_id, g.user["id"]),
-                    ).fetchone()
+                    )
                     if not existing:
                         return render_error("Template not found.", 404)
                     db.execute(
@@ -36,11 +36,11 @@ def register_service_template_routes(bp):
                         (title, text_value, template_id, g.user["id"]),
                     )
                 else:
+                    template_id = db.allocate_id("service_custom_templates")
                     db.execute(
-                        "insert into service_custom_templates (user_id, title, text) values (?, ?, ?)",
-                        (g.user["id"], title, text_value),
+                        "insert into service_custom_templates (id, user_id, title, text) values (?, ?, ?, ?)",
+                        (template_id, g.user["id"], title, text_value),
                     )
-                db.commit()
                 return redirect(url_for("main.templates"))
 
         if error:
@@ -52,18 +52,17 @@ def register_service_template_routes(bp):
     @bp.route("/templates/<int:template_id>/delete", methods=["POST"])
     @login_required
     def templates_delete(template_id):
-        db = get_db()
-        existing = db.execute(
+        db = get_database_gateway()
+        existing = db.fetch_one(
             "select id from service_custom_templates where id=? and user_id=? limit 1",
             (template_id, g.user["id"]),
-        ).fetchone()
+        )
         if not existing:
             return render_error("Template not found.", 404)
         db.execute(
             "delete from service_custom_templates where id=? and user_id=?",
             (template_id, g.user["id"]),
         )
-        db.commit()
         return redirect(url_for("main.templates"))
 
     @bp.route("/templates/bulk-delete", methods=["POST"])
@@ -81,10 +80,9 @@ def register_service_template_routes(bp):
             return redirect(url_for("main.templates"))
 
         placeholders = ",".join(["?"] * len(template_ids))
-        db = get_db()
+        db = get_database_gateway()
         db.execute(
             f"delete from service_custom_templates where user_id=? and id in ({placeholders})",
             (g.user["id"], *template_ids),
         )
-        db.commit()
         return redirect(url_for("main.templates"))

@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from flask import current_app, render_template, request
 
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance
 from .service_option_rendering import (
@@ -54,7 +54,7 @@ def _load_cross_rite_swap_texts(db, rite_name):
     if not other_rite:
         return {}
     placeholders = ",".join("?" for _ in _CROSS_RITE_TITLES)
-    rows = db.execute(
+    rows = db.fetch_all(
         f"""
         select title, text
         from texts
@@ -64,13 +64,13 @@ def _load_cross_rite_swap_texts(db, rite_name):
           and title in ({placeholders})
         """,
         ("ordinarium", "rite", other_rite, *_CROSS_RITE_TITLES),
-    ).fetchall()
+    )
     return {row["title"]: row["text"] for row in rows}
 
 
 def _load_option_variant_texts(db):
     placeholders = ",".join("?" for _ in _OPTION_VARIANT_HANDLES)
-    rows = db.execute(
+    rows = db.fetch_all(
         f"""
         select filter_content, title, text
         from texts
@@ -79,7 +79,7 @@ def _load_option_variant_texts(db):
           and filter_content in ({placeholders})
         """,
         ("ordinarium", "handle", *_OPTION_VARIANT_HANDLES),
-    ).fetchall()
+    )
     return {
         row["filter_content"]: {"title": row["title"], "text": row["text"]}
         for row in rows
@@ -231,7 +231,7 @@ def build_rendered_ordinaries(
         saved_service = dict(saved_service)
     if not saved_service.get("rite"):
         return None
-    db = get_db()
+    db = get_database_gateway()
     text_cache = {}
 
     def fetch_text(text_type, filter_type, filter_content, random_choice=False):
@@ -239,10 +239,10 @@ def build_rendered_ordinaries(
         if key in text_cache:
             return text_cache[key]
         order_clause = "order by random()" if random_choice else ""
-        row = db.execute(
+        row = db.fetch_one(
             f"select text from texts where type=? and filter_type=? and filter_content=? {order_clause} limit 1",
             (text_type, filter_type, filter_content),
-        ).fetchone()
+        )
         text_cache[key] = row
         return row
 
@@ -305,10 +305,10 @@ def build_rendered_ordinaries(
     if season:
         acclamation = fetch_text("acclamation", "season", season, random_choice=True)
     if not acclamation:
-        acclamation = db.execute(
+        acclamation = db.fetch_one(
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("acclamation", "other", "At Any Time", "day", "The Lord’s Day"),
-        ).fetchone()
+        )
     offertory_sentence = _resolve_offertory_sentence(
         db, OFFERTORY_DEFAULT_PREFIX, saved_data.get("offertory_sentence_id")
     )
@@ -318,10 +318,10 @@ def build_rendered_ordinaries(
             "proper_preface", "season", season, random_choice=True
         )
     if not proper_preface:
-        proper_preface = db.execute(
+        proper_preface = db.fetch_one(
             "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
             ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
-        ).fetchone()
+        )
     decalogue_text = fetch_text("law_form", "rite", rite_name)
 
     observance = None
@@ -340,10 +340,10 @@ def build_rendered_ordinaries(
     collect_text = None
     if propers_list:
         propers_json = json.dumps(propers_list)
-        collect_text = db.execute(
+        collect_text = db.fetch_one(
             "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
             (propers_json, "collect", "proper"),
-        ).fetchone()
+        )
     proper_overrides = saved_data.get("proper_overrides")
     collect_override = _resolve_proper_override(
         db, proper_overrides, "collect_of_the_day"

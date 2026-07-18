@@ -4,7 +4,7 @@ from .pco_client import PcoAuthError, refresh_access_token, token_needs_refresh
 from .pco_store import get_pco_connection, upsert_pco_connection
 
 
-def get_valid_pco_connection(user_id, db):
+def get_valid_pco_connection(user_id, db=None):
     connection = get_pco_connection(user_id, db=db)
     if not connection:
         return None
@@ -31,6 +31,7 @@ def get_valid_pco_connection(user_id, db):
             token.expires_at,
             db=db,
         )
-        db.commit()
+        if hasattr(db, "commit"):
+            db.commit()
         connection = get_pco_connection(user_id, db=db)
     return connection

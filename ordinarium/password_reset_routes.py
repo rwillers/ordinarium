@@ -7,17 +7,16 @@ from flask import (
     request,
     url_for,
 )
-from werkzeug.security import generate_password_hash
-
 from .auth_rate_limit import limiter
-from .db import get_db
 from .mail_delivery import send_email
+from .password_security import hash_password
 from .turnstile import turnstile_enabled, verify_turnstile_response
 from .user_store import (
     create_password_reset_token,
     get_password_reset_record,
     get_user_by_email,
     get_user_by_id,
+    update_user_password,
 )
 
 
@@ -94,12 +93,7 @@ def register_password_reset_routes(bp):
                 if not user:
                     flash("Account not found.", "error")
                     return redirect(url_for("main.request_password_reset"))
-                db = get_db()
-                db.execute(
-                    "update users set password_hash=? where id=?",
-                    (generate_password_hash(password), user["id"]),
-                )
-                db.commit()
+                update_user_password(user["id"], hash_password(password))
                 flash("Password updated. Please log in.", "info")
                 return redirect(url_for("main.login"))
         if error:

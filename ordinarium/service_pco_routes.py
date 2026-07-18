@@ -4,7 +4,7 @@ from datetime import date, datetime
 from flask import current_app, flash, g, jsonify, redirect, request, url_for
 
 from .auth_session import login_required
-from .db import close_db, get_db
+from .db import close_db, get_gateway_connection
 from .error_pages import render_error
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .pco_auth import get_valid_pco_connection
@@ -591,7 +591,7 @@ def _start_pco_batch_sync_worker(app, job_id, user_id):
 
 def _run_pco_batch_sync_worker(app, job_id, user_id):
     with app.app_context():
-        db = get_db()
+        db = get_gateway_connection()
         try:
             job = get_pco_batch_sync_job(job_id, user_id, db=db)
             if not job:
@@ -637,7 +637,7 @@ def register_service_pco_routes(bp):
     def service_pco_link(service_id):
         if not _pco_feature_enabled():
             return render_error("Not found.", 404)
-        db = get_db()
+        db = get_gateway_connection()
         owner = db.execute(
             "select id from services where id=? and user_id=? limit 1",
             (service_id, g.user["id"]),
@@ -743,7 +743,7 @@ def register_service_pco_routes(bp):
     def service_pco_unlink(service_id):
         if not _pco_feature_enabled():
             return render_error("Not found.", 404)
-        db = get_db()
+        db = get_gateway_connection()
         owner = db.execute(
             "select id from services where id=? and user_id=? limit 1",
             (service_id, g.user["id"]),
@@ -760,7 +760,7 @@ def register_service_pco_routes(bp):
     def service_pco_plans(service_id):
         if not _pco_feature_enabled():
             return jsonify({"ok": False, "error": "Not found."}), 404
-        db = get_db()
+        db = get_gateway_connection()
         service_row = db.execute(
             "select id, service_date from services where id=? and user_id=? limit 1",
             (service_id, g.user["id"]),
@@ -808,7 +808,7 @@ def register_service_pco_routes(bp):
     def service_pco_templates(service_id):
         if not _pco_feature_enabled():
             return jsonify({"ok": False, "error": "Not found."}), 404
-        db = get_db()
+        db = get_gateway_connection()
         service_row = db.execute(
             "select id from services where id=? and user_id=? limit 1",
             (service_id, g.user["id"]),
@@ -848,7 +848,7 @@ def register_service_pco_routes(bp):
         wants_json = "application/json" in request.headers.get("Accept", "")
         if not _pco_feature_enabled():
             return render_error("Not found.", 404)
-        db = get_db()
+        db = get_gateway_connection()
         owner = db.execute(
             "select id from services where id=? and user_id=? limit 1",
             (service_id, g.user["id"]),
@@ -971,7 +971,7 @@ def register_service_pco_routes(bp):
     def services_pco_batch_sync():
         if not _pco_feature_enabled():
             return jsonify({"ok": False, "error": "Not found."}), 404
-        db = get_db()
+        db = get_gateway_connection()
         try:
             connection = get_valid_pco_connection(g.user["id"], db)
         except PcoAuthError as exc:
@@ -1010,7 +1010,7 @@ def register_service_pco_routes(bp):
     def services_pco_batch_sync_status(job_id):
         if not _pco_feature_enabled():
             return jsonify({"ok": False, "error": "Not found."}), 404
-        job = get_pco_batch_sync_job(job_id, g.user["id"], db=get_db())
+        job = get_pco_batch_sync_job(job_id, g.user["id"], db=get_gateway_connection())
         if not job:
             return jsonify({"ok": False, "error": "Batch sync job not found."}), 404
         return jsonify(

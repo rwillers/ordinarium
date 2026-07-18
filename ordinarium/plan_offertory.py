@@ -1,8 +1,8 @@
 def _offertory_default_row(db, default_prefix):
-    return db.execute(
+    return db.fetch_one(
         "select id, text from texts where type=? and text like ? order by id limit 1",
         ("offertory_sentence", f"{default_prefix}%"),
-    ).fetchone()
+    )
 
 
 def _format_offertory_label(text, limit=110):
@@ -20,10 +20,10 @@ def _format_offertory_label(text, limit=110):
 
 
 def _load_offertory_sentences(db, default_prefix):
-    rows = db.execute(
+    rows = db.fetch_all(
         "select id, text from texts where type=? order by id",
         ("offertory_sentence",),
-    ).fetchall()
+    )
     return [
         {
             "id": row["id"],
@@ -42,16 +42,16 @@ def _resolve_offertory_sentence(db, default_prefix, offertory_sentence_id=None):
         except (TypeError, ValueError):
             sentence_id = None
     if sentence_id:
-        row = db.execute(
+        row = db.fetch_one(
             "select text from texts where id=? and type=? limit 1",
             (sentence_id, "offertory_sentence"),
-        ).fetchone()
+        )
         if row:
             return row
     default_row = _offertory_default_row(db, default_prefix)
     if default_row:
         return default_row
-    return db.execute(
+    return db.fetch_one(
         "select text from texts where type=? order by id limit 1",
         ("offertory_sentence",),
-    ).fetchone()
+    )
