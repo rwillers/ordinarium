@@ -85,6 +85,44 @@ def record_user_access(user_id, timestamp):
     )
 
 
+def update_user_profile(user_id, first_name, last_name, email, password_hash):
+    get_database_gateway().execute(
+        """
+        update users
+        set first_name=?, last_name=?, email=?, password_hash=?
+        where id=?
+        """,
+        (first_name, last_name, email, password_hash, user_id),
+    )
+
+
+def update_user_password(user_id, password_hash):
+    get_database_gateway().execute(
+        "update users set password_hash=? where id=?",
+        (password_hash, user_id),
+    )
+
+
+def update_user_settings(user_id, settings):
+    get_database_gateway().execute(
+        """
+        update users
+        set default_rite=?,
+            default_bible_translation=?,
+            default_service_time=?,
+            greeting_response_form=?
+        where id=?
+        """,
+        (
+            settings["default_rite"],
+            settings["default_bible_translation"],
+            settings["default_service_time"],
+            settings["greeting_response_form"],
+            user_id,
+        ),
+    )
+
+
 def create_password_reset_token(user_id):
     user = get_user_by_id(user_id)
     if not user:

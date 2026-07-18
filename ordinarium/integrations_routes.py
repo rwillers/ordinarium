@@ -12,7 +12,7 @@ from flask import (
 )
 
 from .auth_session import login_required
-from .db import get_db
+from .db import get_database_gateway
 from .pco_client import (
     PcoAuthError,
     build_authorize_url,
@@ -117,7 +117,7 @@ def register_integration_routes(bp):
             )
         except Exception:
             pco_account_name = None
-        db = get_db()
+        db = get_database_gateway()
         upsert_pco_connection(
             user_id=g.user["id"],
             access_token=token.access_token,
@@ -128,7 +128,6 @@ def register_integration_routes(bp):
             pco_account_name=pco_account_name,
             db=db,
         )
-        db.commit()
         flash("Planning Center connected.", "success")
         return _settings_integrations_redirect()
 
@@ -138,14 +137,13 @@ def register_integration_routes(bp):
         guard = _require_pco_feature()
         if guard:
             return guard
-        db = get_db()
+        db = get_database_gateway()
         delete_pco_connection(g.user["id"], db=db)
         clear_upcoming_service_pco_links_for_user(
             g.user["id"],
             date.today().isoformat(),
             db=db,
         )
-        db.commit()
         flash(
             "Planning Center disconnected and upcoming service links reset.", "success"
         )

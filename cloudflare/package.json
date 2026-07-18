@@ -4,8 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:assets": "node scripts/build-assets.mjs",
+    "precheck": "npm run build:assets",
     "check": "tsc --noEmit && wrangler deploy --dry-run",
-    "test": "node --test src/d1_bridge.test.mjs",
+    "predeploy": "npm run build:assets",
+    "deploy": "wrangler deploy",
+    "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

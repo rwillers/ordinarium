@@ -1,8 +1,7 @@
 import time
 
-from werkzeug.security import check_password_hash
-
 from ordinarium.db import get_db
+from ordinarium.password_security import verify_password
 from ordinarium.routes import create_password_reset_token
 
 
@@ -62,7 +61,8 @@ def test_password_reset_updates_password_and_marks_token_used(
         user = db.execute(
             "select password_hash from users where id=? limit 1", (user_id,)
         ).fetchone()
-        assert check_password_hash(user["password_hash"], "new-strong-pass")
+        assert user["password_hash"].startswith("$argon2id$")
+        assert verify_password(user["password_hash"], "new-strong-pass").valid
 
 
 def test_password_reset_rejects_reused_token(app, client, user_factory):

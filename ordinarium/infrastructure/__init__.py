@@ -8,6 +8,7 @@ from .database_gateway import (
     MutationMetadata,
 )
 from .sqlite_gateway import SQLiteGateway
+from .gateway_connection import GatewayConnection
 
 __all__ = [
     "D1HttpGateway",
@@ -15,5 +16,6 @@ __all__ = [
     "DatabaseGateway",
     "DatabaseStatement",
     "MutationMetadata",
+    "GatewayConnection",
     "SQLiteGateway",
 ]

@@ -2,7 +2,7 @@ import json
 import re
 from datetime import date
 
-from .db import get_db
+from .db import get_database_gateway
 from .liturgical_calendar import resolve_observance
 
 LESSON_READING_BY_KEY = {
@@ -264,9 +264,9 @@ def _build_lesson_readings(propers_list, subcycle):
 def _build_lesson_reading_options(propers_list, subcycle):
     if not propers_list:
         return {}
-    db = get_db()
+    db = get_database_gateway()
     propers_json = json.dumps(propers_list)
-    lessons = db.execute(
+    lessons = db.fetch_all(
         """
         select
           reading,
@@ -283,7 +283,7 @@ def _build_lesson_reading_options(propers_list, subcycle):
         order by propers.key, texts.default_order
         """,
         (propers_json, "lesson", "proper"),
-    ).fetchall()
+    )
     readings = {}
     signatures = {}
     if not lessons:

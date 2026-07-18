@@ -1,11 +1,10 @@
 from flask import flash, g, redirect, render_template, request, url_for
 
 from .auth_session import login_required
-from .db import get_db
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .pco_store import get_pco_connection
 from .service_options import load_rite_options
-from .user_store import get_user_by_id
+from .user_store import get_user_by_id, update_user_settings
 from .user_settings import (
     BIBLE_TRANSLATION_OPTIONS,
     GREETING_RESPONSE_OPTIONS,
@@ -18,7 +17,6 @@ def register_settings_routes(bp):
     @bp.route("/settings", methods=["GET", "POST"])
     @login_required
     def settings():
-        db = get_db()
         rite_options = load_rite_options()
         pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         user_row = get_user_by_id(g.user["id"])
@@ -56,30 +54,11 @@ def register_settings_routes(bp):
                     or settings_values["greeting_response_form"],
                 }
             else:
-                db.execute(
-                    """
-                    update users
-                    set default_rite=?,
-                        default_bible_translation=?,
-                        default_service_time=?,
-                        greeting_response_form=?
-                    where id=?
-                    """,
-                    (
-                        updated_settings["default_rite"],
-                        updated_settings["default_bible_translation"],
-                        updated_settings["default_service_time"],
-                        updated_settings["greeting_response_form"],
-                        g.user["id"],
-                    ),
-                )
-                db.commit()
+                update_user_settings(g.user["id"], updated_settings)
                 flash("Settings updated.", "success")
                 return redirect(url_for("main.settings"))
 
-        pco_connection = (
-            get_pco_connection(g.user["id"], db=db) if pco_enabled else None
-        )
+        pco_connection = get_pco_connection(g.user["id"]) if pco_enabled else None
         return render_template(
             "settings.html",
             rite_options=rite_options,

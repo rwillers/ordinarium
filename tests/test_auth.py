@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from ordinarium.db import get_db
+from ordinarium.password_security import verify_password
 from flask.testing import FlaskClient
 
 
@@ -31,11 +32,12 @@ def test_signup_creates_user_and_logs_in(app, client):
     with app.app_context():
         db = get_db()
         user = db.execute(
-            "select id, first_name from users where email=? limit 1",
+            "select id, first_name, password_hash from users where email=? limit 1",
             ("ada@example.com",),
         ).fetchone()
         assert user is not None
         assert user["first_name"] == "Ada"
+        assert user["password_hash"].startswith("$argon2id$")
 
 
 def test_signup_redirect_shows_settings_flash(app, client):
@@ -81,6 +83,29 @@ def test_login_rejects_invalid_credentials(client, user_factory):
     )
     assert response.status_code == 200
     assert b"Invalid email or password." in response.data
+
+
+def test_login_rehashes_legacy_scrypt_password(app, client, user_factory):
+    user_id = user_factory(email="legacy@example.com", password="good-pass")
+
+    response = client.post(
+        "/login",
+        data={"email": "legacy@example.com", "password": "good-pass"},
+    )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/services")
+    with app.app_context():
+        password_hash = (
+            get_db()
+            .execute(
+                "select password_hash from users where id=? limit 1",
+                (user_id,),
+            )
+            .fetchone()["password_hash"]
+        )
+    assert password_hash.startswith("$argon2id$")
+    assert verify_password(password_hash, "good-pass").valid
 
 
 def test_authenticated_request_sets_last_accessed_when_empty(app, auth_client):
@@ -223,4 +248,5 @@ def test_account_update_persists_changes(app, auth_client):
         ).fetchone()
         assert user["first_name"] == "Updated"
         assert user["email"] == "updated@example.com"
-        assert user["password_hash"]
+        assert user["password_hash"].startswith("$argon2id$")
+        assert verify_password(user["password_hash"], "new-password").valid

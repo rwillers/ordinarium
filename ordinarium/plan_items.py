@@ -1,13 +1,13 @@
-from .db import get_db
+from .db import get_database_gateway
 from .plan_customizations import load_custom_elements
 
 
 def build_plan_items(service_id, rite, order_tokens, disabled_tokens, user_id=None):
-    db = get_db()
-    text_rows = db.execute(
+    db = get_database_gateway()
+    text_rows = db.fetch_all(
         "select id, default_order, title, detailed_title, text from texts where type=? and filter_type=? and filter_content=? order by default_order",
         ("ordinarium", "rite", rite),
-    ).fetchall()
+    )
     text_items = []
     items_by_token = {}
     for row in text_rows:

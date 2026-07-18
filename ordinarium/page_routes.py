@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from flask import current_app, g, jsonify, render_template, request, send_from_directory
 
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .feature_flags import FEATURE_PCO_SYNC, user_has_feature
 from .liturgical_calendar import (
@@ -42,12 +42,12 @@ def register_page_routes(bp):
         upcoming_services = []
         pco_enabled = False
         if g.user:
-            db = get_db()
+            db = get_database_gateway()
             today = date.today().isoformat()
-            rows = db.execute(
+            rows = db.fetch_all(
                 "select id, title, season, service_date, rite, observance_handle, updated_at from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc limit 3",
                 (g.user["id"], today),
-            ).fetchall()
+            )
             upcoming_services = format_services(rows)
             pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
             if pco_enabled:
@@ -59,7 +59,7 @@ def register_page_routes(bp):
                 if pco_connected and upcoming_services:
                     service_ids = [service["id"] for service in upcoming_services]
                     placeholders = ",".join(["?"] * len(service_ids))
-                    link_rows = db.execute(
+                    link_rows = db.fetch_all(
                         f"""
                         select
                           service_id,
@@ -69,7 +69,7 @@ def register_page_routes(bp):
                         where service_id in ({placeholders})
                         """,
                         service_ids,
-                    ).fetchall()
+                    )
                     pco_links = {row["service_id"]: dict(row) for row in link_rows}
                 for service in upcoming_services:
                     if not pco_connected:
@@ -133,7 +133,7 @@ def register_page_routes(bp):
         options = resolve_observance_options(service_date)
         if not options:
             return jsonify({"date": raw_date, "season": season, "observances": []})
-        db = get_db()
+        db = get_database_gateway()
         markdown = current_app.jinja_env.filters["markdown"]
         acclamation_text = _resolve_seasonal_text(db, "acclamation", season)
         proper_preface_text = _resolve_seasonal_text(db, "proper_preface", season)
@@ -171,10 +171,10 @@ def register_page_routes(bp):
 
     @bp.route("/<slug>")
     def page(slug):
-        db = get_db()
-        page = db.execute(
+        db = get_database_gateway()
+        page = db.fetch_one(
             "select title, content from pages where slug=? limit 1", (slug,)
-        ).fetchone()
+        )
         if page:
             return render_template(
                 "page.html", title=page["title"], content=page["content"]

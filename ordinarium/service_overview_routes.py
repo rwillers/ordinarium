@@ -3,7 +3,7 @@ from datetime import date
 from flask import current_app, g, redirect, render_template, request, url_for
 
 from .auth_session import login_required
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .liturgical_calendar import resolve_observance, resolve_season
 from .service_defaults import DEFAULT_RITE, OFFERTORY_DEFAULT_PREFIX
@@ -22,6 +22,7 @@ from .pco_auth import get_valid_pco_connection
 from .pco_sync_status import resolve_pco_sync_state
 from .pco_store import get_service_pco_link
 from .pco_sync import list_service_types
+from .infrastructure import DatabaseStatement
 from .user_settings import resolve_user_settings
 
 
@@ -29,22 +30,22 @@ def register_service_overview_routes(bp):
     @bp.route("/services")
     @login_required
     def services():
-        db = get_db()
+        db = get_database_gateway()
         rite_options = load_rite_options()
         user_settings = resolve_user_settings(g.user, rite_options)
         today = date.today().isoformat()
-        current_services = db.execute(
+        current_services = db.fetch_all(
             "select id, title, season, service_date, rite, observance_handle, updated_at from services where user_id=? and service_date is not null and service_date >= ? order by service_date asc",
             (g.user["id"], today),
-        ).fetchall()
-        past_services = db.execute(
+        )
+        past_services = db.fetch_all(
             "select id, title, season, service_date, rite, observance_handle from services where user_id=? and service_date is not null and service_date < ? order by service_date desc",
             (g.user["id"], today),
-        ).fetchall()
-        copy_services = db.execute(
+        )
+        copy_services = db.fetch_all(
             "select id, title, season, service_date, rite, observance_handle from services where user_id=? order by service_date desc",
             (g.user["id"],),
-        ).fetchall()
+        )
         formatted_current_services = format_services(current_services)
         pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         pco_connection = None
@@ -66,7 +67,7 @@ def register_service_overview_routes(bp):
             if formatted_current_services:
                 current_ids = [row["id"] for row in formatted_current_services]
                 placeholders = ",".join(["?"] * len(current_ids))
-                rows = db.execute(
+                rows = db.fetch_all(
                     f"""
                     select
                       service_id,
@@ -81,7 +82,7 @@ def register_service_overview_routes(bp):
                     where service_id in ({placeholders})
                     """,
                     current_ids,
-                ).fetchall()
+                )
                 pco_links = {row["service_id"]: dict(row) for row in rows}
             for service in formatted_current_services:
                 if not pco_connection:
@@ -133,7 +134,7 @@ def register_service_overview_routes(bp):
         )
 
     def _create_service_from_request():
-        db = get_db()
+        db = get_database_gateway()
         rite_options = load_rite_options()
         user_settings = resolve_user_settings(g.user, rite_options)
         rite = user_settings["default_rite"]
@@ -227,7 +228,6 @@ def register_service_overview_routes(bp):
                     )
                     return render_error(message, 400)
                 create_service_from_payload(base_payload)
-            db.commit()
             return redirect(url_for("main.services"))
 
         raw_date = normalize_value(request.form.get("service_date"))
@@ -237,7 +237,6 @@ def register_service_overview_routes(bp):
         if error:
             return render_error(error, 400)
         new_service_id = create_service_from_payload(base_payload)
-        db.commit()
         return redirect(url_for("main.service", service_id=new_service_id))
 
     @bp.route("/services", methods=["POST"])
@@ -253,17 +252,17 @@ def register_service_overview_routes(bp):
     @bp.route("/service/<int:service_id>")
     @login_required
     def service(service_id, rite=DEFAULT_RITE):
-        db = get_db()
-        existing_owner = db.execute(
+        db = get_database_gateway()
+        existing_owner = db.fetch_one(
             "select user_id from services where id=? limit 1", (service_id,)
-        ).fetchone()
+        )
         if not existing_owner or existing_owner["user_id"] != g.user["id"]:
             return render_error("Service not found.", 404)
         context = build_plan_context(
             service_id, rite, g.user["id"], OFFERTORY_DEFAULT_PREFIX
         )
         today = date.today().isoformat()
-        copy_target_rows = db.execute(
+        copy_target_rows = db.fetch_all(
             """
             select id, title, season, service_date, rite, observance_handle
             from services
@@ -281,7 +280,7 @@ def register_service_overview_routes(bp):
                 DEFAULT_RITE,
                 context["service"]["rite"] or DEFAULT_RITE,
             ),
-        ).fetchall()
+        )
         pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         pco_connection = None
         pco_service_types = []
@@ -341,20 +340,20 @@ def register_service_overview_routes(bp):
         if service_id in target_ids:
             return render_error("Cannot copy a service to itself.", 400)
 
-        db = get_db()
+        db = get_database_gateway()
         source_copy = load_service_copy_source(db, service_id, g.user["id"])
         if not source_copy:
             return render_error("Service not found.", 404)
 
         placeholders = ",".join(["?"] * len(target_ids))
-        target_rows = db.execute(
+        target_rows = db.fetch_all(
             f"""
             select id, rite, service_date
             from services
             where user_id=? and id in ({placeholders})
             """,
             [g.user["id"], *target_ids],
-        ).fetchall()
+        )
         if len(target_rows) != len(target_ids):
             return render_error("Service not found.", 404)
 
@@ -374,25 +373,28 @@ def register_service_overview_routes(bp):
             overwrite_service_from_copy(
                 db, g.user["id"], source_copy, target_id, target_payload
             )
-        db.commit()
         return redirect(url_for("main.service", service_id=service_id))
 
     @bp.route("/service/<int:service_id>/delete", methods=["POST"])
     @login_required
     def service_delete(service_id):
-        db = get_db()
-        db.execute(
-            "delete from service_custom_elements where service_id=? and user_id=?",
-            (service_id, g.user["id"]),
+        db = get_database_gateway()
+        db.batch(
+            [
+                DatabaseStatement(
+                    "delete from service_custom_elements where service_id=? and user_id=?",
+                    (service_id, g.user["id"]),
+                ),
+                DatabaseStatement(
+                    "delete from service_shares where service_id=?",
+                    (service_id,),
+                ),
+                DatabaseStatement(
+                    "delete from services where id=? and user_id=?",
+                    (service_id, g.user["id"]),
+                ),
+            ]
         )
-        db.execute(
-            "delete from service_shares where service_id=?",
-            (service_id,),
-        )
-        db.execute(
-            "delete from services where id=? and user_id=?", (service_id, g.user["id"])
-        )
-        db.commit()
         return redirect(url_for("main.services"))
 
     @bp.route("/services/bulk-delete", methods=["POST"])
@@ -410,18 +412,21 @@ def register_service_overview_routes(bp):
 
         placeholders = ",".join(["?"] * len(service_ids))
         params = [g.user["id"], *service_ids]
-        db = get_db()
-        db.execute(
-            f"delete from service_custom_elements where user_id=? and service_id in ({placeholders})",
-            params,
+        db = get_database_gateway()
+        db.batch(
+            [
+                DatabaseStatement(
+                    f"delete from service_custom_elements where user_id=? and service_id in ({placeholders})",
+                    params,
+                ),
+                DatabaseStatement(
+                    f"delete from service_shares where service_id in ({placeholders})",
+                    service_ids,
+                ),
+                DatabaseStatement(
+                    f"delete from services where user_id=? and id in ({placeholders})",
+                    params,
+                ),
+            ]
         )
-        db.execute(
-            f"delete from service_shares where service_id in ({placeholders})",
-            service_ids,
-        )
-        db.execute(
-            f"delete from services where user_id=? and id in ({placeholders})",
-            params,
-        )
-        db.commit()
         return redirect(url_for("main.services"))

@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
-from .db import get_db
+from .db import get_gateway_connection
 
 BATCH_JOB_QUEUED = "queued"
 BATCH_JOB_RUNNING = "running"
@@ -17,7 +17,7 @@ def _utc_now():
 
 
 def create_pco_batch_sync_job(user_id, payload, db=None):
-    db = db or get_db()
+    db = db or get_gateway_connection()
     job_id = uuid.uuid4().hex
     now = _utc_now()
     db.execute(
@@ -50,7 +50,7 @@ def create_pco_batch_sync_job(user_id, payload, db=None):
 def get_pco_batch_sync_job(job_id, user_id, db=None):
     if not job_id or not user_id:
         return None
-    db = db or get_db()
+    db = db or get_gateway_connection()
     row = db.execute(
         """
         select
@@ -77,7 +77,7 @@ def get_pco_batch_sync_job(job_id, user_id, db=None):
 
 
 def mark_pco_batch_sync_job_running(job_id, db=None):
-    db = db or get_db()
+    db = db or get_gateway_connection()
     now = _utc_now()
     db.execute(
         """
@@ -92,7 +92,7 @@ def mark_pco_batch_sync_job_running(job_id, db=None):
 
 
 def update_pco_batch_sync_job_results(job_id, results, summary, db=None):
-    db = db or get_db()
+    db = db or get_gateway_connection()
     db.execute(
         """
         update pco_batch_sync_jobs set
@@ -106,7 +106,7 @@ def update_pco_batch_sync_job_results(job_id, results, summary, db=None):
 
 
 def complete_pco_batch_sync_job(job_id, results, summary, db=None):
-    db = db or get_db()
+    db = db or get_gateway_connection()
     now = _utc_now()
     db.execute(
         """
@@ -131,7 +131,7 @@ def complete_pco_batch_sync_job(job_id, results, summary, db=None):
 
 
 def fail_pco_batch_sync_job(job_id, error, db=None):
-    db = db or get_db()
+    db = db or get_gateway_connection()
     now = _utc_now()
     db.execute(
         """

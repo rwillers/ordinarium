@@ -7,6 +7,7 @@
 .dev.vars
 cloudflare/node_modules/
 cloudflare/.wrangler/
+cloudflare/dist/
 Source\ Liturgies/
 instance/ordinarium.db
 instance/ordinarium.db.bak.db

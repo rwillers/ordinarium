@@ -3,8 +3,14 @@ from datetime import datetime
 
 from flask import flash, g, redirect, render_template, request, url_for
 
+from .admin_store import (
+    count_user_services,
+    list_active_users,
+    soft_delete_user,
+    soft_delete_users,
+    update_user_administration,
+)
 from .auth_session import login_required
-from .db import get_db
 from .error_pages import render_error
 from .feature_flags import FEATURE_ADMIN, list_feature_flags, parse_feature_flags
 from .user_store import get_user_by_email, get_user_by_id
@@ -22,16 +28,7 @@ def register_admin_routes(bp):
         guard = _require_admin()
         if guard:
             return guard
-        db = get_db()
-        rows = db.execute(
-            """
-            select id, first_name, last_name, email, feature_flags,
-                   created_at, last_accessed_at
-            from users
-            where deleted_at is null
-            order by id asc
-            """
-        ).fetchall()
+        rows = list_active_users()
         users = []
         for row in rows:
             users.append(
@@ -75,23 +72,12 @@ def register_admin_routes(bp):
             flags_payload = (
                 json.dumps(updated_flags) if any(updated_flags.values()) else None
             )
-            db = get_db()
-            db.execute(
-                """
-                update users
-                set first_name=?, last_name=?, email=?, feature_flags=?
-                where id=?
-                """,
-                (first_name, last_name, email, flags_payload, user_id),
+            update_user_administration(
+                user_id, first_name, last_name, email, flags_payload
             )
-            db.commit()
             flash("User updated.", "success")
             return redirect(url_for("main.admin_user_edit", user_id=user_id))
-        db = get_db()
-        service_count = db.execute(
-            "select count(*) as total from services where user_id=?",
-            (user_id,),
-        ).fetchone()["total"]
+        service_count = count_user_services(user_id)
         return render_template(
             "admin_user.html",
             user_record=user,
@@ -109,12 +95,7 @@ def register_admin_routes(bp):
         if user_id == g.user["id"]:
             flash("You cannot delete your own account.", "error")
             return redirect(url_for("main.admin_index"))
-        db = get_db()
-        db.execute(
-            "update users set deleted_at=? where id=?",
-            (datetime.utcnow().isoformat(), user_id),
-        )
-        db.commit()
+        soft_delete_user(user_id, datetime.utcnow().isoformat())
         flash("User deleted.", "success")
         return redirect(url_for("main.admin_index"))
 
@@ -136,13 +117,6 @@ def register_admin_routes(bp):
             flash("No users selected.", "error")
             return redirect(url_for("main.admin_index"))
 
-        placeholders = ",".join(["?"] * len(user_ids))
-        db = get_db()
-        params = [datetime.utcnow().isoformat(), *user_ids]
-        db.execute(
-            f"update users set deleted_at=? where id in ({placeholders})",
-            params,
-        )
-        db.commit()
+        soft_delete_users(user_ids, datetime.utcnow().isoformat())
         flash("Users deleted.", "success")
         return redirect(url_for("main.admin_index"))

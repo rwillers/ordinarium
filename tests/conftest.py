@@ -1,4 +1,6 @@
 import json
+import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -12,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from ordinarium import create_app
 from ordinarium.db import get_db, init_db
+from ordinarium.infrastructure import SQLiteGateway
 
 
 class CSRFClient(FlaskClient):
@@ -44,10 +47,26 @@ def app(tmp_path):
         SECRET_KEY="test",
         WTF_CSRF_ENABLED=False,
         RATELIMIT_ENABLED=False,
+        PCO_TOKEN_ENCRYPTION_KEYS={
+            "v1": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+        },
     )
     app.test_client_class = CSRFClient
     with app.app_context():
         init_db()
+    if os.environ.get("ORDINARIUM_TEST_GATEWAY_BACKEND") == "gateway":
+        database_path = app.config["DATABASE"]
+
+        def gateway_factory():
+            connection = sqlite3.connect(database_path)
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA foreign_keys = ON")
+            return SQLiteGateway(connection)
+
+        app.config.update(
+            DATABASE_GATEWAY_BACKEND="d1",
+            DATABASE_GATEWAY_FACTORY=gateway_factory,
+        )
     return app
 
 

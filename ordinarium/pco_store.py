@@ -2,15 +2,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from .db import get_db
+from .db import get_database_gateway
+from .infrastructure import DatabaseStatement
+from .token_encryption import decrypt_token, encrypt_token
 
 
 def get_pco_connection(user_id, db=None):
     if not user_id:
         return None
-    db = db or get_db()
-    return db.execute(
-        """
+    db = _database(db)
+    sql = """
         select
           user_id,
           access_token,
@@ -24,9 +25,22 @@ def get_pco_connection(user_id, db=None):
         from pco_connections
         where user_id=?
         limit 1
-        """,
-        (user_id,),
-    ).fetchone()
+        """
+    row = _fetch_one(db, sql, (user_id,))
+    if not row:
+        return None
+    connection = dict(row)
+    connection["access_token"] = decrypt_token(
+        connection.get("access_token"),
+        user_id=user_id,
+        field_name="access_token",
+    )
+    connection["refresh_token"] = decrypt_token(
+        connection.get("refresh_token"),
+        user_id=user_id,
+        field_name="refresh_token",
+    )
+    return connection
 
 
 def upsert_pco_connection(
@@ -41,8 +55,19 @@ def upsert_pco_connection(
 ):
     if not user_id:
         return
-    db = db or get_db()
-    db.execute(
+    db = _database(db)
+    encrypted_access_token = encrypt_token(
+        access_token,
+        user_id=user_id,
+        field_name="access_token",
+    )
+    encrypted_refresh_token = encrypt_token(
+        refresh_token,
+        user_id=user_id,
+        field_name="refresh_token",
+    )
+    _execute(
+        db,
         """
         insert into pco_connections (
           user_id,
@@ -69,8 +94,8 @@ def upsert_pco_connection(
         """,
         (
             user_id,
-            access_token,
-            refresh_token,
+            encrypted_access_token,
+            encrypted_refresh_token,
             token_type,
             scope,
             expires_at,
@@ -82,48 +107,50 @@ def upsert_pco_connection(
 def delete_pco_connection(user_id, db=None):
     if not user_id:
         return
-    db = db or get_db()
-    db.execute("delete from pco_connections where user_id=?", (user_id,))
+    db = _database(db)
+    _execute(db, "delete from pco_connections where user_id=?", (user_id,))
 
 
 def clear_upcoming_service_pco_links_for_user(user_id, on_or_after_date, db=None):
     if not user_id or not on_or_after_date:
         return
-    db = db or get_db()
-    db.execute(
-        """
-        delete from service_pco_item_links
-        where service_id in (
-          select id
-          from services
-          where user_id=?
-            and service_date is not null
-            and service_date >= ?
-        )
-        """,
-        (user_id, on_or_after_date),
-    )
-    db.execute(
-        """
-        delete from service_pco_links
-        where service_id in (
-          select id
-          from services
-          where user_id=?
-            and service_date is not null
-            and service_date >= ?
-        )
-        """,
-        (user_id, on_or_after_date),
-    )
+    db = _database(db)
+    statements = [
+        DatabaseStatement(
+            """
+            delete from service_pco_item_links
+            where service_id in (
+              select id
+              from services
+              where user_id=?
+                and service_date is not null
+                and service_date >= ?
+            )
+            """,
+            (user_id, on_or_after_date),
+        ),
+        DatabaseStatement(
+            """
+            delete from service_pco_links
+            where service_id in (
+              select id
+              from services
+              where user_id=?
+                and service_date is not null
+                and service_date >= ?
+            )
+            """,
+            (user_id, on_or_after_date),
+        ),
+    ]
+    _batch(db, statements)
 
 
 def get_service_pco_link(service_id, db=None):
     if not service_id:
         return None
-    db = db or get_db()
-    return db.execute(
-        """
+    db = _database(db)
+    sql = """
         select
           id,
           service_id,
@@ -139,9 +166,8 @@ def get_service_pco_link(service_id, db=None):
         from service_pco_links
         where service_id=?
         limit 1
-        """,
-        (service_id,),
-    ).fetchone()
+        """
+    return _fetch_one(db, sql, (service_id,))
 
 
 def upsert_service_pco_link(
@@ -154,14 +180,15 @@ def upsert_service_pco_link(
 ):
     if not service_id:
         return
-    db = db or get_db()
+    db = _database(db)
     existing = get_service_pco_link(service_id, db=db)
     if existing and (
         existing["pco_service_type_id"] != pco_service_type_id
         or existing["pco_plan_id"] != pco_plan_id
     ):
         clear_service_pco_item_links(service_id, db=db)
-    db.execute(
+    _execute(
+        db,
         """
         insert into service_pco_links (
           service_id,
@@ -192,16 +219,17 @@ def upsert_service_pco_link(
 def clear_service_pco_link(service_id, db=None):
     if not service_id:
         return
-    db = db or get_db()
+    db = _database(db)
     clear_service_pco_item_links(service_id, db=db)
-    db.execute("delete from service_pco_links where service_id=?", (service_id,))
+    _execute(db, "delete from service_pco_links where service_id=?", (service_id,))
 
 
 def list_service_pco_item_links(service_id, db=None):
     if not service_id:
         return []
-    db = db or get_db()
-    rows = db.execute(
+    db = _database(db)
+    rows = _fetch_all(
+        db,
         """
         select
           id,
@@ -217,7 +245,7 @@ def list_service_pco_item_links(service_id, db=None):
         order by last_position, id
         """,
         (service_id,),
-    ).fetchall()
+    )
     return [dict(row) for row in rows]
 
 
@@ -231,8 +259,9 @@ def upsert_service_pco_item_link(
 ):
     if not service_id or not ordinarium_token or not pco_item_id:
         return
-    db = db or get_db()
-    db.execute(
+    db = _database(db)
+    _execute(
+        db,
         """
         insert into service_pco_item_links (
           service_id,
@@ -262,8 +291,9 @@ def upsert_service_pco_item_link(
 def delete_service_pco_item_link(service_id, ordinarium_token, db=None):
     if not service_id or not ordinarium_token:
         return
-    db = db or get_db()
-    db.execute(
+    db = _database(db)
+    _execute(
+        db,
         """
         delete from service_pco_item_links
         where service_id=? and ordinarium_token=?
@@ -275,8 +305,9 @@ def delete_service_pco_item_link(service_id, ordinarium_token, db=None):
 def clear_service_pco_item_links(service_id, db=None):
     if not service_id:
         return
-    db = db or get_db()
-    db.execute(
+    db = _database(db)
+    _execute(
+        db,
         "delete from service_pco_item_links where service_id=?",
         (service_id,),
     )
@@ -291,9 +322,10 @@ def update_service_pco_sync_status(
 ):
     if not service_id:
         return
-    db = db or get_db()
+    db = _database(db)
     synced_at = synced_at or datetime.utcnow().isoformat()
-    db.execute(
+    _execute(
+        db,
         """
         update service_pco_links set
           last_synced_at=?,
@@ -304,3 +336,31 @@ def update_service_pco_sync_status(
         """,
         (synced_at, status, error, service_id),
     )
+
+
+def _database(db):
+    return db or get_database_gateway()
+
+
+def _fetch_one(db, sql, params=()):
+    if hasattr(db, "fetch_one"):
+        return db.fetch_one(sql, params)
+    return db.execute(sql, params).fetchone()
+
+
+def _fetch_all(db, sql, params=()):
+    if hasattr(db, "fetch_all"):
+        return db.fetch_all(sql, params)
+    return db.execute(sql, params).fetchall()
+
+
+def _execute(db, sql, params=()):
+    return db.execute(sql, params)
+
+
+def _batch(db, statements):
+    if hasattr(db, "batch"):
+        return db.batch(statements)
+    for statement in statements:
+        db.execute(statement.sql, statement.params)
+    return []

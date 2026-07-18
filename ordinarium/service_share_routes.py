@@ -1,7 +1,7 @@
 from flask import flash, g, jsonify, redirect, render_template_string, request, url_for
 
 from .auth_session import login_required
-from .db import get_db
+from .db import get_database_gateway
 from .error_pages import render_error
 from .plan_lessons import _resolve_lesson_reference_alternates
 from .service_option_registry import (
@@ -129,7 +129,7 @@ def register_service_share_routes(bp):
             flash("Custom passage is required.", "error")
             return redirect(url_for("main.service", service_id=service_id))
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             if wants_json:
@@ -163,7 +163,6 @@ def register_service_share_routes(bp):
             lesson_overrides.pop(lesson_key, None)
         service_data["lesson_overrides"] = lesson_overrides
         update_service_columns(db, service_id, service_data)
-        db.commit()
         if wants_json:
             return jsonify(
                 {
@@ -210,17 +209,17 @@ def register_service_share_routes(bp):
                 flash("Select a proper text.", "error")
                 return redirect(url_for("main.service", service_id=service_id))
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             if wants_json:
                 return jsonify({"ok": False, "error": "Service not found."}), 404
             return render_error("Service not found.", 404)
         if proper_text_id is not None:
-            valid = db.execute(
+            valid = db.fetch_one(
                 "select id from texts where id=? and type=? limit 1",
                 (proper_text_id, proper_type),
-            ).fetchone()
+            )
             if not valid:
                 if wants_json:
                     return (
@@ -237,7 +236,6 @@ def register_service_share_routes(bp):
             proper_overrides.pop(proper_key, None)
         service_data["proper_overrides"] = proper_overrides
         update_service_columns(db, service_id, service_data)
-        db.commit()
         if wants_json:
             return jsonify(
                 {
@@ -275,17 +273,17 @@ def register_service_share_routes(bp):
             flash("Invalid offertory selection.", "error")
             return redirect(url_for("main.service", service_id=service_id))
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             if wants_json:
                 return jsonify({"ok": False, "error": "Service not found."}), 404
             return render_error("Service not found.", 404)
         if sentence_id is not None:
-            valid = db.execute(
+            valid = db.fetch_one(
                 "select id from texts where id=? and type=? limit 1",
                 (sentence_id, "offertory_sentence"),
-            ).fetchone()
+            )
             if not valid:
                 if wants_json:
                     return (
@@ -302,7 +300,6 @@ def register_service_share_routes(bp):
         else:
             service_data["offertory_sentence_id"] = sentence_id
         update_service_columns(db, service_id, service_data)
-        db.commit()
         if wants_json:
             return jsonify({"ok": True, "offertory_sentence_id": sentence_id})
         return redirect(url_for("main.service", service_id=service_id))
@@ -327,7 +324,7 @@ def register_service_share_routes(bp):
                 return jsonify({"ok": False, "error": "Invalid option key."}), 400
             return render_error("Invalid option key.", 400)
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             if wants_json:
@@ -349,7 +346,6 @@ def register_service_share_routes(bp):
         service_data["service_option_values"] = service_option_values
 
         update_service_columns(db, service_id, service_data)
-        db.commit()
         if wants_json:
             return jsonify(
                 {
@@ -368,7 +364,7 @@ def register_service_share_routes(bp):
         if patch_values is None:
             return jsonify({"ok": False, "error": "Invalid options payload."}), 400
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             return jsonify({"ok": False, "error": "Service not found."}), 404
@@ -383,7 +379,6 @@ def register_service_share_routes(bp):
 
         service_data["service_option_values"] = merged_values
         update_service_columns(db, service_id, service_data)
-        db.commit()
         return jsonify({"ok": True, "service_option_values": merged_values})
 
     @bp.route("/service/<int:service_id>/service-option-preview", methods=["POST"])
@@ -403,7 +398,7 @@ def register_service_share_routes(bp):
         if not row_token:
             return jsonify({"ok": False, "error": "Invalid row token."}), 400
 
-        db = get_db()
+        db = get_database_gateway()
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             return jsonify({"ok": False, "error": "Service not found."}), 404
@@ -474,10 +469,10 @@ def register_service_share_routes(bp):
                     proper_text_id = None
                 if proper_text_id is None:
                     return jsonify({"ok": False, "error": "Select a proper text."}), 400
-                valid = db.execute(
+                valid = db.fetch_one(
                     "select id from texts where id=? and type=? limit 1",
                     (proper_text_id, proper_type),
-                ).fetchone()
+                )
                 if not valid:
                     return (
                         jsonify({"ok": False, "error": "Proper text not found."}),
@@ -499,10 +494,10 @@ def register_service_share_routes(bp):
                     400,
                 )
             if sentence_id is not None:
-                valid = db.execute(
+                valid = db.fetch_one(
                     "select id from texts where id=? and type=? limit 1",
                     (sentence_id, "offertory_sentence"),
-                ).fetchone()
+                )
                 if not valid:
                     return (
                         jsonify(

@@ -84,6 +84,11 @@ def create_app():
         ),
         PCO_CLIENT_ID=os.environ.get("PCO_CLIENT_ID"),
         PCO_CLIENT_SECRET=os.environ.get("PCO_CLIENT_SECRET"),
+        PCO_TOKEN_ENCRYPTION_KEYS=os.environ.get("PCO_TOKEN_ENCRYPTION_KEYS"),
+        PCO_TOKEN_ENCRYPTION_KEY=os.environ.get("PCO_TOKEN_ENCRYPTION_KEY"),
+        PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION=os.environ.get(
+            "PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION", "v1"
+        ),
         PCO_OAUTH_REDIRECT_URI=os.environ.get("PCO_OAUTH_REDIRECT_URI"),
         PCO_OAUTH_SCOPES=os.environ.get("PCO_OAUTH_SCOPES", "services"),
         DOCUMENT_SERVICE_URL=os.environ.get("DOCUMENT_SERVICE_URL"),

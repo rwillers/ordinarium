@@ -57,6 +57,9 @@ class SQLiteGateway:
             raise KeyError(f"Unknown ID sequence: {sequence}")
         return int(row["id"])
 
+    def close(self):
+        self._connection.close()
+
 
 def _row_to_dict(row: sqlite3.Row | Sequence[Any]) -> dict[str, Any]:
     if hasattr(row, "keys"):
