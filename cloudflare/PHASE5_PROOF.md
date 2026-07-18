@@ -60,8 +60,9 @@ and built all four container images successfully with OrbStack.
 
 | Check | Result |
 | --- | --- |
-| Flask suite, SQLite gateway | 289 passed; known date-sensitive service-copy test excluded |
-| Flask suite, alternate gateway | 288 passed; same service-copy test excluded; one pre-existing external-calendar test outside the route-test exit scope |
+| Flask suite, SQLite gateway | 290 passed |
+| Flask suite, alternate gateway | 289 passed; one pre-existing external-calendar test outside the route-test exit scope |
+| Service-copy eligibility regression | passed with both database backends |
 | Alternate-backend isolation | 6 passed with a deliberately unusable fallback database |
 | Focused PCO tests | 48 passed |
 | Worker tests | 8 passed |
