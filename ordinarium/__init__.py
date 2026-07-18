@@ -95,6 +95,9 @@ def create_app():
         DOCUMENT_SERVICE_TIMEOUT_SECONDS=float(
             os.environ.get("DOCUMENT_SERVICE_TIMEOUT_SECONDS", "120")
         ),
+        DOCUMENT_SERVICE_MAX_REQUEST_BYTES=int(
+            os.environ.get("DOCUMENT_SERVICE_MAX_REQUEST_BYTES", str(5 * 1024 * 1024))
+        ),
         DOCUMENT_SERVICE_MAX_BYTES=int(
             os.environ.get("DOCUMENT_SERVICE_MAX_BYTES", str(25 * 1024 * 1024))
         ),

@@ -9,6 +9,7 @@ from .service_share_store import get_service_id_by_share_uuid
 from .service_store import load_service_for_text
 from .text_rendering import render_text_page
 from .text_export import (
+    build_docx_render_context,
     build_export_filename,
     build_text_export_context,
     render_docx_bytes,
@@ -90,7 +91,7 @@ def register_text_routes(bp):
 
 def _render_docx_export(context):
     if current_app.config.get("DOCUMENT_SERVICE_URL"):
-        return render_document("docx", {"context": context})
+        return render_document("docx", {"context": build_docx_render_context(context)})
     return render_docx_bytes(context)
 
 

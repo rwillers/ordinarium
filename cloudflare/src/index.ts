@@ -2,14 +2,13 @@ import { Container, ContainerProxy } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
 import { handleD1Request } from "./d1_bridge";
+import { handleDocumentRequest } from "./document_orchestrator";
 import { handleEdgeRoute } from "./edge_routes";
 
 export { ContainerProxy };
 
 const APPLICATION_PORT = 8080;
 const WEB_INSTANCE_NAME = "staging-web";
-const DOCUMENT_INSTANCE_NAME = "staging-documents";
-
 declare global {
   namespace Cloudflare {
     interface Env {
@@ -23,6 +22,7 @@ declare global {
       OPS_HEALTH_TOKEN?: string;
       PCO_TOKEN_ENCRYPTION_KEYS: string;
       PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION?: string;
+      DOCUMENT_SERVICE_AUTH_TOKEN: string;
     }
   }
 }
@@ -38,6 +38,9 @@ export class WebContainer extends Container {
     SESSION_COOKIE_SECURE: env.DEPLOYMENT_ENV === "local" ? "false" : "true",
     ORDINARIUM_DISPOSABLE_SQLITE: "true",
     DOCUMENT_SERVICE_URL: "http://documents.internal/render",
+    DOCUMENT_SERVICE_TIMEOUT_SECONDS: "120",
+    DOCUMENT_SERVICE_MAX_REQUEST_BYTES: String(5 * 1024 * 1024),
+    DOCUMENT_SERVICE_MAX_BYTES: String(25 * 1024 * 1024),
     D1_SERVICE_URL: "http://d1.internal/query",
     DATABASE_GATEWAY_BACKEND: "d1",
     PCO_TOKEN_ENCRYPTION_KEYS: env.PCO_TOKEN_ENCRYPTION_KEYS,
@@ -55,12 +58,8 @@ export class WebContainer extends Container {
 }
 
 WebContainer.outboundByHost = {
-  "documents.internal": (request, environment: Cloudflare.Env) => {
-    const documentContainer = environment.DOCUMENT_CONTAINER.getByName(
-      DOCUMENT_INSTANCE_NAME,
-    );
-    return documentContainer.fetch(request);
-  },
+  "documents.internal": (request, environment: Cloudflare.Env) =>
+    handleDocumentRequest(request, environment),
   "d1.internal": (request, environment: Cloudflare.Env) =>
     handleD1Request(request, environment.APP_DB),
 };
@@ -69,6 +68,12 @@ export class DocumentContainer extends Container {
   defaultPort = APPLICATION_PORT;
   sleepAfter = "60s";
   enableInternet = false;
+  envVars = {
+    DOCUMENT_SERVICE_AUTH_TOKEN: env.DOCUMENT_SERVICE_AUTH_TOKEN,
+    DOCUMENT_MAX_REQUEST_BYTES: String(5 * 1024 * 1024),
+    DOCUMENT_MAX_OUTPUT_BYTES: String(25 * 1024 * 1024),
+    DOCUMENT_RENDER_TIMEOUT_SECONDS: "60",
+  };
 
   override onStart() {
     console.log("Document container started", new Date().toISOString());

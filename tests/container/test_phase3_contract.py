@@ -6,10 +6,14 @@ ROOT = Path(__file__).parents[2]
 
 def test_worker_routes_to_named_web_and_document_containers():
     worker = (ROOT / "cloudflare/src/index.ts").read_text()
+    orchestrator = (ROOT / "cloudflare/src/document_orchestrator.ts").read_text()
 
     assert "getByName(WEB_INSTANCE_NAME)" in worker
     assert '"documents.internal"' in worker
-    assert "getByName(\n      DOCUMENT_INSTANCE_NAME" in worker
+    assert "handleDocumentRequest(request, environment)" in worker
+    assert '"staging-documents-0"' in orchestrator
+    assert '"staging-documents-1"' in orchestrator
+    assert '"X-Ordinarium-Document-Auth"' in orchestrator
     assert "ContainerProxy" in worker
 
 
@@ -27,3 +31,4 @@ def test_web_proof_marks_sqlite_as_disposable():
 
     assert 'ORDINARIUM_DISPOSABLE_SQLITE: "true"' in worker
     assert "flask --app ordinarium init-db" in startup
+    assert "--timeout=125" in startup
