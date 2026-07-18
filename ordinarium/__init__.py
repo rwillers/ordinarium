@@ -93,6 +93,14 @@ def create_app():
         DOCUMENT_SERVICE_MAX_BYTES=int(
             os.environ.get("DOCUMENT_SERVICE_MAX_BYTES", str(25 * 1024 * 1024))
         ),
+        DATABASE_GATEWAY_BACKEND=os.environ.get("DATABASE_GATEWAY_BACKEND", "sqlite"),
+        D1_SERVICE_URL=os.environ.get("D1_SERVICE_URL"),
+        D1_SERVICE_TIMEOUT_SECONDS=float(
+            os.environ.get("D1_SERVICE_TIMEOUT_SECONDS", "30")
+        ),
+        D1_SERVICE_MAX_BYTES=int(
+            os.environ.get("D1_SERVICE_MAX_BYTES", str(5 * 1024 * 1024))
+        ),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE=os.environ.get("SESSION_COOKIE_SAMESITE", "Lax"),
         SESSION_COOKIE_SECURE=_config_bool(

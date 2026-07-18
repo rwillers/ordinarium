@@ -17,6 +17,14 @@
   "vars": {
     "DEPLOYMENT_ENV": "staging"
   },
+  "d1_databases": [
+    {
+      "binding": "APP_DB",
+      "database_name": "ordinarium-app-staging",
+      "database_id": "e13336d8-cf7c-4c63-955d-4d8c7cfa4321",
+      "migrations_dir": "../migrations/d1"
+    }
+  ],
   "containers": [
     {
       "name": "ordinarium-web",

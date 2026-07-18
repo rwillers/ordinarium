@@ -1,0 +1,2 @@
+# Generated SQL preserves Markdown's meaningful two-space line breaks.
+migrations/d1/0002_reference_data.sql -whitespace

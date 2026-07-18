@@ -1,5 +1,3 @@
-import uuid
-
 from flask import flash, g, jsonify, redirect, render_template_string, request, url_for
 
 from .auth_session import login_required
@@ -12,6 +10,7 @@ from .service_option_registry import (
 )
 from .service_planning import build_plan_items, parse_plan_tokens
 from .service_store import load_service_payload, update_service_columns
+from .service_share_store import get_or_create_service_share
 from .text_rendering import build_rendered_ordinaries
 
 
@@ -84,30 +83,17 @@ def register_service_share_routes(bp):
     @bp.route("/service/<int:service_id>/share", methods=["POST"])
     @login_required
     def service_share(service_id):
-        db = get_db()
-        existing_owner = db.execute(
-            "select user_id from services where id=? limit 1", (service_id,)
-        ).fetchone()
-        if not existing_owner or existing_owner["user_id"] != g.user["id"]:
+        share = get_or_create_service_share(service_id, g.user["id"])
+        if not share:
             return render_error("Service not found.", 404)
-        existing_share = db.execute(
-            "select share_uuid from service_shares where service_id=? limit 1",
-            (service_id,),
-        ).fetchone()
-        if existing_share:
-            share_uuid = existing_share["share_uuid"]
-            created = False
-        else:
-            share_uuid = str(uuid.uuid4())
-            db.execute(
-                "insert into service_shares (service_id, share_uuid) values (?, ?)",
-                (service_id, share_uuid),
-            )
-            db.commit()
-            created = True
+        share_uuid = share["share_uuid"]
         share_url = url_for("main.shared_text", share_uuid=share_uuid, _external=True)
         return jsonify(
-            {"share_uuid": share_uuid, "share_url": share_url, "created": created}
+            {
+                "share_uuid": share_uuid,
+                "share_url": share_url,
+                "created": share["created"],
+            }
         )
 
     @bp.route("/service/<int:service_id>/lesson-passage", methods=["POST"])

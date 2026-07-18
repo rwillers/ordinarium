@@ -3,9 +3,9 @@ from io import BytesIO
 from flask import current_app, g, send_file
 
 from .auth_session import login_required
-from .db import get_db
 from .document_service_client import render_document
 from .error_pages import render_error
+from .service_share_store import get_service_id_by_share_uuid
 from .service_store import load_service_for_text
 from .text_rendering import render_text_page
 from .text_export import (
@@ -79,17 +79,13 @@ def register_text_routes(bp):
 
     @bp.route("/share/<share_uuid>")
     def shared_text(share_uuid):
-        db = get_db()
-        share = db.execute(
-            "select service_id from service_shares where share_uuid=? limit 1",
-            (share_uuid,),
-        ).fetchone()
-        if not share:
+        service_id = get_service_id_by_share_uuid(share_uuid)
+        if not service_id:
             return render_error("Share link not found.", 404)
-        saved_service, saved_data = load_service_for_text(share["service_id"])
+        saved_service, saved_data = load_service_for_text(service_id)
         if not saved_service:
             return render_error("Service not found.", 404)
-        return render_text_page(share["service_id"], saved_service, saved_data)
+        return render_text_page(service_id, saved_service, saved_data)
 
 
 def _render_docx_export(context):

@@ -222,10 +222,10 @@ def test_service_copy_modal_lists_only_future_same_rite_targets(
     assert response.status_code == 200
     body = response.data.decode("utf-8")
     assert "Copy elements to..." in body
-    assert "Eligible future target" in body
-    assert "Past target" not in body
-    assert "Wrong rite target" not in body
-    assert "Other user target" not in body
+    assert 'name="service_ids" value="5201"' in body
+    assert 'name="service_ids" value="5202"' not in body
+    assert 'name="service_ids" value="5203"' not in body
+    assert 'name="service_ids" value="5204"' not in body
 
 
 def test_service_copy_elements_overwrites_targets_and_preserves_metadata(

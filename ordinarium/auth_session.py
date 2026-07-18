@@ -9,9 +9,8 @@ from flask_login import (
     login_required as flask_login_required,
 )
 
-from .db import get_db
 from .feature_flags import parse_feature_flags
-from .user_store import get_user_by_id
+from .user_store import get_user_by_id, record_user_access
 from .user_settings import resolve_user_settings
 
 login_manager = LoginManager()
@@ -125,10 +124,5 @@ def _update_last_accessed_at(user):
         return
 
     now_value = now.isoformat()
-    db = get_db()
-    db.execute(
-        "update users set last_accessed_at=? where id=?",
-        (now_value, user["id"]),
-    )
-    db.commit()
+    record_user_access(user["id"], now_value)
     user.last_accessed_at = now_value

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit && wrangler deploy --dry-run",
+    "test": "node --test src/d1_bridge.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
