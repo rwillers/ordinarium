@@ -2,45 +2,87 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from flask import current_app
 
-from .db import get_db
+from .db import get_database_gateway
+
+
+USER_COLUMNS = """
+    id, first_name, last_name, email, password_hash,
+    default_rite, default_bible_translation, default_service_time,
+    greeting_response_form,
+    feature_flags, created_at, last_login_at, last_accessed_at
+"""
 
 
 def get_user_by_id(user_id):
     if not user_id:
         return None
-    db = get_db()
-    user = db.execute(
-        """
-        select id, first_name, last_name, email, password_hash,
-               default_rite, default_bible_translation, default_service_time,
-               greeting_response_form,
-               feature_flags, created_at, last_login_at, last_accessed_at
+    gateway = get_database_gateway()
+    return gateway.fetch_one(
+        f"""
+        select {USER_COLUMNS}
         from users
         where id=? and deleted_at is null
         limit 1
         """,
         (user_id,),
-    ).fetchone()
-    return user
+    )
 
 
 def get_user_by_email(email):
     if not email:
         return None
-    db = get_db()
-    user = db.execute(
-        """
-        select id, first_name, last_name, email, password_hash,
-               default_rite, default_bible_translation, default_service_time,
-               greeting_response_form,
-               feature_flags, created_at, last_login_at, last_accessed_at
+    gateway = get_database_gateway()
+    return gateway.fetch_one(
+        f"""
+        select {USER_COLUMNS}
         from users
         where email=? and deleted_at is null
         limit 1
         """,
         (email,),
-    ).fetchone()
-    return user
+    )
+
+
+def create_user(first_name, last_name, email, password_hash, timestamp):
+    gateway = get_database_gateway()
+    user_id = gateway.allocate_id("users")
+    gateway.execute(
+        """
+        insert into users (
+            id,
+            first_name,
+            last_name,
+            email,
+            password_hash,
+            created_at,
+            last_login_at
+        ) values (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            user_id,
+            first_name,
+            last_name,
+            email,
+            password_hash,
+            timestamp,
+            timestamp,
+        ),
+    )
+    return get_user_by_id(user_id)
+
+
+def record_user_login(user_id, timestamp):
+    get_database_gateway().execute(
+        "update users set last_login_at=? where id=?",
+        (timestamp, user_id),
+    )
+
+
+def record_user_access(user_id, timestamp):
+    get_database_gateway().execute(
+        "update users set last_accessed_at=? where id=?",
+        (timestamp, user_id),
+    )
 
 
 def create_password_reset_token(user_id):

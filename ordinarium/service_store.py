@@ -1,6 +1,7 @@
 import json
 
 from .db import get_db
+from .infrastructure import DatabaseGateway
 from .service_defaults import DEFAULT_RITE
 from .service_planning import _parse_json_object
 
@@ -57,6 +58,66 @@ def create_service(db, payload):
         ),
     )
     return cursor.lastrowid
+
+
+def create_service_record(gateway: DatabaseGateway, payload):
+    serialized = serialize_service_payload(payload)
+    service_id = gateway.allocate_id("services")
+    gateway.execute(
+        """
+        insert into services (
+          id,
+          user_id,
+          title,
+          rite,
+          text_order,
+          text_disabled,
+          season,
+          service_date,
+          observance_handle,
+          lesson_overrides,
+          offertory_sentence_id,
+          proper_overrides,
+          service_option_values
+        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            service_id,
+            serialized["user_id"],
+            serialized["title"],
+            serialized["rite"],
+            serialized["text_order"],
+            serialized["text_disabled"],
+            serialized["season"],
+            serialized["service_date"],
+            serialized["observance_handle"],
+            serialized["lesson_overrides"],
+            serialized["offertory_sentence_id"],
+            serialized["proper_overrides"],
+            serialized["service_option_values"],
+        ),
+    )
+    return service_id
+
+
+def get_service_record(gateway: DatabaseGateway, service_id, user_id=None):
+    if not service_id:
+        return None
+    user_filter = ""
+    params = [service_id]
+    if user_id:
+        user_filter = "and user_id=?"
+        params.append(user_id)
+    return gateway.fetch_one(
+        f"""
+        select id, user_id, title, rite, season, service_date,
+               observance_handle, updated_at
+        from services
+        where id=? {user_filter}
+        limit 1
+        """,
+        params,
+    )
 
 
 def serialize_service_payload(payload):

@@ -1,6 +1,8 @@
 import { Container, ContainerProxy } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
+import { handleD1Request } from "./d1_bridge";
+
 export { ContainerProxy };
 
 const APPLICATION_PORT = 8080;
@@ -14,6 +16,7 @@ declare global {
       DOCUMENT_CONTAINER: DurableObjectNamespace;
       PCO_JOBS_CONTAINER: DurableObjectNamespace;
       EMAIL_JOBS_CONTAINER: DurableObjectNamespace;
+      APP_DB: D1Database;
       SECRET_KEY: string;
       DEPLOYMENT_ENV: string;
     }
@@ -31,6 +34,7 @@ export class WebContainer extends Container {
     SESSION_COOKIE_SECURE: env.DEPLOYMENT_ENV === "local" ? "false" : "true",
     ORDINARIUM_DISPOSABLE_SQLITE: "true",
     DOCUMENT_SERVICE_URL: "http://documents.internal/render",
+    D1_SERVICE_URL: "http://d1.internal/query",
   };
 
   override onStart() {
@@ -49,6 +53,8 @@ WebContainer.outboundByHost = {
     );
     return documentContainer.fetch(request);
   },
+  "d1.internal": (request, environment: Cloudflare.Env) =>
+    handleD1Request(request, environment.APP_DB),
 };
 
 export class DocumentContainer extends Container {

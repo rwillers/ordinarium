@@ -15,10 +15,9 @@ from flask_login import login_user
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .auth_rate_limit import limiter
-from .db import get_db
 from .auth_session import build_user
 from .turnstile import turnstile_enabled, verify_turnstile_response
-from .user_store import get_user_by_email
+from .user_store import create_user, get_user_by_email, record_user_login
 
 
 def register_login_routes(bp):
@@ -49,12 +48,7 @@ def register_login_routes(bp):
                 if not verified:
                     error = "Please verify you're human."
             if not error and user:
-                db = get_db()
-                db.execute(
-                    "update users set last_login_at=? where id=?",
-                    (datetime.utcnow().isoformat(), user["id"]),
-                )
-                db.commit()
+                record_user_login(user["id"], datetime.utcnow().isoformat())
                 session.permanent = True
                 login_user(build_user(user))
                 next_url = (
@@ -97,31 +91,14 @@ def register_login_routes(bp):
                 if not verified:
                     error = "Please verify you're human."
             if not error:
-                db = get_db()
                 now = datetime.utcnow().isoformat()
-                db.execute(
-                    """
-                    insert into users (
-                        first_name,
-                        last_name,
-                        email,
-                        password_hash,
-                        created_at,
-                        last_login_at
-                    )
-                    values (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        first_name,
-                        last_name,
-                        email,
-                        generate_password_hash(password),
-                        now,
-                        now,
-                    ),
+                user = create_user(
+                    first_name,
+                    last_name,
+                    email,
+                    generate_password_hash(password),
+                    now,
                 )
-                db.commit()
-                user = get_user_by_email(email)
                 session.permanent = True
                 login_user(build_user(user))
                 flash(
