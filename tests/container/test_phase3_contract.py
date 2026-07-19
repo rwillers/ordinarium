@@ -32,3 +32,16 @@ def test_web_proof_marks_sqlite_as_disposable():
     assert 'ORDINARIUM_DISPOSABLE_SQLITE: "true"' in worker
     assert "flask --app ordinarium init-db" in startup
     assert "--timeout=125" in startup
+
+
+def test_web_container_disables_access_logging_for_token_bearing_routes():
+    startup = (ROOT / "scripts/cloudflare/start_web_proof.sh").read_text()
+    reset_routes = (ROOT / "ordinarium/password_reset_routes.py").read_text()
+
+    assert '@bp.route("/reset-password/<token>"' in reset_routes
+    # Gunicorn access logging is disabled by default. Configuring neither an
+    # access destination nor format prevents the bearer token path from being
+    # emitted while the dedicated error log remains available.
+    assert "--access-logfile" not in startup
+    assert "--access-logformat" not in startup
+    assert "--error-logfile=-" in startup

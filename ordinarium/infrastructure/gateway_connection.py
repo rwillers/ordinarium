@@ -50,6 +50,10 @@ class GatewayConnection:
             metadata=MutationMetadata(changes=changes, last_row_id=last_row_id)
         )
 
+    def batch(self, statements):
+        """Execute an ordered, atomic gateway batch."""
+        return self._gateway.batch(statements)
+
     def commit(self):
         return None
 

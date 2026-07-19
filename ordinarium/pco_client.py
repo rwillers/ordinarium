@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
 import hashlib
 import re
@@ -70,6 +71,9 @@ class PcoRateLimiter:
 
     def wait_for_slot(self, token):
         delay = self._reserve_delay(token)
+        remaining = _deadline_remaining_seconds()
+        if remaining is not None and delay >= remaining:
+            raise requests.Timeout("Planning Center job deadline was exceeded.")
         if delay > 0:
             self.sleep(delay)
 
@@ -128,6 +132,15 @@ class PcoRateLimiter:
 
 
 rate_limiter = PcoRateLimiter()
+_request_deadline = ContextVar("pco_request_deadline", default=None)
+
+
+def begin_pco_request_deadline(seconds):
+    return _request_deadline.set(time.monotonic() + float(seconds))
+
+
+def end_pco_request_deadline(token):
+    _request_deadline.reset(token)
 
 
 def _rate_limit_token_key(token):
@@ -223,6 +236,16 @@ def refresh_access_token(
     }
     response = requests.post(token_url, data=data, timeout=20)
     if response.status_code >= 400:
+        if response.status_code == 429 or response.status_code >= 500:
+            try:
+                payload = response.json()
+            except ValueError:
+                payload = {"detail": response.text}
+            raise PcoApiError(
+                f"OAuth token refresh failed ({response.status_code}).",
+                status_code=response.status_code,
+                payload=payload,
+            )
         raise PcoAuthError(f"OAuth token refresh failed ({response.status_code}).")
     payload = response.json()
     return _token_from_payload(payload)
@@ -271,13 +294,14 @@ def api_request(
     retries = 0
     while True:
         rate_limiter.wait_for_slot(access_token)
+        timeout_seconds = _remaining_request_seconds()
         response = requests.request(
             method,
             url,
             headers=headers,
             json=json,
             params=params,
-            timeout=30,
+            timeout=timeout_seconds,
         )
         rate_limiter.update_from_response(access_token, response)
         if response.status_code != 429 or retries >= MAX_RATE_LIMIT_RETRIES:
@@ -300,6 +324,20 @@ def api_request(
     if response.status_code == 204:
         return None
     return response.json()
+
+
+def _remaining_request_seconds():
+    remaining = _deadline_remaining_seconds()
+    if remaining is None:
+        return 30
+    if remaining <= 0:
+        raise requests.Timeout("Planning Center job deadline was exceeded.")
+    return max(1, min(20, remaining))
+
+
+def _deadline_remaining_seconds():
+    deadline = _request_deadline.get()
+    return None if deadline is None else deadline - time.monotonic()
 
 
 def _format_api_error_detail(payload):

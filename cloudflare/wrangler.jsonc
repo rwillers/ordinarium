@@ -20,7 +20,13 @@
     "head_sampling_rate": 1
   },
   "vars": {
-    "DEPLOYMENT_ENV": "staging"
+    "DEPLOYMENT_ENV": "staging",
+    "APP_ORIGIN": "https://containers-staging.ordinarium.com",
+    "SIDE_EFFECTS_HOSTNAME": "containers-staging.ordinarium.com",
+    "EXTERNAL_SIDE_EFFECTS_ENABLED": "true"
+  },
+  "triggers": {
+    "crons": ["* * * * *"]
   },
   "d1_databases": [
     {
@@ -30,6 +36,50 @@
       "migrations_dir": "../migrations/d1"
     }
   ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "PCO_JOBS_QUEUE",
+        "queue": "ordinarium-app-staging-pco-jobs"
+      },
+      {
+        "binding": "EMAIL_JOBS_QUEUE",
+        "queue": "ordinarium-app-staging-email-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "ordinarium-app-staging-pco-jobs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "ordinarium-app-staging-pco-jobs-dlq",
+        "max_concurrency": 1
+      },
+      {
+        "queue": "ordinarium-app-staging-pco-jobs-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 100,
+        "max_concurrency": 1
+      },
+      {
+        "queue": "ordinarium-app-staging-email-jobs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "ordinarium-app-staging-email-jobs-dlq",
+        "max_concurrency": 2
+      },
+      {
+        "queue": "ordinarium-app-staging-email-jobs-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 100,
+        "max_concurrency": 1
+      }
+    ]
+  },
   "containers": [
     {
       "name": "ordinarium-web",
