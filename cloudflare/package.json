@@ -10,7 +10,8 @@
     "predeploy": "npm run build:assets",
     "deploy": "wrangler deploy",
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "queues:ensure": "node scripts/ensure-queues.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "0.3.7"

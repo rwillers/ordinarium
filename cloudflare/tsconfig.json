@@ -5,6 +5,7 @@
     "moduleResolution": "Bundler",
     "noEmit": true,
     "strict": true,
+    "allowImportingTsExtensions": true,
     "types": ["@cloudflare/workers-types"],
     "verbatimModuleSyntax": true
   },

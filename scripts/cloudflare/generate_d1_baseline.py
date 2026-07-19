@@ -15,8 +15,34 @@ from ordinarium.db import init_db
 
 
 REFERENCE_TABLES = ("holidays", "fragments", "subcycles", "pages", "texts")
-EXCLUDED_TABLES = {"id_sequences", "schema_migrations"}
+EXCLUDED_TABLES = {
+    "id_sequences",
+    "password_reset_requests",
+    "pco_batch_sync_rows",
+    "pco_plan_operations",
+    "pco_rate_limit_windows",
+    "pco_service_sync_leases",
+    "schema_migrations",
+}
 EXCLUDED_OBJECT_PREFIXES = ("sync_id_sequence_",)
+EXCLUDED_INDEXES = {
+    "idx_service_custom_elements_stable_token",
+    "idx_services_creation_token",
+}
+POST_BASELINE_COLUMNS = {
+    "pco_batch_sync_jobs": (
+        "  claim_token TEXT,\n",
+        "  claim_expires_at INTEGER,\n",
+        "  delivery_attempts INTEGER NOT NULL DEFAULT 0,\n",
+    ),
+    "pco_connections": (
+        "  version INTEGER NOT NULL DEFAULT 1,\n",
+        "  refresh_claim_token TEXT,\n",
+        "  refresh_claim_expires_at INTEGER,\n",
+    ),
+    "service_custom_elements": ("  stable_token TEXT,\n",),
+    "services": ("  creation_token TEXT,\n",),
+}
 
 
 def build_fresh_database(path):
@@ -40,10 +66,14 @@ def schema_sql(connection):
     for object_type, name, sql in rows:
         if name.startswith(EXCLUDED_OBJECT_PREFIXES):
             continue
+        if name in EXCLUDED_INDEXES:
+            continue
         if object_type == "table" and name in EXCLUDED_TABLES:
             continue
         if object_type == "index" and _index_targets_excluded_table(connection, name):
             continue
+        for column_sql in POST_BASELINE_COLUMNS.get(name, ()):
+            sql = sql.replace(column_sql, "")
         statements.append(f"{sql.rstrip(';')};")
     return _document(
         "Schema generated from a freshly initialized main SQLite database.",

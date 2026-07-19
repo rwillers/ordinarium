@@ -15,14 +15,24 @@ from .pco_batch_jobs import (
     create_pco_batch_sync_job,
     fail_pco_batch_sync_job,
     get_pco_batch_sync_job,
+    list_pco_batch_sync_rows,
     mark_pco_batch_sync_job_running,
+    complete_pco_batch_sync_row,
     update_pco_batch_sync_job_results,
 )
 from .pco_client import PcoApiError, PcoAuthError
+from .pco_job_errors import raise_if_retryable_pco_error, raise_if_terminal_pco_auth
+from .pco_plan_operations import complete_pco_plan_operation
 from .pco_store import (
     clear_service_pco_link,
+    pco_connection_exists,
     update_service_pco_sync_status,
     upsert_service_pco_link,
+)
+from .queue_publisher import (
+    QueuePublicationError,
+    publish_pco_row,
+    queue_publishing_is_configured,
 )
 from .pco_sync import (
     PcoSyncError,
@@ -122,6 +132,7 @@ def _run_service_sync(
     plan_id,
     db,
     sync_mode="delta",
+    propagate_retryable=False,
 ):
     try:
         result = sync_service_plan(
@@ -134,6 +145,9 @@ def _run_service_sync(
             sync_mode=sync_mode,
         )
     except Exception as exc:
+        if propagate_retryable:
+            raise_if_retryable_pco_error(exc)
+            raise_if_terminal_pco_auth(exc)
         failed_at = datetime.utcnow().isoformat()
         update_service_pco_sync_status(
             service_id,
@@ -354,6 +368,9 @@ def _execute_pco_batch_row(
     services_by_id,
     links_by_id,
     duplicate_indexes,
+    *,
+    propagate_retryable=False,
+    durable_plan_context=None,
 ):
     service_id = row["service_id"]
     mode = row["mode"]
@@ -386,7 +403,14 @@ def _execute_pco_batch_row(
         return result
     if mode in {"sync_linked", "adopt_linked", "reset_linked"}:
         return _execute_pco_linked_batch_row(
-            result, service_id, user_id, access_token, base_url, db, links_by_id
+            result,
+            service_id,
+            user_id,
+            access_token,
+            base_url,
+            db,
+            links_by_id,
+            propagate_retryable=propagate_retryable,
         )
 
     service_type_id = row["pco_service_type_id"]
@@ -399,27 +423,53 @@ def _execute_pco_batch_row(
     plan_title = None
     if mode in {"link_existing", "reset_existing"}:
         plan_id, plan_title, error = _resolve_existing_pco_plan(
-            base_url, access_token, service_type_id, row["pco_plan_id"]
+            base_url,
+            access_token,
+            service_type_id,
+            row["pco_plan_id"],
+            propagate_retryable=propagate_retryable,
         )
         if error:
             result["status"] = "failed"
             result["error"] = error
             return result
     if mode == "create_new":
-        plan_id, plan_title, error = _create_pco_plan_for_batch_row(
-            base_url,
-            access_token,
-            service_type_id,
-            service_title,
-            service,
-            default_plan_time,
-            tz_offset,
-            row["pco_plan_template_id"],
-        )
-        if error:
-            result["status"] = "failed"
-            result["error"] = error
-            return result
+        if durable_plan_context is not None:
+            values = {
+                "service_type_id": service_type_id,
+                "service_type_name": service_type_name,
+                "plan_title": service_title or f"Service {service['service_date']}",
+                "plan_date": service["service_date"],
+                "plan_time": default_plan_time,
+                "timezone_offset": tz_offset,
+                "template_id": row["pco_plan_template_id"] or None,
+                "series_title": _to_text(service.get("season")) or None,
+            }
+            plan_id, plan_title, operation_id = complete_pco_plan_operation(
+                db=db,
+                user_id=user_id,
+                service_id=service_id,
+                access_token=access_token,
+                base_url=base_url,
+                values=values,
+            )
+            durable_plan_context["plan_operation_id"] = operation_id
+        else:
+            plan_id, plan_title, error = _create_pco_plan_for_batch_row(
+                base_url,
+                access_token,
+                service_type_id,
+                service_title,
+                service,
+                default_plan_time,
+                tz_offset,
+                row["pco_plan_template_id"],
+                propagate_retryable=propagate_retryable,
+            )
+            if error:
+                result["status"] = "failed"
+                result["error"] = error
+                return result
     upsert_service_pco_link(
         service_id,
         service_type_id,
@@ -449,6 +499,7 @@ def _execute_pco_batch_row(
         plan_id,
         db,
         sync_mode=sync_mode,
+        propagate_retryable=propagate_retryable,
     )
     result.update(
         {
@@ -468,7 +519,15 @@ def _execute_pco_batch_row(
 
 
 def _execute_pco_linked_batch_row(
-    result, service_id, user_id, access_token, base_url, db, links_by_id
+    result,
+    service_id,
+    user_id,
+    access_token,
+    base_url,
+    db,
+    links_by_id,
+    *,
+    propagate_retryable=False,
 ):
     link = links_by_id.get(service_id)
     if not link:
@@ -484,6 +543,7 @@ def _execute_pco_linked_batch_row(
         link["pco_plan_id"],
         db,
         sync_mode=_sync_mode_for_linked_batch_mode(result.get("mode")),
+        propagate_retryable=propagate_retryable,
     )
     result.update(
         {
@@ -510,12 +570,17 @@ def _sync_mode_for_linked_batch_mode(mode):
     return "delta"
 
 
-def _resolve_existing_pco_plan(base_url, access_token, service_type_id, plan_id):
+def _resolve_existing_pco_plan(
+    base_url, access_token, service_type_id, plan_id, *, propagate_retryable=False
+):
     if not plan_id:
         return None, None, "PCO plan is required for link existing mode."
     try:
         plan = fetch_plan(base_url, access_token, service_type_id, plan_id)
     except PcoApiError as exc:
+        if propagate_retryable:
+            raise_if_retryable_pco_error(exc)
+            raise_if_terminal_pco_auth(exc)
         return None, None, str(exc)
     plan_data = plan.get("data") if plan else None
     if not plan_data:
@@ -532,6 +597,8 @@ def _create_pco_plan_for_batch_row(
     default_plan_time,
     tz_offset,
     plan_template_id=None,
+    *,
+    propagate_retryable=False,
 ):
     create_title = service_title or f"Service {service['service_date']}"
     create_date = service["service_date"]
@@ -546,6 +613,9 @@ def _create_pco_plan_for_batch_row(
             series_title,
         )
     except PcoApiError as exc:
+        if propagate_retryable:
+            raise_if_retryable_pco_error(exc)
+            raise_if_terminal_pco_auth(exc)
         return None, None, str(exc)
     plan_data = created.get("data") if created else None
     if not plan_data:
@@ -565,6 +635,9 @@ def _create_pco_plan_for_batch_row(
             tz_offset,
         )
     except (PcoApiError, PcoSyncError) as exc:
+        if propagate_retryable:
+            raise_if_retryable_pco_error(exc)
+            raise_if_terminal_pco_auth(exc)
         return None, None, str(exc)
     if plan_template_id:
         try:
@@ -576,6 +649,9 @@ def _create_pco_plan_for_batch_row(
                 plan_template_id,
             )
         except PcoApiError as exc:
+            if propagate_retryable:
+                raise_if_retryable_pco_error(exc)
+                raise_if_terminal_pco_auth(exc)
             return None, None, str(exc)
     return plan_id, plan_title, None
 
@@ -602,7 +678,22 @@ def _run_pco_batch_sync_worker(app, job_id, user_id):
             if not connection:
                 raise PcoAuthError("Planning Center is not connected.")
 
+            durable_rows = list_pco_batch_sync_rows(job_id, db=db)
+            row_ids_by_index = {row["row_index"]: row["id"] for row in durable_rows}
+
             def on_progress(results, summary):
+                for row_index, result in enumerate(results):
+                    status = result.get("status")
+                    row_id = row_ids_by_index.get(row_index)
+                    if not row_id or status not in {"success", "failed", "skipped"}:
+                        continue
+                    complete_pco_batch_sync_row(
+                        job_id,
+                        row_id,
+                        status,
+                        result,
+                        db=db,
+                    )
                 update_pco_batch_sync_job_results(job_id, results, summary, db=db)
                 db.commit()
 
@@ -972,11 +1063,23 @@ def register_service_pco_routes(bp):
         if not _pco_feature_enabled():
             return jsonify({"ok": False, "error": "Not found."}), 404
         db = get_gateway_connection()
-        try:
-            connection = get_valid_pco_connection(g.user["id"], db)
-        except PcoAuthError as exc:
-            return jsonify({"ok": False, "error": str(exc)}), 400
-        if not connection:
+        queued_mode = queue_publishing_is_configured()
+        if queued_mode:
+            connected = pco_connection_exists(g.user["id"], db=db)
+        else:
+            try:
+                connected = get_valid_pco_connection(g.user["id"], db)
+            except PcoAuthError:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": "Planning Center authorization failed.",
+                        }
+                    ),
+                    400,
+                )
+        if not connected:
             return (
                 jsonify({"ok": False, "error": "Planning Center is not connected."}),
                 400,
@@ -987,9 +1090,26 @@ def register_service_pco_routes(bp):
             return jsonify({"ok": False, "error": error}), 400
         job_id = create_pco_batch_sync_job(g.user["id"], payload, db=db)
         db.commit()
-        _start_pco_batch_sync_worker(
-            current_app._get_current_object(), job_id, g.user["id"]
-        )
+        if queued_mode:
+            publication_failed = False
+            for row in list_pco_batch_sync_rows(job_id, db=db):
+                try:
+                    publish_pco_row(
+                        job_id=job_id,
+                        row_id=row["id"],
+                        user_id=g.user["id"],
+                    )
+                except QueuePublicationError:
+                    publication_failed = True
+            if publication_failed:
+                current_app.logger.warning(
+                    "One or more PCO batch rows await queue reconciliation.",
+                    extra={"job_id": job_id},
+                )
+        else:
+            _start_pco_batch_sync_worker(
+                current_app._get_current_object(), job_id, g.user["id"]
+            )
         return (
             jsonify(
                 {

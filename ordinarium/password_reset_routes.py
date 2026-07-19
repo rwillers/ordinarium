@@ -9,7 +9,17 @@ from flask import (
 )
 from .auth_rate_limit import limiter
 from .mail_delivery import send_email
+from .password_reset_store import (
+    PasswordResetConfigurationError,
+    consume_queued_password_reset,
+    create_queued_password_reset,
+)
 from .password_security import hash_password
+from .queue_publisher import (
+    QueuePublicationError,
+    publish_password_reset,
+    queue_publishing_is_configured,
+)
 from .turnstile import turnstile_enabled, verify_turnstile_response
 from .user_store import (
     create_password_reset_token,
@@ -41,16 +51,45 @@ def register_password_reset_routes(bp):
             if not error:
                 user = get_user_by_email(email)
                 if user:
-                    token = create_password_reset_token(user["id"])
-                    reset_url = url_for(
-                        "main.reset_password", token=token, _external=True
-                    )
-                    body = (
-                        "A password reset was requested for your Ordinarium account.\n\n"
-                        f"Reset your password: {reset_url}\n\n"
-                        "If you did not request this, you can ignore this email."
-                    )
-                    send_email(user["email"], "Reset your Ordinarium password", body)
+                    if queue_publishing_is_configured():
+                        try:
+                            queued_reset = create_queued_password_reset(user["id"])
+                        except PasswordResetConfigurationError:
+                            current_app.logger.exception(
+                                "Queued password reset configuration is invalid"
+                            )
+                        except Exception:
+                            # Preserve the same public response for existing,
+                            # unknown, and deleted accounts during a D1 outage.
+                            current_app.logger.exception(
+                                "Unable to persist queued password reset"
+                            )
+                        else:
+                            try:
+                                publish_password_reset(
+                                    reset_id=queued_reset["reset_id"]
+                                )
+                            except QueuePublicationError:
+                                # The encrypted delivery token remains in D1. The
+                                # scheduled reconciler will publish this opaque ID.
+                                current_app.logger.warning(
+                                    "Queued password reset awaits reconciliation",
+                                    extra={"reset_id": queued_reset["reset_id"]},
+                                )
+                    else:
+                        token = create_password_reset_token(user["id"])
+                        reset_url = url_for(
+                            "main.reset_password", token=token, _external=True
+                        )
+                        body = (
+                            "A password reset was requested for your Ordinarium "
+                            "account.\n\n"
+                            f"Reset your password: {reset_url}\n\n"
+                            "If you did not request this, you can ignore this email."
+                        )
+                        send_email(
+                            user["email"], "Reset your Ordinarium password", body
+                        )
                 flash(
                     "If an account exists for that email, a reset link is on its way.",
                     "info",
@@ -89,11 +128,18 @@ def register_password_reset_routes(bp):
                 if not verified:
                     error = "Please verify you're human."
             if not error:
-                user = get_user_by_id(record["user_id"])
-                if not user:
-                    flash("Account not found.", "error")
-                    return redirect(url_for("main.request_password_reset"))
-                update_user_password(user["id"], hash_password(password))
+                password_hash = hash_password(password)
+                queued_reset_id = record.get("queued_reset_id")
+                if queued_reset_id:
+                    if not consume_queued_password_reset(token, password_hash):
+                        flash("This reset link is invalid or expired.", "error")
+                        return redirect(url_for("main.request_password_reset"))
+                else:
+                    user = get_user_by_id(record["user_id"])
+                    if not user:
+                        flash("This reset link is invalid or expired.", "error")
+                        return redirect(url_for("main.request_password_reset"))
+                    update_user_password(user["id"], password_hash)
                 flash("Password updated. Please log in.", "info")
                 return redirect(url_for("main.login"))
         if error:

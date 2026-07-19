@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+import uuid
 from datetime import datetime
 
 from .db import get_database_gateway
@@ -20,6 +22,9 @@ def get_pco_connection(user_id, db=None):
           scope,
           expires_at,
           pco_account_name,
+          version,
+          refresh_claim_token,
+          refresh_claim_expires_at,
           created_at,
           updated_at
         from pco_connections
@@ -41,6 +46,98 @@ def get_pco_connection(user_id, db=None):
         field_name="refresh_token",
     )
     return connection
+
+
+def claim_pco_connection_refresh(connection, lease_seconds=60, db=None):
+    """Claim a token version so concurrent refreshes cannot overwrite each other."""
+    if not connection:
+        return None
+    claim_token = uuid.uuid4().hex
+    now = int(time.time())
+    cursor = _execute(
+        _database(db),
+        """
+        update pco_connections set
+          refresh_claim_token=?, refresh_claim_expires_at=?, updated_at=CURRENT_TIMESTAMP
+        where user_id=? and version=?
+          and (refresh_claim_token is null or coalesce(refresh_claim_expires_at, 0) <= ?)
+        """,
+        (
+            claim_token,
+            now + int(lease_seconds),
+            connection["user_id"],
+            int(connection.get("version") or 1),
+            now,
+        ),
+    )
+    return claim_token if _changes(cursor) == 1 else None
+
+
+def complete_pco_connection_refresh(connection, claim_token, token, db=None):
+    """Persist refreshed encrypted tokens only if the claimed version is current."""
+    encrypted_access_token = encrypt_token(
+        token.access_token,
+        user_id=connection["user_id"],
+        field_name="access_token",
+    )
+    encrypted_refresh_token = encrypt_token(
+        token.refresh_token,
+        user_id=connection["user_id"],
+        field_name="refresh_token",
+    )
+    cursor = _execute(
+        _database(db),
+        """
+        update pco_connections set
+          access_token=?, refresh_token=coalesce(?, refresh_token), token_type=?,
+          scope=?, expires_at=?, version=version + 1,
+          refresh_claim_token=null, refresh_claim_expires_at=null,
+          updated_at=CURRENT_TIMESTAMP
+        where user_id=? and version=? and refresh_claim_token=?
+        """,
+        (
+            encrypted_access_token,
+            encrypted_refresh_token,
+            token.token_type,
+            token.scope,
+            token.expires_at,
+            connection["user_id"],
+            int(connection.get("version") or 1),
+            claim_token,
+        ),
+    )
+    return _changes(cursor) == 1
+
+
+def release_pco_connection_refresh(connection, claim_token, db=None):
+    cursor = _execute(
+        _database(db),
+        """
+        update pco_connections set
+          refresh_claim_token=null, refresh_claim_expires_at=null,
+          updated_at=CURRENT_TIMESTAMP
+        where user_id=? and version=? and refresh_claim_token=?
+        """,
+        (
+            connection["user_id"],
+            int(connection.get("version") or 1),
+            claim_token,
+        ),
+    )
+    return _changes(cursor) == 1
+
+
+def pco_connection_exists(user_id, db=None):
+    """Return whether a user has a connection without reading token material."""
+    if not user_id:
+        return False
+    db = _database(db)
+    row = _fetch_one(
+        db,
+        "select user_id from pco_connections where user_id=? limit 1",
+        (user_id,),
+    )
+    return row is not None
 
 
 def upsert_pco_connection(
@@ -90,6 +187,9 @@ def upsert_pco_connection(
             excluded.pco_account_name,
             pco_connections.pco_account_name
           ),
+          version=pco_connections.version + 1,
+          refresh_claim_token=null,
+          refresh_claim_expires_at=null,
           updated_at=CURRENT_TIMESTAMP
         """,
         (
@@ -364,3 +464,9 @@ def _batch(db, statements):
     for statement in statements:
         db.execute(statement.sql, statement.params)
     return []
+
+
+def _changes(cursor):
+    if hasattr(cursor, "changes"):
+        return cursor.changes
+    return cursor.rowcount

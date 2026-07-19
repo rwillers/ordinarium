@@ -135,6 +135,13 @@ def create_password_reset_token(user_id):
 def get_password_reset_record(token):
     if not token:
         return None
+    from .password_reset_store import (
+        get_queued_password_reset_record,
+        is_queued_password_reset_token,
+    )
+
+    if is_queued_password_reset_token(token):
+        return get_queued_password_reset_record(token)
     serializer = _password_reset_serializer()
     max_age = int(current_app.config.get("PASSWORD_RESET_EXPIRY_MINUTES", 60)) * 60
     try:

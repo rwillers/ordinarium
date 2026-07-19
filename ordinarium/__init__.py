@@ -45,6 +45,7 @@ def create_app():
         PASSWORD_RESET_EXPIRY_MINUTES=int(
             os.environ.get("PASSWORD_RESET_EXPIRY_MINUTES", "60")
         ),
+        PASSWORD_RESET_DELIVERY_KEY=os.environ.get("PASSWORD_RESET_DELIVERY_KEY"),
         TURNSTILE_ENABLED=_config_bool(
             os.environ.get("TURNSTILE_ENABLED"), not _is_dev_env()
         ),
@@ -100,6 +101,10 @@ def create_app():
         ),
         DOCUMENT_SERVICE_MAX_BYTES=int(
             os.environ.get("DOCUMENT_SERVICE_MAX_BYTES", str(25 * 1024 * 1024))
+        ),
+        QUEUE_SERVICE_URL=os.environ.get("QUEUE_SERVICE_URL"),
+        QUEUE_SERVICE_TIMEOUT_SECONDS=float(
+            os.environ.get("QUEUE_SERVICE_TIMEOUT_SECONDS", "10")
         ),
         DATABASE_GATEWAY_BACKEND=os.environ.get("DATABASE_GATEWAY_BACKEND", "sqlite"),
         D1_SERVICE_URL=os.environ.get("D1_SERVICE_URL"),

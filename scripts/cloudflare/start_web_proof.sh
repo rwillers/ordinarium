@@ -11,6 +11,5 @@ exec gunicorn \
     --threads=4 \
     --graceful-timeout=25 \
     --timeout=125 \
-    --access-logfile=- \
     --error-logfile=- \
     app:app

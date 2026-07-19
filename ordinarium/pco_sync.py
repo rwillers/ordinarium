@@ -24,6 +24,34 @@ class PcoSyncError(RuntimeError):
     pass
 
 
+_OPERATION_MARKER_RE = re.compile(r"<!--ordinarium-operation:([a-f0-9]{64})-->")
+
+
+def _pco_item_operation_marker(service_id, token):
+    stable = json.dumps(
+        {"service_id": int(service_id), "token": str(token)},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return f"<!--ordinarium-operation:{hashlib.sha256(stable.encode()).hexdigest()}-->"
+
+
+def _marked_pco_item_payload(service_id, item_payload):
+    payload = item_payload["payload"]
+    attributes = payload["data"]["attributes"]
+    marker = _pco_item_operation_marker(service_id, item_payload["token"])
+    details = attributes.get("html_details") or ""
+    if marker not in details:
+        attributes["html_details"] = f"{details}{marker}"
+    return payload, marker
+
+
+def _remote_pco_item_marker(item):
+    details = (item.get("attributes") or {}).get("html_details") or ""
+    match = _OPERATION_MARKER_RE.search(details)
+    return match.group(0) if match else None
+
+
 def _load_service_plan(service_id, user_id):
     db = get_gateway_connection()
     saved = db.execute(
@@ -253,6 +281,39 @@ def list_plans_for_date(base_url, access_token, service_type_id, service_date):
     return filtered
 
 
+def list_plans_by_title(base_url, access_token, service_type_id, title):
+    path = f"/services/v2/service_types/{service_type_id}/plans"
+    rows = list_all_pages(
+        lambda next_url: api_request(
+            "GET",
+            base_url,
+            next_url or path,
+            access_token,
+            params=None if next_url else {"per_page": 100},
+            absolute_url=bool(next_url),
+        )
+    )
+    expected = (title or "").strip()
+    return [
+        row
+        for row in rows
+        if ((row.get("attributes") or {}).get("title") or "").strip() == expected
+    ]
+
+
+def list_plan_times(base_url, access_token, service_type_id, plan_id):
+    path = f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/plan_times"
+    return list_all_pages(
+        lambda next_url: api_request(
+            "GET",
+            base_url,
+            next_url or path,
+            access_token,
+            absolute_url=bool(next_url),
+        )
+    )
+
+
 def delete_plan_item(base_url, access_token, service_type_id, plan_id, item_id):
     path = (
         f"/services/v2/service_types/{service_type_id}/plans/{plan_id}/items/{item_id}"
@@ -442,6 +503,7 @@ def _sync_pco_item_delta(
     }
     linked_rows = list_service_pco_item_links(service_id, db=db)
     linked_by_token = {row["ordinarium_token"]: row for row in linked_rows}
+    claimed_item_ids = {str(row["pco_item_id"]) for row in linked_rows}
     desired_tokens = [payload["token"] for payload in payloads if payload.get("token")]
 
     if _requires_order_rebuild(payloads, linked_by_token, existing_item_ids):
@@ -475,6 +537,7 @@ def _sync_pco_item_delta(
             continue
         linked = linked_by_token.get(token)
         pco_item_id = str(linked["pco_item_id"]) if linked else ""
+        marked_payload, marker = _marked_pco_item_payload(service_id, payload)
         if linked and pco_item_id in existing_item_ids:
             if linked.get("last_content_hash") != payload["content_hash"]:
                 update_plan_item(
@@ -483,7 +546,7 @@ def _sync_pco_item_delta(
                     service_type_id,
                     plan_id,
                     pco_item_id,
-                    payload["payload"],
+                    marked_payload,
                 )
             upsert_service_pco_item_link(
                 service_id,
@@ -494,16 +557,39 @@ def _sync_pco_item_delta(
                 db=db,
             )
             continue
+        reconciled = [
+            item
+            for item in existing_items
+            if str(item.get("id")) not in claimed_item_ids
+            and _remote_pco_item_marker(item) == marker
+        ]
+        if len(reconciled) > 1:
+            raise PcoSyncError(
+                "Planning Center item creation has an uncertain result: multiple items match."
+            )
+        if reconciled:
+            created_id = str(reconciled[0]["id"])
+            claimed_item_ids.add(created_id)
+            upsert_service_pco_item_link(
+                service_id,
+                token,
+                created_id,
+                last_content_hash=payload["content_hash"],
+                last_position=payload["position"],
+                db=db,
+            )
+            continue
         created = create_plan_item(
             base_url,
             access_token,
             service_type_id,
             plan_id,
-            payload["payload"],
+            marked_payload,
         )
         created_id = _extract_pco_item_id(created)
         if not created_id:
             raise PcoSyncError("PCO item creation failed.")
+        claimed_item_ids.add(created_id)
         upsert_service_pco_item_link(
             service_id,
             token,
@@ -745,7 +831,7 @@ def _reset_pco_plan_items(
             access_token,
             service_type_id,
             plan_id,
-            payload["payload"],
+            _marked_pco_item_payload(service_id, payload)[0],
         )
         created_id = _extract_pco_item_id(created)
         if not created_id:
@@ -838,7 +924,7 @@ def _rebuild_linked_plan_items(
             access_token,
             service_type_id,
             plan_id,
-            payload["payload"],
+            _marked_pco_item_payload(service_id, payload)[0],
         )
         created_id = _extract_pco_item_id(created)
         if not created_id:

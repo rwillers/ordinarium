@@ -56,6 +56,114 @@ def test_services_pco_batch_sync_enforces_limit(app, auth_client):
     assert "up to 25 services" in payload["error"]
 
 
+def test_services_pco_batch_sync_sanitizes_auth_errors(app, auth_client, monkeypatch):
+    from ordinarium.pco_client import PcoAuthError
+
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.get_valid_pco_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PcoAuthError("provider response contained sensitive diagnostics")
+        ),
+    )
+
+    response = client.post(
+        "/services/pco/batch-sync",
+        json={"rows": [{"service_id": 1, "mode": "skip"}]},
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "ok": False,
+        "error": "Planning Center authorization failed.",
+    }
+
+
+def test_services_pco_batch_sync_queues_one_opaque_message_per_row(
+    app, auth_client, monkeypatch
+):
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    app.config["QUEUE_SERVICE_URL"] = "http://queue.internal"
+    published = []
+
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.get_valid_pco_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("queued web request must not decrypt or refresh OAuth")
+        ),
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes._start_pco_batch_sync_worker",
+        lambda *_args: (_ for _ in ()).throw(
+            AssertionError("queued web request must not start a thread")
+        ),
+    )
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.publish_pco_row",
+        lambda **message: published.append(message),
+    )
+
+    response = client.post(
+        "/services/pco/batch-sync",
+        json=_queued_payload(),
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 202
+    job_id = response.get_json()["job_id"]
+    assert len(published) == 2
+    assert all(set(message) == {"job_id", "row_id", "user_id"} for message in published)
+    assert all(message["job_id"] == job_id for message in published)
+    assert all(message["user_id"] == user_id for message in published)
+    assert len({message["row_id"] for message in published}) == 2
+
+
+def test_services_pco_batch_sync_keeps_rows_pending_after_partial_publication(
+    app, auth_client, monkeypatch
+):
+    from ordinarium.queue_publisher import QueuePublicationUnavailable
+
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    app.config["QUEUE_SERVICE_URL"] = "http://queue.internal"
+    published = []
+
+    def publish(**message):
+        published.append(message)
+        if len(published) == 1:
+            raise QueuePublicationUnavailable("unavailable")
+
+    monkeypatch.setattr("ordinarium.service_pco_routes.publish_pco_row", publish)
+    response = client.post(
+        "/services/pco/batch-sync",
+        json=_queued_payload(),
+        headers={"Accept": "application/json"},
+    )
+    status_response = client.get(response.get_json()["status_url"])
+
+    assert response.status_code == 202
+    assert len(published) == 2
+    assert status_response.get_json()["status"] == "queued"
+    assert [row["status"] for row in status_response.get_json()["results"]] == [
+        "pending",
+        "pending",
+    ]
+
+
+def _queued_payload():
+    return {
+        "rows": [
+            {"service_id": 901, "mode": "skip"},
+            {"service_id": 902, "mode": "skip"},
+        ],
+        "pco_plan_time": "10:00",
+        "pco_plan_tz_offset": "0",
+    }
+
+
 def test_services_pco_batch_sync_handles_mixed_modes(
     app, auth_client, service_factory, monkeypatch
 ):

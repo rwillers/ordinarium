@@ -21,6 +21,55 @@ def test_jobs_health_endpoint(monkeypatch):
     assert response.get_json() == {"role": "email-jobs", "status": "ok"}
 
 
+def test_job_process_endpoint_is_role_gated_and_authenticated(monkeypatch):
+    monkeypatch.setenv("ORDINARIUM_CONTAINER_ROLE", "pco-jobs")
+    monkeypatch.setenv("JOB_SERVICE_AUTH_TOKEN", "pco-secret")
+    client = create_jobs_app().test_client()
+    payload = {"job_id": "job-1", "row_id": "row-1", "user_id": 7}
+
+    missing_auth = client.post("/jobs/pco/rows/process", json=payload)
+    wrong_role = client.post(
+        "/jobs/email/resets/process",
+        json={"reset_id": "reset-1"},
+        headers={"X-Ordinarium-Job-Auth": "pco-secret"},
+    )
+    unavailable = client.post(
+        "/jobs/pco/rows/process",
+        json=payload,
+        headers={"X-Ordinarium-Job-Auth": "pco-secret"},
+    )
+
+    assert missing_auth.status_code == 404
+    assert wrong_role.status_code == 404
+    assert unavailable.status_code == 503
+    assert unavailable.headers["Retry-After"] == "30"
+    assert unavailable.get_json() == {
+        "error": "processor_unavailable",
+        "retry_after_seconds": 30,
+    }
+
+
+def test_job_endpoint_rejects_unbounded_payload_contract(monkeypatch):
+    monkeypatch.setenv("ORDINARIUM_CONTAINER_ROLE", "email-jobs")
+    monkeypatch.setenv("JOB_SERVICE_AUTH_TOKEN", "email-secret")
+    client = create_jobs_app().test_client()
+    headers = {"X-Ordinarium-Job-Auth": "email-secret"}
+
+    extra_field = client.post(
+        "/jobs/email/resets/process",
+        json={"reset_id": "reset-1", "reset_token": "must-not-cross-boundary"},
+        headers=headers,
+    )
+    wrong_type = client.post(
+        "/jobs/email/resets/dead-letter",
+        json={"reset_id": 1},
+        headers=headers,
+    )
+
+    assert extra_field.status_code == 400
+    assert wrong_type.status_code == 400
+
+
 def test_private_container_apps_do_not_expose_business_routes():
     for app in (create_documents_app(), create_jobs_app()):
         response = app.test_client().get("/")

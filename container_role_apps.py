@@ -87,7 +87,202 @@ def create_documents_app():
 
 
 def create_jobs_app():
-    return _create_private_container_app("jobs")
+    app = _create_private_container_app("jobs")
+    app.config.update(
+        MAX_CONTENT_LENGTH=int(os.environ.get("JOB_MAX_REQUEST_BYTES", "1024")),
+        JOB_SERVICE_AUTH_TOKEN=os.environ.get("JOB_SERVICE_AUTH_TOKEN"),
+        ORDINARIUM_CONTAINER_ROLE=os.environ.get("ORDINARIUM_CONTAINER_ROLE", "jobs"),
+        DATABASE_GATEWAY_BACKEND=os.environ.get("DATABASE_GATEWAY_BACKEND", "sqlite"),
+        D1_SERVICE_URL=os.environ.get("D1_SERVICE_URL"),
+        D1_SERVICE_TIMEOUT_SECONDS=float(
+            os.environ.get("D1_SERVICE_TIMEOUT_SECONDS", "20")
+        ),
+        D1_SERVICE_MAX_BYTES=int(
+            os.environ.get("D1_SERVICE_MAX_BYTES", str(5 * 1024 * 1024))
+        ),
+        PCO_API_BASE=os.environ.get(
+            "PCO_API_BASE", "https://api.planningcenteronline.com"
+        ),
+        PCO_OAUTH_TOKEN_URL=os.environ.get(
+            "PCO_OAUTH_TOKEN_URL",
+            "https://api.planningcenteronline.com/oauth/token",
+        ),
+        PCO_CLIENT_ID=os.environ.get("PCO_CLIENT_ID"),
+        PCO_CLIENT_SECRET=os.environ.get("PCO_CLIENT_SECRET"),
+        PCO_TOKEN_ENCRYPTION_KEYS=os.environ.get("PCO_TOKEN_ENCRYPTION_KEYS"),
+        PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION=os.environ.get(
+            "PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION", "v1"
+        ),
+        DEPLOYMENT_ENV=os.environ.get("DEPLOYMENT_ENV"),
+        APP_ORIGIN=os.environ.get("APP_ORIGIN"),
+        EXTERNAL_SIDE_EFFECTS_ENABLED=os.environ.get(
+            "EXTERNAL_SIDE_EFFECTS_ENABLED", "false"
+        ),
+        SIDE_EFFECTS_HOSTNAME=os.environ.get("SIDE_EFFECTS_HOSTNAME"),
+        MAILERSEND_API_TOKEN=os.environ.get("MAILERSEND_API_TOKEN"),
+        MAILERSEND_FROM_EMAIL=os.environ.get("MAILERSEND_FROM_EMAIL"),
+        MAILERSEND_FROM_NAME=os.environ.get("MAILERSEND_FROM_NAME", "Ordinarium"),
+        PASSWORD_RESET_DELIVERY_KEY=os.environ.get("PASSWORD_RESET_DELIVERY_KEY"),
+    )
+    if app.config["ORDINARIUM_CONTAINER_ROLE"] == "pco-jobs":
+        _configure_pco_jobs_app(app)
+    elif app.config["ORDINARIUM_CONTAINER_ROLE"] == "email-jobs":
+        _configure_email_jobs_app(app)
+
+    @app.errorhandler(RequestEntityTooLarge)
+    def job_request_too_large(_error):
+        return jsonify({"error": "request_too_large"}), 413
+
+    @app.post("/jobs/pco/rows/process")
+    def process_pco_row():
+        rejected = _validate_job_request(app, "pco-jobs", _valid_pco_job_payload)
+        if rejected:
+            return rejected
+        if not app.config.get("D1_SERVICE_URL") and not app.config.get(
+            "DATABASE_GATEWAY_FACTORY"
+        ):
+            return _processor_unavailable_response()
+        from ordinarium.pco_job_processor import process_pco_row_message
+
+        body, status = process_pco_row_message(request.get_json())
+        response = jsonify(body)
+        response.status_code = status
+        if status in {429, 503}:
+            response.headers["Retry-After"] = str(body["retry_after_seconds"])
+        return response
+
+    @app.post("/jobs/pco/rows/dead-letter")
+    def dead_letter_pco_row():
+        rejected = _validate_job_request(app, "pco-jobs", _valid_pco_job_payload)
+        if rejected:
+            return rejected
+        from ordinarium.pco_job_processor import dead_letter_pco_row_message
+
+        body, status = dead_letter_pco_row_message(request.get_json())
+        response = jsonify(body)
+        response.status_code = status
+        if status == 503:
+            response.headers["Retry-After"] = str(body["retry_after_seconds"])
+        return response
+
+    @app.post("/jobs/email/resets/process")
+    def process_email_reset():
+        rejected = _validate_job_request(app, "email-jobs", _valid_email_job_payload)
+        if rejected:
+            return rejected
+        if not app.config.get("D1_SERVICE_URL") and not app.config.get(
+            "DATABASE_GATEWAY_FACTORY"
+        ):
+            return _processor_unavailable_response()
+        from ordinarium.password_reset_email_processor import (
+            process_password_reset_message,
+        )
+
+        body, status = process_password_reset_message(request.get_json())
+        response = jsonify(body)
+        response.status_code = status
+        if status in {429, 503}:
+            response.headers["Retry-After"] = str(body["retry_after_seconds"])
+        return response
+
+    @app.post("/jobs/email/resets/dead-letter")
+    def dead_letter_email_reset():
+        rejected = _validate_job_request(app, "email-jobs", _valid_email_job_payload)
+        if rejected:
+            return rejected
+        if not app.config.get("D1_SERVICE_URL") and not app.config.get(
+            "DATABASE_GATEWAY_FACTORY"
+        ):
+            return _processor_unavailable_response()
+        from ordinarium.password_reset_email_processor import (
+            dead_letter_password_reset_message,
+        )
+
+        body, status = dead_letter_password_reset_message(request.get_json())
+        response = jsonify(body)
+        response.status_code = status
+        return response
+
+    return app
+
+
+def _unavailable_job_response(app, expected_role, payload_validator):
+    rejected = _validate_job_request(app, expected_role, payload_validator)
+    if rejected:
+        return rejected
+    return _processor_unavailable_response()
+
+
+def _processor_unavailable_response():
+    response = jsonify({"error": "processor_unavailable", "retry_after_seconds": 30})
+    response.status_code = 503
+    response.headers["Retry-After"] = "30"
+    return response
+
+
+def _validate_job_request(app, expected_role, payload_validator):
+    if not _job_request_is_authorized(app, expected_role):
+        return jsonify({"error": "not_found"}), 404
+    if not payload_validator(request.get_json(silent=True)):
+        return jsonify({"error": "invalid_payload"}), 400
+    return None
+
+
+def _configure_pco_jobs_app(app):
+    import markdown2
+    from markupsafe import Markup
+
+    from ordinarium.db import close_db
+
+    app.jinja_env.filters["markdown"] = lambda value: Markup(
+        markdown2.markdown(
+            value or "",
+            extras=["fenced-code-blocks", "code-friendly", "markdown-in-html"],
+        )
+    )
+    app.teardown_appcontext(close_db)
+
+
+def _configure_email_jobs_app(app):
+    from ordinarium.db import close_db
+
+    app.teardown_appcontext(close_db)
+
+
+def _job_request_is_authorized(app, expected_role):
+    if app.config.get("ORDINARIUM_CONTAINER_ROLE") != expected_role:
+        return False
+    expected_token = app.config.get("JOB_SERVICE_AUTH_TOKEN")
+    provided_token = request.headers.get("X-Ordinarium-Job-Auth")
+    if not expected_token or not provided_token:
+        return False
+    return hmac.compare_digest(provided_token, expected_token)
+
+
+def _valid_pco_job_payload(payload):
+    if not _has_exact_keys(payload, {"job_id", "row_id", "user_id"}):
+        return False
+    return (
+        _valid_identifier(payload["job_id"])
+        and _valid_identifier(payload["row_id"])
+        and isinstance(payload["user_id"], int)
+        and not isinstance(payload["user_id"], bool)
+        and payload["user_id"] > 0
+    )
+
+
+def _valid_email_job_payload(payload):
+    return _has_exact_keys(payload, {"reset_id"}) and _valid_identifier(
+        payload["reset_id"]
+    )
+
+
+def _has_exact_keys(payload, expected_keys):
+    return isinstance(payload, dict) and set(payload) == expected_keys
+
+
+def _valid_identifier(value):
+    return isinstance(value, str) and 0 < len(value) <= 128
 
 
 def _render_payload(export_format, payload):
