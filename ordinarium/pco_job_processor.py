@@ -127,22 +127,19 @@ def process_pco_row_message(payload, db=None):
             durable_plan_context=plan_context,
         )
         return _complete_result(database, row, claim, result, plan_context)
-    except PcoPlanOperationBusy as exc:
-        return _release_for_retry(database, row, claim, "lease", str(exc), 20)
+    except PcoPlanOperationBusy:
+        return _release_for_retry(database, row, claim, "lease", 20)
     except RetryablePcoJobError as exc:
         return _release_for_retry(
             database,
             row,
             claim,
             exc.category,
-            str(exc),
             exc.retry_after_seconds,
         )
     except PcoAuthError as exc:
         if "in progress" in str(exc).lower() or "lease was lost" in str(exc).lower():
-            return _release_for_retry(
-                database, row, claim, "auth_refresh", str(exc), 20
-            )
+            return _release_for_retry(database, row, claim, "auth_refresh", 20)
         return _complete_terminal_failure(database, row, claim, str(exc), "auth")
     except TerminalPcoAuthError as exc:
         return _complete_terminal_failure(database, row, claim, str(exc), "auth")
@@ -155,7 +152,6 @@ def process_pco_row_message(payload, db=None):
                 row,
                 claim,
                 retryable.category,
-                str(retryable),
                 retryable.retry_after_seconds,
             )
         try:
@@ -170,7 +166,7 @@ def process_pco_row_message(payload, db=None):
             return _complete_terminal_failure(
                 database, row, claim, str(terminal), terminal.category
             )
-        return _release_for_retry(database, row, claim, "internal", str(exc), 30)
+        return _release_for_retry(database, row, claim, "internal", 30)
     finally:
         end_pco_request_deadline(deadline_token)
         if service_claim and row.get("service_id"):
@@ -222,7 +218,7 @@ def _prepared_row(index, raw):
 def _complete_result(db, row, claim, result, plan_context=None):
     status = result.get("status")
     if status not in {"success", "failed", "skipped"}:
-        return _release_for_retry(db, row, claim, "internal", "Invalid result.", 30)
+        return _release_for_retry(db, row, claim, "internal", 30)
     persisted = complete_pco_batch_sync_row(
         row["job_id"],
         row["id"],
@@ -252,13 +248,13 @@ def _complete_terminal_failure(db, row, claim, message, category):
     return _terminal(category) if persisted else _retry("d1_conflict", 20)
 
 
-def _release_for_retry(db, row, claim, category, message, delay):
+def _release_for_retry(db, row, claim, category, delay):
     persisted = release_pco_batch_sync_row(
         row["job_id"], row["id"], claim, error_category=category, db=db
     )
     if not persisted:
         return _retry("d1_conflict", 20)
-    return _retry(category, delay, message)
+    return _retry(category, delay)
 
 
 def _failure_result(row, message):
@@ -275,16 +271,13 @@ def _terminal(reason):
     return {"disposition": "terminal", "persisted": True, "reason": reason}, 200
 
 
-def _retry(reason, delay, message=None):
-    body = {
+def _retry(reason, delay):
+    return {
         "disposition": "retry",
         "persisted": False,
         "reason": reason,
         "retry_after_seconds": int(delay),
-    }
-    if message:
-        body["error"] = message
-    return body, 429 if reason == "rate_limit" else 503
+    }, (429 if reason == "rate_limit" else 503)
 
 
 def _application_config(name):

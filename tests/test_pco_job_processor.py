@@ -130,6 +130,7 @@ def test_transient_failure_releases_row_then_retry_succeeds(
 
     assert first[1] == 429
     assert first[0]["retry_after_seconds"] == 41
+    assert "error" not in first[0]
     assert released["status"] == "retry"
     assert second[0]["disposition"] == "terminal"
     assert attempts == 2

@@ -56,6 +56,31 @@ def test_services_pco_batch_sync_enforces_limit(app, auth_client):
     assert "up to 25 services" in payload["error"]
 
 
+def test_services_pco_batch_sync_sanitizes_auth_errors(app, auth_client, monkeypatch):
+    from ordinarium.pco_client import PcoAuthError
+
+    client, user_id = auth_client
+    _enable_pco_feature(app, user_id)
+    monkeypatch.setattr(
+        "ordinarium.service_pco_routes.get_valid_pco_connection",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            PcoAuthError("provider response contained sensitive diagnostics")
+        ),
+    )
+
+    response = client.post(
+        "/services/pco/batch-sync",
+        json={"rows": [{"service_id": 1, "mode": "skip"}]},
+        headers={"Accept": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "ok": False,
+        "error": "Planning Center authorization failed.",
+    }
+
+
 def test_services_pco_batch_sync_queues_one_opaque_message_per_row(
     app, auth_client, monkeypatch
 ):

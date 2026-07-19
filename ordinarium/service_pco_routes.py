@@ -1069,8 +1069,16 @@ def register_service_pco_routes(bp):
         else:
             try:
                 connected = get_valid_pco_connection(g.user["id"], db)
-            except PcoAuthError as exc:
-                return jsonify({"ok": False, "error": str(exc)}), 400
+            except PcoAuthError:
+                return (
+                    jsonify(
+                        {
+                            "ok": False,
+                            "error": "Planning Center authorization failed.",
+                        }
+                    ),
+                    400,
+                )
         if not connected:
             return (
                 jsonify({"ok": False, "error": "Planning Center is not connected."}),
