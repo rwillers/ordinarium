@@ -7,6 +7,8 @@ export const REQUIRED_QUEUE_NAMES = Object.freeze([
   "ordinarium-app-staging-pco-jobs-dlq",
   "ordinarium-app-staging-email-jobs",
   "ordinarium-app-staging-email-jobs-dlq",
+  "ordinarium-app-staging-alerts",
+  "ordinarium-app-staging-alerts-dlq",
 ]);
 
 

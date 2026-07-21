@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ALERT_DLQ_NAME,
+  ALERT_QUEUE_NAME,
+} from "./operational_alerts.ts";
+import {
   EMAIL_DLQ_NAME,
   EMAIL_QUEUE_NAME,
   PCO_DLQ_NAME,
@@ -209,6 +213,30 @@ test("consumer retries unavailable and incomplete success responses", async () =
 });
 
 
+test("consumer safely surfaces bounded retry reasons from job responses", async () => {
+  const unavailable = consumerEnvironment(
+    () =>
+      Response.json(
+        { error: "provider_configuration_missing", retry_after_seconds: 60 },
+        { status: 503 },
+      ),
+  );
+  const message = queueMessage({
+    job_id: "job-1",
+    row_id: "row-1",
+    user_id: 7,
+  });
+
+  await handleQueueBatch(
+    { queue: PCO_QUEUE_NAME, messages: [message] },
+    unavailable,
+  );
+
+  assert.deepEqual(message.retryOptions, { delaySeconds: 60 });
+  assert.equal(message.acknowledged, false);
+});
+
+
 test("consumer omits zero retry delay and clamps large delays to one day", async () => {
   const zeroDelay = consumerEnvironment(
     () => Response.json({ retry_after_seconds: 0 }, { status: 503 }),
@@ -275,6 +303,49 @@ test("DLQ batches call role terminalization endpoints", async () => {
     ),
     "email-job-secret",
   );
+});
+
+
+test("alert queues deliver the bounded contract through the email role", async () => {
+  const environment = consumerEnvironment(
+    () => Response.json({ disposition: "terminal", persisted: true }),
+  );
+  const alert = {
+    alert_id: "alert-1",
+    kind: "d1_failure",
+    severity: "critical",
+    occurred_at: "2026-07-21T12:00:00.000Z",
+    source: {
+      script_name: "ordinarium-app-staging",
+      container_role: "d1-bridge",
+      queue: null,
+      route: null,
+      status: null,
+      error_category: "internal",
+      request_id: "request-1",
+      job_id: null,
+    },
+  };
+  const primary = queueMessage(alert);
+  const deadLetter = queueMessage(alert);
+
+  await handleQueueBatch({ queue: ALERT_QUEUE_NAME, messages: [primary] }, environment);
+  await handleQueueBatch({ queue: ALERT_DLQ_NAME, messages: [deadLetter] }, environment);
+
+  assert.equal(primary.acknowledged, true);
+  assert.equal(deadLetter.acknowledged, true);
+  assert.equal(environment.EMAIL_JOBS_CONTAINER.requests.length, 2);
+  assert.equal(
+    new URL(environment.EMAIL_JOBS_CONTAINER.requests[0].url).pathname,
+    "/jobs/email/alerts/process",
+  );
+  assert.equal(
+    environment.EMAIL_JOBS_CONTAINER.requests[0].headers.get(
+      "x-ordinarium-job-auth",
+    ),
+    "email-job-secret",
+  );
+  assert.deepEqual(await environment.EMAIL_JOBS_CONTAINER.requests[0].json(), alert);
 });
 
 

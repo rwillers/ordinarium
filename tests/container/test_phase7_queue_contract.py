@@ -21,12 +21,22 @@ def test_phase7_declares_exact_staging_queues_and_dlqs():
             "binding": "EMAIL_JOBS_QUEUE",
             "queue": "ordinarium-app-staging-email-jobs",
         },
+        {
+            "binding": "PCO_JOBS_DLQ",
+            "queue": "ordinarium-app-staging-pco-jobs-dlq",
+        },
+        {
+            "binding": "EMAIL_JOBS_DLQ",
+            "queue": "ordinarium-app-staging-email-jobs-dlq",
+        },
     ]
     assert {consumer["queue"] for consumer in queues["consumers"]} == {
         "ordinarium-app-staging-pco-jobs",
         "ordinarium-app-staging-pco-jobs-dlq",
         "ordinarium-app-staging-email-jobs",
         "ordinarium-app-staging-email-jobs-dlq",
+        "ordinarium-app-staging-alerts",
+        "ordinarium-app-staging-alerts-dlq",
     }
 
 
@@ -46,6 +56,10 @@ def test_phase7_pco_queue_is_strictly_serial_and_both_primaries_have_dlqs():
     assert email["dead_letter_queue"] == "ordinarium-app-staging-email-jobs-dlq"
     assert consumers["ordinarium-app-staging-pco-jobs-dlq"]["max_retries"] == 100
     assert consumers["ordinarium-app-staging-email-jobs-dlq"]["max_retries"] == 100
+    assert consumers["ordinarium-app-staging-alerts"]["dead_letter_queue"] == (
+        "ordinarium-app-staging-alerts-dlq"
+    )
+    assert consumers["ordinarium-app-staging-alerts-dlq"]["max_retries"] == 100
 
 
 def test_phase7_documents_finite_dlq_retries_and_reconciliation_fallback():

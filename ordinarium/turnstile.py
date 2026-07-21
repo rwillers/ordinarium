@@ -13,7 +13,7 @@ def turnstile_enabled():
     )
 
 
-def verify_turnstile_response(token, remoteip=None):
+def verify_turnstile_response(token, remoteip=None, expected_action=None):
     if not turnstile_enabled():
         return True, None
     if not token:
@@ -38,6 +38,13 @@ def verify_turnstile_response(token, remoteip=None):
         current_app.logger.warning("Turnstile verification error: %s", exc)
         return False, "verification-error"
     if payload.get("success"):
+        expected_hostname = current_app.config.get("TURNSTILE_EXPECTED_HOSTNAME")
+        if expected_hostname and payload.get("hostname") != expected_hostname:
+            current_app.logger.warning("Turnstile rejected an unexpected hostname")
+            return False, "hostname-mismatch"
+        if expected_action and payload.get("action") != expected_action:
+            current_app.logger.warning("Turnstile rejected an unexpected action")
+            return False, "action-mismatch"
         return True, None
     current_app.logger.info(
         "Turnstile rejected response: %s", payload.get("error-codes")
