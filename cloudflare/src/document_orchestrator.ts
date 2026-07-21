@@ -1,5 +1,11 @@
+import {
+  createRequestId,
+  emitTelemetry,
+  errorCategory,
+  REQUEST_ID_HEADER,
+} from "./telemetry.ts";
+
 const DOCUMENT_AUTH_HEADER = "X-Ordinarium-Document-Auth";
-const DOCUMENT_REQUEST_ID_HEADER = "X-Ordinarium-Request-Id";
 const DOCUMENT_MAX_REQUEST_BYTES = 5 * 1024 * 1024;
 const DOCUMENT_MAX_OUTPUT_BYTES = 25 * 1024 * 1024;
 const DOCUMENT_REQUEST_TIMEOUT_MS = 115_000;
@@ -28,11 +34,12 @@ export const handleDocumentRequest = async (
   environment: DocumentEnvironment,
 ): Promise<Response> => {
   const url = new URL(request.url);
+  const requestId = request.headers.get(REQUEST_ID_HEADER) || createRequestId();
   if (request.method !== "POST" || url.pathname !== "/render") {
     return Response.json({ error: "not_found" }, { status: 404 });
   }
   if (!environment.DOCUMENT_SERVICE_AUTH_TOKEN) {
-    console.error("Document service authentication is not configured");
+    emitExportFailure(requestId, "configuration");
     return unavailableResponse();
   }
   if (request.headers.get("content-type") !== "application/json") {
@@ -48,7 +55,7 @@ export const handleDocumentRequest = async (
   try {
     body = await request.arrayBuffer();
   } catch (error: unknown) {
-    console.error("Unable to read document request body", error);
+    emitExportFailure(requestId, errorCategory(error));
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
   if (body.byteLength > DOCUMENT_MAX_REQUEST_BYTES) {
@@ -61,8 +68,7 @@ export const handleDocumentRequest = async (
   const headers = new Headers({
     "content-type": "application/json",
     [DOCUMENT_AUTH_HEADER]: environment.DOCUMENT_SERVICE_AUTH_TOKEN,
-    [DOCUMENT_REQUEST_ID_HEADER]:
-      request.headers.get(DOCUMENT_REQUEST_ID_HEADER) || crypto.randomUUID(),
+    [REQUEST_ID_HEADER]: requestId,
   });
   const forwardedRequest = new Request(request.url, {
     method: "POST",
@@ -77,12 +83,15 @@ export const handleDocumentRequest = async (
       response.headers.get("content-length"),
     );
     if (responseLength !== null && responseLength > DOCUMENT_MAX_OUTPUT_BYTES) {
-      console.error("Document service response exceeded the output limit");
+      emitExportFailure(requestId, "output_limit");
       return unavailableResponse();
+    }
+    if (!response.ok) {
+      emitExportFailure(requestId, "document_response");
     }
     return response;
   } catch (error: unknown) {
-    console.error("Document container request failed", error);
+    emitExportFailure(requestId, errorCategory(error));
     return unavailableResponse();
   }
 };
@@ -104,3 +113,11 @@ const parseContentLength = (value: string | null): number | null => {
 
 const unavailableResponse = (): Response =>
   Response.json({ error: "document_service_unavailable" }, { status: 503 });
+
+const emitExportFailure = (requestId: string, category: string): void => {
+  emitTelemetry("error", "export_failure", {
+    request_id: requestId,
+    container_role: "documents",
+    error_category: category,
+  });
+};

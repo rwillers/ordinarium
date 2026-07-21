@@ -33,7 +33,8 @@
 				return
 			}
 			widgetId = window.turnstile.render(widget, {
-				sitekey: "{{ turnstile_site_key }}",
+				sitekey: {{ turnstile_site_key | tojson }},
+				action: {{ turnstile_action | tojson }},
 				theme: "light",
 				callback: (value) => {
 					token = value || null

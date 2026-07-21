@@ -1,3 +1,9 @@
+import {
+  emitTelemetry,
+  errorCategory,
+  sanitizeIdentifier,
+} from "./telemetry.ts";
+
 const MAX_QUEUE_REQUEST_BYTES = 1024;
 
 interface QueueProducer<T> {
@@ -57,7 +63,15 @@ export const handleQueuePublishRequest = async (
       await environment.EMAIL_JOBS_QUEUE.send(message as EmailMessage);
     }
   } catch (error: unknown) {
-    console.error("Queue publication failed", error);
+    const identifier =
+      path === "/pco"
+        ? (message as PcoRowMessage).job_id
+        : (message as EmailMessage).reset_id;
+    emitTelemetry("error", "queue_publication_failure", {
+      queue: path === "/pco" ? "pco-jobs" : "email-jobs",
+      job_id: sanitizeIdentifier(identifier),
+      error_category: errorCategory(error),
+    });
     return Response.json({ error: "queue_unavailable" }, { status: 503 });
   }
   return Response.json({ status: "queued" }, { status: 202 });

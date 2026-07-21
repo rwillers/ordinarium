@@ -1,3 +1,10 @@
+import {
+  createRequestId,
+  emitTelemetry,
+  errorCategory,
+  REQUEST_ID_HEADER,
+} from "./telemetry.ts";
+
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_SQL_BYTES = 64 * 1024;
 const MAX_PARAMS = 500;
@@ -52,7 +59,12 @@ export const handleD1Request = async (
     if (error instanceof BridgeInputError) {
       return jsonError(error.code, error.status);
     }
-    console.error("D1 bridge operation failed", error);
+    emitTelemetry("error", "d1_operation_failure", {
+      request_id:
+        request.headers.get(REQUEST_ID_HEADER) || createRequestId(),
+      container_role: "d1-bridge",
+      error_category: errorCategory(error),
+    });
     return jsonError("database_operation_failed", 503);
   }
 };

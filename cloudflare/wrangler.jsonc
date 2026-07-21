@@ -19,11 +19,19 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "tail_consumers": [
+    {
+      "service": "ordinarium-alerts-staging"
+    }
+  ],
   "vars": {
     "DEPLOYMENT_ENV": "staging",
     "APP_ORIGIN": "https://containers-staging.ordinarium.com",
     "SIDE_EFFECTS_HOSTNAME": "containers-staging.ordinarium.com",
-    "EXTERNAL_SIDE_EFFECTS_ENABLED": "true"
+    "EXTERNAL_SIDE_EFFECTS_ENABLED": "true",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAACNe-sQcXR2N-BAL",
+    "TURNSTILE_EXPECTED_HOSTNAME": "containers-staging.ordinarium.com",
+    "ALERT_EMAIL_TO": "ryanwillers+ordo@gmail.com"
   },
   "triggers": {
     "crons": ["* * * * *"]
@@ -45,6 +53,14 @@
       {
         "binding": "EMAIL_JOBS_QUEUE",
         "queue": "ordinarium-app-staging-email-jobs"
+      },
+      {
+        "binding": "PCO_JOBS_DLQ",
+        "queue": "ordinarium-app-staging-pco-jobs-dlq"
+      },
+      {
+        "binding": "EMAIL_JOBS_DLQ",
+        "queue": "ordinarium-app-staging-email-jobs-dlq"
       }
     ],
     "consumers": [
@@ -73,6 +89,21 @@
       },
       {
         "queue": "ordinarium-app-staging-email-jobs-dlq",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 100,
+        "max_concurrency": 1
+      },
+      {
+        "queue": "ordinarium-app-staging-alerts",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "ordinarium-app-staging-alerts-dlq",
+        "max_concurrency": 1
+      },
+      {
+        "queue": "ordinarium-app-staging-alerts-dlq",
         "max_batch_size": 1,
         "max_batch_timeout": 5,
         "max_retries": 100,
@@ -131,6 +162,10 @@
       {
         "name": "EMAIL_JOBS_CONTAINER",
         "class_name": "EmailJobsContainer"
+      },
+      {
+        "name": "AUTH_RATE_LIMITER",
+        "class_name": "AuthRateLimiter"
       }
     ]
   },
@@ -143,6 +178,10 @@
         "PcoJobsContainer",
         "EmailJobsContainer"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["AuthRateLimiter"]
     }
   ],
   "dev": {

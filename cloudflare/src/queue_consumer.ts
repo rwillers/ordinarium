@@ -1,4 +1,16 @@
 import { parseEmailMessage, parsePcoRowMessage } from "./queue_publisher.ts";
+import {
+  ALERT_DLQ_NAME,
+  ALERT_QUEUE_NAME,
+  parseOperationalAlert,
+} from "./operational_alerts.ts";
+import {
+  createRequestId,
+  emitTelemetry,
+  errorCategory,
+  REQUEST_ID_HEADER,
+  sanitizeIdentifier,
+} from "./telemetry.ts";
 
 const JOB_AUTH_HEADER = "X-Ordinarium-Job-Auth";
 const JOB_REQUEST_TIMEOUT_MS = 115_000;
@@ -26,6 +38,8 @@ export interface QueueConsumerEnvironment {
 
 interface QueueMessageLike {
   body: unknown;
+  id?: string;
+  attempts?: number;
   ack(): void;
   retry(options?: { delaySeconds?: number }): void;
 }
@@ -41,6 +55,9 @@ interface ConsumerRoute {
   instanceName: () => string;
   path: string;
   authToken?: string;
+  queueName: string;
+  role: "pco-jobs" | "email-jobs";
+  dlq: boolean;
 }
 
 let nextEmailInstance = 0;
@@ -51,7 +68,10 @@ export const handleQueueBatch = async (
 ): Promise<void> => {
   const route = routeForQueue(batch.queue, environment);
   if (!route) {
-    console.error("Received a batch from an unknown queue", batch.queue);
+    emitTelemetry("error", "queue_unknown_batch", {
+      queue: sanitizeIdentifier(batch.queue),
+      error_category: "unknown_queue",
+    });
     for (const message of batch.messages) {
       message.retry();
     }
@@ -61,7 +81,12 @@ export const handleQueueBatch = async (
   for (const message of batch.messages) {
     const payload = route.parse(message.body);
     if (!payload) {
-      console.error("Discarding malformed queue message", batch.queue);
+      emitTelemetry("error", "queue_message_discarded", {
+        queue: route.queueName,
+        container_role: route.role,
+        dlq: route.dlq,
+        error_category: "invalid_message",
+      });
       message.ack();
       continue;
     }
@@ -74,8 +99,17 @@ const deliverMessage = async (
   payload: object,
   route: ConsumerRoute,
 ): Promise<void> => {
+  const requestId = createRequestId();
+  const jobId = payloadIdentifier(payload);
   if (!route.authToken) {
-    console.error("Job container authentication is not configured");
+    emitTelemetry("error", "queue_delivery_failure", {
+      request_id: requestId,
+      queue: route.queueName,
+      container_role: route.role,
+      job_id: jobId,
+      dlq: route.dlq,
+      error_category: "configuration",
+    });
     message.retry();
     return;
   }
@@ -86,6 +120,7 @@ const deliverMessage = async (
     headers: {
       "content-type": "application/json",
       [JOB_AUTH_HEADER]: route.authToken,
+      [REQUEST_ID_HEADER]: requestId,
     },
     signal: AbortSignal.timeout(JOB_REQUEST_TIMEOUT_MS),
   });
@@ -94,16 +129,53 @@ const deliverMessage = async (
   try {
     response = await route.namespace.getByName(route.instanceName()).fetch(request);
   } catch (error: unknown) {
-    console.error("Job container request failed", error);
+    emitTelemetry("error", "queue_delivery_failure", {
+      request_id: requestId,
+      queue: route.queueName,
+      container_role: route.role,
+      job_id: jobId,
+      dlq: route.dlq,
+      error_category: errorCategory(error),
+    });
     message.retry();
     return;
   }
 
-  if (await isPersistedTerminalResponse(response)) {
+  const disposition = await readJobDisposition(response);
+  if (disposition.terminal) {
+    const isPcoAuthFailure =
+      route.role === "pco-jobs" && disposition.reason === "auth";
+    emitTelemetry(
+      isPcoAuthFailure || route.dlq ? "error" : "info",
+      isPcoAuthFailure ? "pco_auth_failure" : "queue_job_terminal",
+      {
+        request_id: requestId,
+        queue: route.queueName,
+        container_role: route.role,
+        job_id: jobId,
+        dlq: route.dlq,
+        disposition: disposition.reason,
+        error_category: isPcoAuthFailure
+          ? "pco_auth"
+          : route.dlq
+            ? "dead_letter"
+            : undefined,
+      },
+    );
     message.ack();
     return;
   }
   const delaySeconds = await retryDelaySeconds(response);
+  emitTelemetry("warn", "queue_job_retry", {
+    request_id: requestId,
+    queue: route.queueName,
+    container_role: route.role,
+    job_id: jobId,
+    dlq: route.dlq,
+    status: response.status,
+    retry_delay_seconds: delaySeconds,
+    error_category: sanitizeIdentifier(disposition.reason, "job_unavailable"),
+  });
   message.retry(delaySeconds === undefined ? undefined : { delaySeconds });
 };
 
@@ -124,6 +196,9 @@ const routeForQueue = (
           ? "/jobs/pco/rows/process"
           : "/jobs/pco/rows/dead-letter",
       authToken: environment.PCO_JOB_SERVICE_AUTH_TOKEN,
+      queueName,
+      role: "pco-jobs",
+      dlq: queueName === PCO_DLQ_NAME,
     };
   }
   if (queueName === EMAIL_QUEUE_NAME || queueName === EMAIL_DLQ_NAME) {
@@ -136,6 +211,21 @@ const routeForQueue = (
           ? "/jobs/email/resets/process"
           : "/jobs/email/resets/dead-letter",
       authToken: environment.EMAIL_JOB_SERVICE_AUTH_TOKEN,
+      queueName,
+      role: "email-jobs",
+      dlq: queueName === EMAIL_DLQ_NAME,
+    };
+  }
+  if (queueName === ALERT_QUEUE_NAME || queueName === ALERT_DLQ_NAME) {
+    return {
+      parse: parseOperationalAlert,
+      namespace: environment.EMAIL_JOBS_CONTAINER,
+      instanceName: selectEmailInstanceName,
+      path: "/jobs/email/alerts/process",
+      authToken: environment.EMAIL_JOB_SERVICE_AUTH_TOKEN,
+      queueName,
+      role: "email-jobs",
+      dlq: queueName === ALERT_DLQ_NAME,
     };
   }
   return null;
@@ -147,16 +237,34 @@ const selectEmailInstanceName = (): string => {
   return name;
 };
 
-const isPersistedTerminalResponse = async (response: Response): Promise<boolean> => {
+const readJobDisposition = async (
+  response: Response,
+): Promise<{ terminal: boolean; reason: string }> => {
   if (!response.ok) {
-    return false;
+    try {
+      const value = (await response.clone().json()) as Record<string, unknown>;
+      return {
+        terminal: false,
+        reason: sanitizeIdentifier(value.error, "job_response_error"),
+      };
+    } catch {
+      return { terminal: false, reason: "job_response_error" };
+    }
   }
   try {
     const value = (await response.clone().json()) as Record<string, unknown>;
-    return value.persisted === true && value.disposition === "terminal";
+    return {
+      terminal: value.persisted === true && value.disposition === "terminal",
+      reason: sanitizeIdentifier(value.reason, "unknown"),
+    };
   } catch {
-    return false;
+    return { terminal: false, reason: "invalid_job_response" };
   }
+};
+
+const payloadIdentifier = (payload: object): string => {
+  const value = payload as Record<string, unknown>;
+  return sanitizeIdentifier(value.job_id ?? value.reset_id ?? value.alert_id);
 };
 
 const retryDelaySeconds = async (response: Response): Promise<number | undefined> => {

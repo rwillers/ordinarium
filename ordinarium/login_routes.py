@@ -51,7 +51,9 @@ def register_login_routes(bp):
                         )
             if not error and turnstile_enabled():
                 token = request.form.get("cf-turnstile-response")
-                verified, _ = verify_turnstile_response(token, request.remote_addr)
+                verified, _ = verify_turnstile_response(
+                    token, request.remote_addr, expected_action="login"
+                )
                 if not verified:
                     error = "Please verify you're human."
             if not error and user:
@@ -73,6 +75,7 @@ def register_login_routes(bp):
                 if turnstile_enabled()
                 else None
             ),
+            turnstile_action="login",
         )
 
     @bp.route("/signup", methods=["GET", "POST"])
@@ -94,7 +97,9 @@ def register_login_routes(bp):
                 error = "An account with this email already exists."
             if not error and turnstile_enabled():
                 token = request.form.get("cf-turnstile-response")
-                verified, _ = verify_turnstile_response(token, request.remote_addr)
+                verified, _ = verify_turnstile_response(
+                    token, request.remote_addr, expected_action="signup"
+                )
                 if not verified:
                     error = "Please verify you're human."
             if not error:
@@ -122,6 +127,7 @@ def register_login_routes(bp):
                 if turnstile_enabled()
                 else None
             ),
+            turnstile_action="signup",
         )
 
 

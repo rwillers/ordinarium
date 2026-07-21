@@ -123,6 +123,7 @@ def create_jobs_app():
         MAILERSEND_FROM_EMAIL=os.environ.get("MAILERSEND_FROM_EMAIL"),
         MAILERSEND_FROM_NAME=os.environ.get("MAILERSEND_FROM_NAME", "Ordinarium"),
         PASSWORD_RESET_DELIVERY_KEY=os.environ.get("PASSWORD_RESET_DELIVERY_KEY"),
+        ALERT_EMAIL_TO=os.environ.get("ALERT_EMAIL_TO"),
     )
     if app.config["ORDINARIUM_CONTAINER_ROLE"] == "pco-jobs":
         _configure_pco_jobs_app(app)
@@ -201,6 +202,23 @@ def create_jobs_app():
         body, status = dead_letter_password_reset_message(request.get_json())
         response = jsonify(body)
         response.status_code = status
+        return response
+
+    @app.post("/jobs/email/alerts/process")
+    def process_email_alert():
+        from ordinarium.operational_alert_processor import (
+            process_operational_alert,
+            valid_operational_alert,
+        )
+
+        rejected = _validate_job_request(app, "email-jobs", valid_operational_alert)
+        if rejected:
+            return rejected
+        body, status = process_operational_alert(request.get_json())
+        response = jsonify(body)
+        response.status_code = status
+        if status == 503:
+            response.headers["Retry-After"] = str(body["retry_after_seconds"])
         return response
 
     return app

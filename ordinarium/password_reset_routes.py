@@ -45,7 +45,11 @@ def register_password_reset_routes(bp):
                 error = "Email address is required."
             if not error and turnstile_enabled():
                 token = request.form.get("cf-turnstile-response")
-                verified, _ = verify_turnstile_response(token, request.remote_addr)
+                verified, _ = verify_turnstile_response(
+                    token,
+                    request.remote_addr,
+                    expected_action="request_password_reset",
+                )
                 if not verified:
                     error = "Please verify you're human."
             if not error:
@@ -104,6 +108,7 @@ def register_password_reset_routes(bp):
                 if turnstile_enabled()
                 else None
             ),
+            turnstile_action="request_password_reset",
         )
 
     @bp.route("/reset-password/<token>", methods=["GET", "POST"])
@@ -123,7 +128,9 @@ def register_password_reset_routes(bp):
             if not error and turnstile_enabled():
                 token_value = request.form.get("cf-turnstile-response")
                 verified, _ = verify_turnstile_response(
-                    token_value, request.remote_addr
+                    token_value,
+                    request.remote_addr,
+                    expected_action="reset_password",
                 )
                 if not verified:
                     error = "Please verify you're human."
@@ -152,4 +159,5 @@ def register_password_reset_routes(bp):
                 if turnstile_enabled()
                 else None
             ),
+            turnstile_action="reset_password",
         )

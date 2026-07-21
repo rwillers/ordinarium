@@ -6,9 +6,10 @@
   "scripts": {
     "build:assets": "node scripts/build-assets.mjs",
     "precheck": "npm run build:assets",
-    "check": "tsc --noEmit && wrangler deploy --dry-run",
+    "check": "tsc --noEmit && wrangler deploy --dry-run && wrangler deploy --dry-run --config wrangler.alerts.jsonc",
     "predeploy": "npm run build:assets",
     "deploy": "wrangler deploy",
+    "deploy:alerts": "wrangler deploy --config wrangler.alerts.jsonc",
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "queues:ensure": "node scripts/ensure-queues.mjs"
