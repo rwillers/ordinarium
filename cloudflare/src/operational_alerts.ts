@@ -6,6 +6,7 @@ export const ALERT_DLQ_NAME = `${ALERT_QUEUE_NAME}-dlq`;
 export const ALERT_KINDS = [
   "worker_runtime_failure",
   "worker_request_failure",
+  // Kept for compatibility with Phase 8 messages that may already be queued.
   "container_started",
   "container_failure",
   "d1_failure",
@@ -15,6 +16,7 @@ export const ALERT_KINDS = [
   "export_failure",
   "pco_authorization_failure",
   "edge_security_failure",
+  "turnstile_failure",
 ] as const;
 
 export type AlertKind = (typeof ALERT_KINDS)[number];
@@ -128,9 +130,6 @@ const alertFromTelemetry = (
   scriptName: string,
 ): OperationalAlertMessage | null => {
   const event = sanitizeIdentifier(record.event, "unknown");
-  if (event === "container_started") {
-    return createAlert("container_started", "warning", occurredAt, scriptName, record);
-  }
   if (event === "container_stopped" && record.error_category) {
     return createAlert("container_failure", "critical", occurredAt, scriptName, record);
   }
@@ -154,6 +153,9 @@ const alertFromTelemetry = (
   }
   if (event === "edge_rate_limit_failure") {
     return createAlert("edge_security_failure", "critical", occurredAt, scriptName, record);
+  }
+  if (event === "turnstile_siteverify_failure") {
+    return createAlert("turnstile_failure", "critical", occurredAt, scriptName, record);
   }
   if (
     event === "queue_delivery_failure" ||

@@ -77,12 +77,12 @@ test("tail classification covers every Phase 8 alert category", () => {
     { event: "export_failure", request_id: "request-1" },
     { event: "pco_auth_failure", job_id: "job-1" },
     { event: "edge_rate_limit_failure", route: "/login" },
+    { event: "turnstile_siteverify_failure", error_category: "network" },
   ];
 
   const kinds = alertsFromTrace(trace(records)).map((alert) => alert.kind);
 
   assert.deepEqual(kinds, [
-    "container_started",
     "container_failure",
     "worker_request_failure",
     "d1_failure",
@@ -92,7 +92,16 @@ test("tail classification covers every Phase 8 alert category", () => {
     "export_failure",
     "pco_authorization_failure",
     "edge_security_failure",
+    "turnstile_failure",
   ]);
+});
+
+
+test("routine container starts remain telemetry and do not enqueue alerts", () => {
+  assert.deepEqual(
+    alertsFromTrace(trace([{ event: "container_started", container_role: "web" }])),
+    [],
+  );
 });
 
 
