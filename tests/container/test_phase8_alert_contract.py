@@ -61,3 +61,30 @@ def test_phase8_alert_recipient_and_provider_secret_stay_in_email_role():
     assert _config("wrangler.jsonc")["vars"]["ALERT_EMAIL_TO"] == (
         "ryanwillers+ordo@gmail.com"
     )
+
+
+def test_web_container_has_explicit_turnstile_https_egress():
+    worker_source = (ROOT / "cloudflare" / "src" / "index.ts").read_text()
+    web_block = worker_source.split("export class WebContainer", 1)[1].split(
+        "export class DocumentContainer", 1
+    )[0]
+
+    assert "interceptHttps = true" in web_block
+    assert '"challenges.cloudflare.com"' in web_block
+    assert (
+        'SSL_CERT_FILE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt"'
+        in web_block
+    )
+    assert (
+        'REQUESTS_CA_BUNDLE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt"'
+        in web_block
+    )
+    assert (
+        '"challenges.cloudflare.com": (request, environment: Cloudflare.Env)'
+        in web_block
+    )
+    assert "handleTurnstileRequest(request, environment)" in web_block
+    assert (
+        'TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY ? "worker-managed" : ""'
+        in web_block
+    )

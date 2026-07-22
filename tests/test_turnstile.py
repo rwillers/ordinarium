@@ -1,4 +1,5 @@
 import json
+from urllib.error import URLError
 
 from ordinarium import turnstile
 
@@ -68,3 +69,63 @@ def test_turnstile_rejects_hostname_or_action_mismatch(app, monkeypatch):
         assert turnstile.verify_turnstile_response(
             "token", expected_action="login"
         ) == (False, "action-mismatch")
+
+
+def test_turnstile_submits_secret_token_and_remote_ip(app, monkeypatch):
+    configure_turnstile(app)
+    captured = {}
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["body"] = request.data.decode("utf-8")
+        return FakeResponse(
+            {
+                "success": True,
+                "hostname": "containers-staging.ordinarium.com",
+                "action": "signup",
+            }
+        )
+
+    monkeypatch.setattr(turnstile.urlrequest, "urlopen", fake_urlopen)
+
+    with app.app_context():
+        assert turnstile.verify_turnstile_response(
+            "response-token", "203.0.113.8", expected_action="signup"
+        ) == (True, None)
+
+    assert captured == {
+        "url": "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+        "timeout": 5,
+        "body": (
+            "secret=private-secret-key&response=response-token&remoteip=203.0.113.8"
+        ),
+    }
+
+
+def test_turnstile_reports_transport_and_upstream_rejections(app, monkeypatch):
+    configure_turnstile(app)
+
+    monkeypatch.setattr(
+        turnstile.urlrequest,
+        "urlopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("unreachable")),
+    )
+    with app.app_context():
+        assert turnstile.verify_turnstile_response("token") == (
+            False,
+            "verification-error",
+        )
+
+    monkeypatch.setattr(
+        turnstile.urlrequest,
+        "urlopen",
+        lambda *_args, **_kwargs: FakeResponse(
+            {"success": False, "error-codes": ["invalid-input-response"]}
+        ),
+    )
+    with app.app_context():
+        assert turnstile.verify_turnstile_response("token") == (
+            False,
+            ["invalid-input-response"],
+        )

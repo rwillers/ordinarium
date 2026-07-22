@@ -19,6 +19,7 @@ import {
   REQUEST_ID_HEADER,
   sanitizeRoute,
 } from "./telemetry";
+import { handleTurnstileRequest } from "./turnstile_gateway";
 
 export { ContainerProxy };
 export { AuthRateLimiter } from "./auth_rate_limiter";
@@ -69,6 +70,7 @@ export class WebContainer extends Container {
   defaultPort = APPLICATION_PORT;
   sleepAfter = "30m";
   enableInternet = false;
+  interceptHttps = true;
   allowedHosts = [
     "d1.internal",
     "documents.internal",
@@ -81,8 +83,10 @@ export class WebContainer extends Container {
     SECRET_KEY: env.SECRET_KEY,
     TURNSTILE_ENABLED: env.DEPLOYMENT_ENV === "staging" ? "true" : "false",
     TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY || "",
-    TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY || "",
+    TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY ? "worker-managed" : "",
     TURNSTILE_EXPECTED_HOSTNAME: env.TURNSTILE_EXPECTED_HOSTNAME || "",
+    SSL_CERT_FILE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
+    REQUESTS_CA_BUNDLE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
     RATELIMIT_ENABLED: "false",
     SESSION_COOKIE_SECURE: env.DEPLOYMENT_ENV === "local" ? "false" : "true",
     ORDINARIUM_DISPOSABLE_SQLITE: "true",
@@ -122,6 +126,9 @@ WebContainer.outboundByHost = {
     handleD1Request(request, environment.APP_DB),
   "queue.internal": (request, environment: Cloudflare.Env) =>
     handleQueuePublishRequest(request, environment),
+  "challenges.cloudflare.com": (request, environment: Cloudflare.Env) =>
+    handleTurnstileRequest(request, environment),
+  "api.planningcenteronline.com": (request) => fetch(request),
 };
 
 export class DocumentContainer extends Container {
