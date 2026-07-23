@@ -60,6 +60,13 @@ jobs:
           file: containers/${{ matrix.role }}/Dockerfile
           platforms: linux/amd64
           push: false
+          load: true
           tags: ordinarium-${{ matrix.role }}:ci
           cache-from: type=gha,scope=${{ matrix.role }}
           cache-to: type=gha,mode=max,scope=${{ matrix.role }}
+
+      - name: Run container integration smoke test
+        run: >-
+          ./scripts/cloudflare/verify_container_image.sh
+          "${{ matrix.role }}"
+          "ordinarium-${{ matrix.role }}:ci"

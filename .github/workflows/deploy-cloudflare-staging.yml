@@ -1,0 +1,119 @@
+name: Deploy Cloudflare staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate, deploy, and verify staging
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: cloudflare-staging
+      url: https://containers-staging.ordinarium.com
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+      CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Check out the exact main commit
+        uses: actions/checkout@v5
+
+      - name: Verify deployment commit
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Recheck Worker behavior
+        run: npm test
+
+      - name: Verify required queues
+        run: npm run queues:ensure
+
+      - name: Apply compatible D1 migrations
+        run: npx wrangler d1 migrations apply APP_DB --remote --config wrangler.jsonc
+
+      - name: Verify remote D1
+        run: >-
+          npx wrangler d1 execute APP_DB
+          --remote
+          --config wrangler.jsonc
+          --command "select 1 as ok"
+
+      - name: Deploy alert classifier
+        run: >-
+          npx wrangler deploy
+          --config wrangler.alerts.jsonc
+          --tag "$GITHUB_SHA"
+          --message "GitHub staging deployment $GITHUB_SHA"
+          --strict
+
+      - name: Build static assets
+        run: npm run build:assets
+
+      - name: Deploy application and containers
+        run: >-
+          npx wrangler deploy
+          --config wrangler.jsonc
+          --tag "$GITHUB_SHA"
+          --message "GitHub staging deployment $GITHUB_SHA"
+          --strict
+
+      - name: Verify staging readiness
+        run: >-
+          python ../scripts/cloudflare/verify_staging_deployment.py
+          --base-url https://containers-staging.ordinarium.com
+          --wrangler ./node_modules/.bin/wrangler
+          --config wrangler.jsonc
+
+      - name: Capture immutable deployment metadata
+        run: |
+          npx wrangler deployments status --json > "$RUNNER_TEMP/app-deployment.json"
+          npx wrangler deployments status --config wrangler.alerts.jsonc --json > "$RUNNER_TEMP/alert-deployment.json"
+          npx wrangler containers list --json > "$RUNNER_TEMP/containers.json"
+          APP_VERSION_ID="$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync(process.argv[1])); process.stdout.write(d.versions[0].version_id)" "$RUNNER_TEMP/app-deployment.json")"
+          ALERT_VERSION_ID="$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync(process.argv[1])); process.stdout.write(d.versions[0].version_id)" "$RUNNER_TEMP/alert-deployment.json")"
+          npx wrangler versions view "$APP_VERSION_ID" --json > "$RUNNER_TEMP/app-version.json"
+          npx wrangler versions view "$ALERT_VERSION_ID" --config wrangler.alerts.jsonc --json > "$RUNNER_TEMP/alert-version.json"
+          python ../scripts/cloudflare/deployment_manifest.py capture \
+            --commit "$GITHUB_SHA" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --app-deployment "$RUNNER_TEMP/app-deployment.json" \
+            --app-version "$RUNNER_TEMP/app-version.json" \
+            --alert-deployment "$RUNNER_TEMP/alert-deployment.json" \
+            --alert-version "$RUNNER_TEMP/alert-version.json" \
+            --containers "$RUNNER_TEMP/containers.json" \
+            --output "$RUNNER_TEMP/staging-release.json"
+
+      - name: Preserve staging release manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-release-${{ github.sha }}
+          path: ${{ runner.temp }}/staging-release.json
+          if-no-files-found: error
+          retention-days: 90
