@@ -105,6 +105,9 @@ def test_staging_workflow_migrates_deploys_verifies_and_records_release():
         "Deploy application and containers"
     )
     assert "verify_staging_deployment.py" in workflow
+    assert '--containers-output "$RUNNER_TEMP/containers.json"' in workflow
+    capture_step = workflow.split("- name: Capture immutable deployment metadata", 1)[1]
+    assert "wrangler containers list" not in capture_step
     assert "staging-release-${{ github.sha }}" in workflow
 
 
@@ -174,7 +177,9 @@ def test_staging_request_identifies_the_github_readiness_client(monkeypatch):
 def test_staging_readiness_does_not_retry_access_rejection(monkeypatch):
     monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
     monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
-    monkeypatch.setattr(staging_verifier, "_containers_ready", lambda *_args: True)
+    monkeypatch.setattr(
+        staging_verifier, "_container_snapshot", lambda *_args: _containers()
+    )
     monkeypatch.setattr(
         staging_verifier,
         "_request",
@@ -192,7 +197,66 @@ def test_staging_readiness_does_not_retry_access_rejection(monkeypatch):
 
     with pytest.raises(RuntimeError, match=r"/health returned HTTP 403"):
         staging_verifier.verify_staging(
-            "https://staging.example.com", "wrangler", "config"
+            "https://staging.example.com",
+            "wrangler",
+            "config",
+            stable_samples=1,
+        )
+
+
+def test_staging_readiness_persists_the_stable_container_snapshot(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
+    first = _containers()
+    second = _containers()
+    second[0]["image"] = second[0]["image"].replace("1" * 64, "9" * 64)
+    snapshots = iter([first, second, second])
+    edge_checks = []
+    sleeps = []
+    output = tmp_path / "containers.json"
+
+    monkeypatch.setattr(
+        staging_verifier, "_container_snapshot", lambda *_args: next(snapshots)
+    )
+    monkeypatch.setattr(
+        staging_verifier,
+        "_verify_edge_routes",
+        lambda *_args: edge_checks.append(True),
+    )
+    monkeypatch.setattr(staging_verifier.time, "sleep", sleeps.append)
+
+    staging_verifier.verify_staging(
+        "https://staging.example.com",
+        "wrangler",
+        "config",
+        attempts=3,
+        stable_samples=2,
+        containers_output=output,
+    )
+
+    assert json.loads(output.read_text()) == second
+    assert edge_checks == [True]
+    assert sleeps == [10, 10]
+
+
+def test_staging_readiness_reports_actual_transient_container_state(monkeypatch):
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
+    snapshot = _containers()
+    snapshot[0]["state"] = "deploying"
+    monkeypatch.setattr(
+        staging_verifier, "_container_snapshot", lambda *_args: snapshot
+    )
+    monkeypatch.setattr(staging_verifier.time, "sleep", lambda *_args: None)
+
+    with pytest.raises(RuntimeError, match=r"state:deploying"):
+        staging_verifier.verify_staging(
+            "https://staging.example.com",
+            "wrangler",
+            "config",
+            attempts=1,
         )
 
 
@@ -224,6 +288,21 @@ def test_release_manifest_requires_exact_worker_versions_and_image_digests():
     ] = "registry.cloudflare.com/account/ordinarium-web:mutable"
     with pytest.raises(ValueError, match="not pinned by digest"):
         deployment_manifest.validate_manifest(manifest, COMMIT)
+
+
+def test_release_manifest_reports_the_actual_container_state():
+    containers = _containers()
+    containers[0]["state"] = "deploying"
+
+    with pytest.raises(ValueError, match=r"state='deploying'"):
+        deployment_manifest.create_manifest(
+            COMMIT,
+            _deployment("app-deployment", "app-version"),
+            _version("app-version"),
+            _deployment("alert-deployment", "alert-version"),
+            _version("alert-version"),
+            containers,
+        )
 
 
 def test_production_renderer_uses_separate_resources_and_tested_images():

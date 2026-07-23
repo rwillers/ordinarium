@@ -71,8 +71,9 @@ def create_manifest(
             raise ValueError(
                 f"container {name} does not expose an immutable image digest"
             )
-        if container.get("state") not in {"active", "ready"}:
-            raise ValueError(f"container {name} is not ready")
+        state = container.get("state")
+        if state not in {"active", "ready"}:
+            raise ValueError(f"container {name} is not ready (state={state!r})")
         images[name] = image
 
     if set(images) != EXPECTED_CONTAINERS:
