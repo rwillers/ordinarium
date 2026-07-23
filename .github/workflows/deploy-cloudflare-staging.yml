@@ -52,6 +52,12 @@ jobs:
       - name: Recheck Worker behavior
         run: npm test
 
+      - name: Verify staging Access credentials
+        run: >-
+          python ../scripts/cloudflare/verify_staging_deployment.py
+          --base-url https://containers-staging.ordinarium.com
+          --access-preflight
+
       - name: Verify required queues
         run: npm run queues:ensure
 
