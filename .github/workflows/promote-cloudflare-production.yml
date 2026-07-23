@@ -1,0 +1,173 @@
+name: Promote Cloudflare production
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_run_id:
+        description: Successful Deploy Cloudflare staging workflow run ID
+        required: true
+        type: string
+      commit_sha:
+        description: Exact 40-character staging-tested commit SHA
+        required: true
+        type: string
+      confirmation:
+        description: Type PROMOTE to confirm the production promotion request
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify staging-tested release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      commit_sha: ${{ steps.release.outputs.commit_sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMIT_SHA: ${{ inputs.commit_sha }}
+      STAGING_RUN_ID: ${{ inputs.staging_run_id }}
+      PROMOTION_CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Require explicit confirmation
+        run: |
+          test "$PROMOTION_CONFIRMATION" = "PROMOTE"
+          case "$STAGING_RUN_ID" in (*[!0-9]*|'') exit 1;; esac
+          printf '%s' "$COMMIT_SHA" | grep -Eq '^[0-9a-f]{40}$'
+
+      - name: Verify successful staging workflow run
+        run: |
+          test "$(gh run view "$STAGING_RUN_ID" --repo "$GITHUB_REPOSITORY" --json workflowName --jq .workflowName)" = "Deploy Cloudflare staging"
+          test "$(gh run view "$STAGING_RUN_ID" --repo "$GITHUB_REPOSITORY" --json conclusion --jq .conclusion)" = "success"
+          test "$(gh run view "$STAGING_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headBranch --jq .headBranch)" = "main"
+          test "$(gh run view "$STAGING_RUN_ID" --repo "$GITHUB_REPOSITORY" --json headSha --jq .headSha)" = "$COMMIT_SHA"
+
+      - name: Download staging release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-release-${{ inputs.commit_sha }}
+          path: ${{ runner.temp }}/staging-release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.staging_run_id }}
+
+      - name: Check out repository history
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.commit_sha }}
+
+      - name: Validate commit ancestry and release manifest
+        id: release
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$COMMIT_SHA" origin/main
+          python scripts/cloudflare/deployment_manifest.py validate \
+            --manifest "$RUNNER_TEMP/staging-release/staging-release.json" \
+            --commit "$COMMIT_SHA"
+          echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve verified promotion input
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-production-release-${{ inputs.commit_sha }}
+          path: ${{ runner.temp }}/staging-release/staging-release.json
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Promote exact release to production
+    needs: verify
+    if: ${{ vars.ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: cloudflare-production
+      url: https://${{ vars.PRODUCTION_APP_DOMAIN }}
+    defaults:
+      run:
+        working-directory: cloudflare
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      COMMIT_SHA: ${{ needs.verify.outputs.commit_sha }}
+      PRODUCTION_APP_DOMAIN: ${{ vars.PRODUCTION_APP_DOMAIN }}
+      PRODUCTION_D1_DATABASE_ID: ${{ vars.PRODUCTION_D1_DATABASE_ID }}
+      PRODUCTION_TURNSTILE_SITE_KEY: ${{ vars.PRODUCTION_TURNSTILE_SITE_KEY }}
+      PRODUCTION_ALERT_EMAIL_TO: ${{ vars.PRODUCTION_ALERT_EMAIL_TO }}
+      ORDINARIUM_DEPLOYMENT_ENV: production
+      ORDINARIUM_WRANGLER_CONFIG: wrangler.production.generated.json
+    steps:
+      - name: Check out the staging-tested commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.commit_sha }}
+
+      - name: Download verified release manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: verified-production-release-${{ needs.verify.outputs.commit_sha }}
+          path: ${{ runner.temp }}/verified-release
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Render production configuration with pinned images
+        run: >-
+          python ../scripts/cloudflare/render_production_configs.py
+          --app-source wrangler.jsonc
+          --alerts-source wrangler.alerts.jsonc
+          --manifest "$RUNNER_TEMP/verified-release/staging-release.json"
+          --domain "$PRODUCTION_APP_DOMAIN"
+          --database-id "$PRODUCTION_D1_DATABASE_ID"
+          --turnstile-site-key "$PRODUCTION_TURNSTILE_SITE_KEY"
+          --alert-email "$PRODUCTION_ALERT_EMAIL_TO"
+          --app-output wrangler.production.generated.json
+          --alerts-output wrangler.alerts.production.generated.json
+
+      - name: Verify production queues
+        run: npm run queues:ensure
+
+      - name: Apply compatible production D1 migrations
+        run: >-
+          npx wrangler d1 migrations apply APP_DB
+          --remote
+          --config wrangler.production.generated.json
+
+      - name: Deploy production alert classifier
+        run: >-
+          npx wrangler deploy
+          --config wrangler.alerts.production.generated.json
+          --tag "$COMMIT_SHA"
+          --message "Production promotion of staging release $COMMIT_SHA"
+          --strict
+
+      - name: Build static assets from tested commit
+        run: npm run build:assets
+
+      - name: Deploy production application with pinned container digests
+        run: >-
+          npx wrangler deploy
+          --config wrangler.production.generated.json
+          --tag "$COMMIT_SHA"
+          --message "Production promotion of staging release $COMMIT_SHA"
+          --strict
+
+      - name: Verify production D1 and public health
+        run: |
+          npx wrangler d1 execute APP_DB --remote --config wrangler.production.generated.json --command "select 1 as ok"
+          curl --fail --retry 30 --retry-delay 10 --retry-all-errors "https://$PRODUCTION_APP_DOMAIN/health"

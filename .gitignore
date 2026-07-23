@@ -8,6 +8,8 @@
 cloudflare/node_modules/
 cloudflare/.wrangler/
 cloudflare/dist/
+cloudflare/wrangler.production.generated.json
+cloudflare/wrangler.alerts.production.generated.json
 Source\ Liturgies/
 instance/ordinarium.db
 instance/ordinarium.db.bak.db

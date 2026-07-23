@@ -4,10 +4,20 @@ import test from "node:test";
 import {
   REQUIRED_QUEUE_NAMES,
   ensureQueues,
+  queueNamesForEnvironment,
 } from "../scripts/ensure-queues.mjs";
 
 
 const result = (status, output) => ({ status, stdout: output, stderr: "" });
+
+
+test("queue names are isolated by deployment environment", () => {
+  assert.deepEqual(
+    queueNamesForEnvironment("production"),
+    REQUIRED_QUEUE_NAMES.map((name) => name.replace("-staging-", "-production-")),
+  );
+  assert.throws(() => queueNamesForEnvironment("preview"), /Unsupported queue environment/);
+});
 
 
 test("queue provisioning accepts existing queues and verifies all of them", () => {

@@ -1,19 +1,33 @@
 import { spawnSync } from "node:child_process";
+import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 
-export const REQUIRED_QUEUE_NAMES = Object.freeze([
-  "ordinarium-app-staging-pco-jobs",
-  "ordinarium-app-staging-pco-jobs-dlq",
-  "ordinarium-app-staging-email-jobs",
-  "ordinarium-app-staging-email-jobs-dlq",
-  "ordinarium-app-staging-alerts",
-  "ordinarium-app-staging-alerts-dlq",
-]);
+export const queueNamesForEnvironment = (environment) => {
+  if (!["staging", "production"].includes(environment)) {
+    throw new Error(`Unsupported queue environment: ${environment}`);
+  }
+  const prefix = `ordinarium-app-${environment}`;
+  return Object.freeze([
+    `${prefix}-pco-jobs`,
+    `${prefix}-pco-jobs-dlq`,
+    `${prefix}-email-jobs`,
+    `${prefix}-email-jobs-dlq`,
+    `${prefix}-alerts`,
+    `${prefix}-alerts-dlq`,
+  ]);
+};
 
 
-export const ensureQueues = ({ run = runWrangler, log = console.log } = {}) => {
-  for (const queueName of REQUIRED_QUEUE_NAMES) {
+export const REQUIRED_QUEUE_NAMES = queueNamesForEnvironment("staging");
+
+
+export const ensureQueues = ({
+  run = runWrangler,
+  log = console.log,
+  queueNames = REQUIRED_QUEUE_NAMES,
+} = {}) => {
+  for (const queueName of queueNames) {
     const inspection = run(["queues", "info", queueName]);
     if (isVerifiedQueue(inspection, queueName)) {
       log(`Verified existing queue: ${queueName}`);
@@ -30,13 +44,13 @@ export const ensureQueues = ({ run = runWrangler, log = console.log } = {}) => {
     log(`Ensured queue: ${queueName}`);
   }
 
-  for (const queueName of REQUIRED_QUEUE_NAMES) {
+  for (const queueName of queueNames) {
     const verification = run(["queues", "info", queueName]);
     if (!isVerifiedQueue(verification, queueName)) {
       throw new Error(`Remote queue verification incomplete: ${queueName}`);
     }
   }
-  log(`Verified all ${REQUIRED_QUEUE_NAMES.length} required queues.`);
+  log(`Verified all ${queueNames.length} required queues.`);
 };
 
 
@@ -45,7 +59,10 @@ const runWrangler = (args) => {
   const wranglerPath = fileURLToPath(
     new URL("../node_modules/.bin/wrangler", import.meta.url),
   );
-  const configPath = fileURLToPath(new URL("../wrangler.jsonc", import.meta.url));
+  const configuredPath = process.env.ORDINARIUM_WRANGLER_CONFIG;
+  const configPath = configuredPath
+    ? resolve(process.cwd(), configuredPath)
+    : fileURLToPath(new URL("../wrangler.jsonc", import.meta.url));
   const result = spawnSync(wranglerPath, [...args, "--config", configPath], {
     cwd: scriptDirectory,
     encoding: "utf8",
@@ -85,7 +102,8 @@ const isDirectInvocation =
   process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectInvocation) {
   try {
-    ensureQueues();
+    const environment = process.env.ORDINARIUM_DEPLOYMENT_ENV || "staging";
+    ensureQueues({ queueNames: queueNamesForEnvironment(environment) });
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
