@@ -5,8 +5,10 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -17,6 +19,9 @@ EXPECTED_CONTAINERS = {
     "ordinarium-pco-jobs",
     "ordinarium-email-jobs",
 }
+IMAGE_PATTERN = re.compile(
+    r"registry\.cloudflare\.com/[0-9a-f]+/[a-z0-9-]+@sha256:[0-9a-f]{64}"
+)
 USER_AGENT = "Ordinarium-GitHub-Staging-Readiness/1.0"
 
 
@@ -100,32 +105,88 @@ def verify_access(base_url):
     print("Cloudflare Access authenticated staging probes passed.")
 
 
-def _containers_ready(wrangler, config):
+def _container_snapshot(wrangler, config):
     result = subprocess.run(
         [wrangler, "containers", "list", "--json", "--config", config],
         check=True,
         capture_output=True,
         text=True,
     )
-    containers = {
-        item.get("name"): item
-        for item in json.loads(result.stdout)
-        if item.get("name") in EXPECTED_CONTAINERS
-    }
-    if set(containers) != EXPECTED_CONTAINERS:
-        return False
-    return all(item.get("state") in {"active", "ready"} for item in containers.values())
+    payload = json.loads(result.stdout)
+    if not isinstance(payload, list):
+        raise RuntimeError("container metadata is not a list")
+    return sorted(
+        (item for item in payload if item.get("name") in EXPECTED_CONTAINERS),
+        key=lambda item: item["name"],
+    )
 
 
-def verify_staging(base_url, wrangler, config, attempts=60):
+def _container_snapshot_error(snapshot):
+    containers = {item.get("name"): item for item in snapshot}
+    missing = sorted(EXPECTED_CONTAINERS - set(containers))
+    if missing:
+        return f"container metadata is missing: {', '.join(missing)}"
+
+    invalid = []
+    for name in sorted(EXPECTED_CONTAINERS):
+        container = containers[name]
+        state = container.get("state")
+        image = container.get("image", "")
+        if state not in {"active", "ready"}:
+            invalid.append(f"{name}=state:{state or 'missing'}")
+        if not IMAGE_PATTERN.fullmatch(image):
+            invalid.append(f"{name}=image:not-immutable")
+    if invalid:
+        return f"container rollout is not ready: {', '.join(invalid)}"
+    return None
+
+
+def _snapshot_signature(snapshot):
+    return tuple(
+        (item.get("name"), item.get("state"), item.get("image")) for item in snapshot
+    )
+
+
+def _write_snapshot(snapshot, output):
+    Path(output).write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+
+
+def verify_staging(
+    base_url,
+    wrangler,
+    config,
+    attempts=60,
+    stable_samples=2,
+    containers_output=None,
+):
     headers = _access_headers()
     print(_credential_metadata(headers))
     last_error = None
+    previous_signature = None
+    consecutive_samples = 0
     for _attempt in range(attempts):
         try:
-            if not _containers_ready(wrangler, config):
-                raise RuntimeError("container rollout is not ready")
+            snapshot = _container_snapshot(wrangler, config)
+            if error := _container_snapshot_error(snapshot):
+                previous_signature = None
+                consecutive_samples = 0
+                raise RuntimeError(error)
+
+            signature = _snapshot_signature(snapshot)
+            if signature == previous_signature:
+                consecutive_samples += 1
+            else:
+                previous_signature = signature
+                consecutive_samples = 1
+            if consecutive_samples < stable_samples:
+                raise RuntimeError(
+                    "container rollout is not stable: "
+                    f"{consecutive_samples}/{stable_samples} consecutive samples"
+                )
+
             _verify_edge_routes(base_url, headers)
+            if containers_output:
+                _write_snapshot(snapshot, containers_output)
             return
         except (
             URLError,
@@ -152,6 +213,7 @@ def _main():
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--wrangler")
     parser.add_argument("--config")
+    parser.add_argument("--containers-output")
     parser.add_argument("--access-preflight", action="store_true")
     args = parser.parse_args()
     if args.access_preflight:
