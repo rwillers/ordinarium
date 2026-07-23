@@ -134,6 +134,43 @@ def test_staging_access_preflight_checks_health_and_login(monkeypatch, capsys):
     assert "authenticated staging probes passed" in output
 
 
+def test_staging_request_identifies_the_github_readiness_client(monkeypatch):
+    observed = {}
+
+    class Response:
+        status = 200
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        @staticmethod
+        def read():
+            return b"ok"
+
+    def open_request(request, timeout):
+        observed["user_agent"] = request.get_header("User-agent")
+        observed["accept"] = request.get_header("Accept")
+        observed["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setattr(staging_verifier, "urlopen", open_request)
+
+    status, _headers, body = staging_verifier._request(
+        "https://staging.example.com", "/health", {"X-Test": "value"}
+    )
+
+    assert (status, body) == (200, b"ok")
+    assert observed == {
+        "user_agent": staging_verifier.USER_AGENT,
+        "accept": "application/json, text/html;q=0.9, */*;q=0.8",
+        "timeout": 30,
+    }
+
+
 def test_staging_readiness_does_not_retry_access_rejection(monkeypatch):
     monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
     monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")

@@ -17,6 +17,7 @@ EXPECTED_CONTAINERS = {
     "ordinarium-pco-jobs",
     "ordinarium-email-jobs",
 }
+USER_AGENT = "Ordinarium-GitHub-Staging-Readiness/1.0"
 
 
 class StagingRequestError(RuntimeError):
@@ -64,7 +65,14 @@ def _error_details(error):
 
 
 def _request(base_url, path, headers):
-    request = Request(f"{base_url.rstrip('/')}{path}", headers=headers)
+    request = Request(
+        f"{base_url.rstrip('/')}{path}",
+        headers={
+            **headers,
+            "User-Agent": USER_AGENT,
+            "Accept": "application/json, text/html;q=0.9, */*;q=0.8",
+        },
+    )
     try:
         with urlopen(request, timeout=30) as response:
             return response.status, response.headers, response.read()
