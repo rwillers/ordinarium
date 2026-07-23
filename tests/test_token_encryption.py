@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 
 from ordinarium.token_encryption import (
@@ -35,11 +37,18 @@ def test_token_envelope_authenticates_user_and_field(app):
 def test_token_envelope_rejects_tampering(app):
     with app.app_context():
         envelope = encrypt_token("secret-token", user_id=42, field_name="access_token")
-        replacement = "A" if envelope[-1] != "A" else "B"
+        prefix, version, nonce, ciphertext_value = envelope.split(":")
+        padding = "=" * (-len(ciphertext_value) % 4)
+        ciphertext = bytearray(base64.urlsafe_b64decode(ciphertext_value + padding))
+        ciphertext[-1] ^= 1
+        tampered_ciphertext = (
+            base64.urlsafe_b64encode(ciphertext).rstrip(b"=").decode("ascii")
+        )
+        tampered_envelope = ":".join((prefix, version, nonce, tampered_ciphertext))
 
         with pytest.raises(TokenEncryptionError):
             decrypt_token(
-                envelope[:-1] + replacement,
+                tampered_envelope,
                 user_id=42,
                 field_name="access_token",
             )

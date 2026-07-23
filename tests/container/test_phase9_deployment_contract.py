@@ -20,6 +20,7 @@ def _module(name):
 
 deployment_manifest = _module("deployment_manifest")
 production_configs = _module("render_production_configs")
+staging_verifier = _module("verify_staging_deployment")
 
 
 COMMIT = "a" * 40
@@ -97,11 +98,65 @@ def test_staging_workflow_migrates_deploys_verifies_and_records_release():
     assert workflow.index("Apply compatible D1 migrations") < workflow.index(
         "Deploy application and containers"
     )
+    assert workflow.index("Verify staging Access credentials") < workflow.index(
+        "Apply compatible D1 migrations"
+    )
     assert workflow.index("Deploy alert classifier") < workflow.index(
         "Deploy application and containers"
     )
     assert "verify_staging_deployment.py" in workflow
     assert "staging-release-${{ github.sha }}" in workflow
+
+
+def test_staging_access_preflight_checks_health_and_login(monkeypatch, capsys):
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
+    paths = []
+
+    class Headers:
+        @staticmethod
+        def get_content_type():
+            return "text/html"
+
+    def request(_base_url, path, _headers):
+        paths.append(path)
+        if path == "/health":
+            return 200, Headers(), b'{"status": "ok"}'
+        return 200, Headers(), b'<input name="csrf_token">'
+
+    monkeypatch.setattr(staging_verifier, "_request", request)
+
+    staging_verifier.verify_access("https://staging.example.com")
+
+    assert paths == ["/health", "/login"]
+    output = capsys.readouterr().out
+    assert "client_secret(length=6, sha256=" in output
+    assert "authenticated staging probes passed" in output
+
+
+def test_staging_readiness_does_not_retry_access_rejection(monkeypatch):
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
+    monkeypatch.setattr(staging_verifier, "_containers_ready", lambda *_args: True)
+    monkeypatch.setattr(
+        staging_verifier,
+        "_request",
+        lambda *_args: (_ for _ in ()).throw(
+            staging_verifier.StagingRequestError(
+                "/health", 403, "content-type=text/html; cf-ray=test"
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        staging_verifier.time,
+        "sleep",
+        lambda *_args: pytest.fail("non-retryable rejection slept"),
+    )
+
+    with pytest.raises(RuntimeError, match=r"/health returned HTTP 403"):
+        staging_verifier.verify_staging(
+            "https://staging.example.com", "wrangler", "config"
+        )
 
 
 def test_production_workflow_is_manual_disabled_and_exact_release_only():
