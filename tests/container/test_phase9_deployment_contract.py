@@ -260,6 +260,47 @@ def test_staging_readiness_reports_actual_transient_container_state(monkeypatch)
         )
 
 
+def test_staging_cli_forwards_the_verified_container_snapshot(monkeypatch, tmp_path):
+    output = tmp_path / "containers.json"
+    observed = {}
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "verify_staging_deployment.py",
+            "--base-url",
+            "https://staging.example.com",
+            "--wrangler",
+            "wrangler",
+            "--config",
+            "wrangler.jsonc",
+            "--containers-output",
+            str(output),
+        ],
+    )
+    monkeypatch.setattr(
+        staging_verifier,
+        "verify_staging",
+        lambda base_url, wrangler, config, **options: observed.update(
+            {
+                "base_url": base_url,
+                "wrangler": wrangler,
+                "config": config,
+                **options,
+            }
+        ),
+    )
+
+    staging_verifier._main()
+
+    assert observed == {
+        "base_url": "https://staging.example.com",
+        "wrangler": "wrangler",
+        "config": "wrangler.jsonc",
+        "containers_output": str(output),
+    }
+
+
 def test_production_workflow_is_manual_disabled_and_exact_release_only():
     workflow = (
         ROOT / ".github" / "workflows" / "promote-cloudflare-production.yml"

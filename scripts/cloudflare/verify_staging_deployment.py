@@ -221,7 +221,12 @@ def _main():
         return
     if not args.wrangler or not args.config:
         parser.error("--wrangler and --config are required for readiness verification")
-    verify_staging(args.base_url, args.wrangler, args.config)
+    verify_staging(
+        args.base_url,
+        args.wrangler,
+        args.config,
+        containers_output=args.containers_output,
+    )
     print("Staging edge, container, and login readiness checks passed.")
 
 
