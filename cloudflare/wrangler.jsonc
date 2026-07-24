@@ -11,7 +11,7 @@
   "workers_dev": false,
   "routes": [
     {
-      "pattern": "containers-staging.ordinarium.com",
+      "pattern": "staging.ordinarium.com",
       "custom_domain": true
     }
   ],
@@ -26,11 +26,11 @@
   ],
   "vars": {
     "DEPLOYMENT_ENV": "staging",
-    "APP_ORIGIN": "https://containers-staging.ordinarium.com",
-    "SIDE_EFFECTS_HOSTNAME": "containers-staging.ordinarium.com",
+    "APP_ORIGIN": "https://staging.ordinarium.com",
+    "SIDE_EFFECTS_HOSTNAME": "staging.ordinarium.com",
     "EXTERNAL_SIDE_EFFECTS_ENABLED": "true",
     "TURNSTILE_SITE_KEY": "0x4AAAAAACNe-sQcXR2N-BAL",
-    "TURNSTILE_EXPECTED_HOSTNAME": "containers-staging.ordinarium.com",
+    "TURNSTILE_EXPECTED_HOSTNAME": "staging.ordinarium.com",
     "ALERT_EMAIL_TO": "ryanwillers+ordo@gmail.com"
   },
   "triggers": {

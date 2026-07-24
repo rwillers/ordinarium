@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 45
     environment:
       name: cloudflare-staging
-      url: https://containers-staging.ordinarium.com
+      url: https://staging.ordinarium.com
     defaults:
       run:
         working-directory: cloudflare
@@ -55,7 +55,7 @@ jobs:
       - name: Verify staging Access credentials
         run: >-
           python ../scripts/cloudflare/verify_staging_deployment.py
-          --base-url https://containers-staging.ordinarium.com
+          --base-url https://staging.ordinarium.com
           --access-preflight
 
       - name: Verify required queues
@@ -93,7 +93,7 @@ jobs:
       - name: Verify staging readiness
         run: >-
           python ../scripts/cloudflare/verify_staging_deployment.py
-          --base-url https://containers-staging.ordinarium.com
+          --base-url https://staging.ordinarium.com
           --wrangler ./node_modules/.bin/wrangler
           --config wrangler.jsonc
           --containers-output "$RUNNER_TEMP/containers.json"

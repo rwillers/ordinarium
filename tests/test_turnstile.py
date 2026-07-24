@@ -23,7 +23,7 @@ def configure_turnstile(app):
         TURNSTILE_ENABLED=True,
         TURNSTILE_SITE_KEY="public-site-key",
         TURNSTILE_SECRET_KEY="private-secret-key",
-        TURNSTILE_EXPECTED_HOSTNAME="containers-staging.ordinarium.com",
+        TURNSTILE_EXPECTED_HOSTNAME="staging.ordinarium.com",
     )
 
 
@@ -35,7 +35,7 @@ def test_turnstile_accepts_matching_hostname_and_action(app, monkeypatch):
         lambda *_args, **_kwargs: FakeResponse(
             {
                 "success": True,
-                "hostname": "containers-staging.ordinarium.com",
+                "hostname": "staging.ordinarium.com",
                 "action": "login",
             }
         ),
@@ -64,7 +64,7 @@ def test_turnstile_rejects_hostname_or_action_mismatch(app, monkeypatch):
         assert turnstile.verify_turnstile_response(
             "token", expected_action="login"
         ) == (False, "hostname-mismatch")
-        payload["hostname"] = "containers-staging.ordinarium.com"
+        payload["hostname"] = "staging.ordinarium.com"
         payload["action"] = "signup"
         assert turnstile.verify_turnstile_response(
             "token", expected_action="login"
@@ -82,7 +82,7 @@ def test_turnstile_submits_secret_token_and_remote_ip(app, monkeypatch):
         return FakeResponse(
             {
                 "success": True,
-                "hostname": "containers-staging.ordinarium.com",
+                "hostname": "staging.ordinarium.com",
                 "action": "signup",
             }
         )
