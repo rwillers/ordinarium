@@ -21,7 +21,7 @@ def test_staging_has_one_access_protectable_origin():
     config = (ROOT / "cloudflare/wrangler.jsonc").read_text()
 
     assert '"workers_dev": false' in config
-    assert '"pattern": "containers-staging.ordinarium.com"' in config
+    assert '"pattern": "staging.ordinarium.com"' in config
     assert '"custom_domain": true' in config
 
 

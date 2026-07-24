@@ -43,8 +43,8 @@ def _enable_email_delivery(app, transport):
     app.config.update(
         PASSWORD_RESET_DELIVERY_KEY=DELIVERY_KEY,
         DEPLOYMENT_ENV="staging",
-        APP_ORIGIN="https://containers-staging.ordinarium.com",
-        SIDE_EFFECTS_HOSTNAME="containers-staging.ordinarium.com",
+        APP_ORIGIN="https://staging.ordinarium.com",
+        SIDE_EFFECTS_HOSTNAME="staging.ordinarium.com",
         EXTERNAL_SIDE_EFFECTS_ENABLED=True,
         MAILERSEND_API_TOKEN="provider-secret",
         MAILERSEND_FROM_EMAIL="no-reply@example.com",
