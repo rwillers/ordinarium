@@ -32,3 +32,6 @@ npx wrangler d1 migrations apply APP_DB --remote
 
 Do not create or migrate `ordinarium-app-production` until staging validation is
 complete.
+
+Production data transfer and reconciliation are documented in
+[`cloudflare/PHASE11_PRODUCTION_CUTOVER.md`](../../cloudflare/PHASE11_PRODUCTION_CUTOVER.md).

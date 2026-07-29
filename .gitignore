@@ -13,3 +13,5 @@ cloudflare/wrangler.alerts.production.generated.json
 Source\ Liturgies/
 instance/ordinarium.db
 instance/ordinarium.db.bak.db
+/phase11-migration-*/
+/production-migration-bundle/
