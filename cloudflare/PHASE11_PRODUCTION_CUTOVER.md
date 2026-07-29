@@ -104,6 +104,39 @@ changes.
 Gate 11E covers post-cutover monitoring, rollback readiness, and eventual AWS
 retirement.
 
+## Gate 11B: production resource and secret preparation
+
+The empty production D1 database, queues, Turnstile widget, GitHub environment
+variables, and application secrets are provisioned before production traffic
+changes. `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` remains `false`, and neither the
+production application Worker nor its custom domain is deployed during this
+gate.
+
+The application declares its complete runtime secret contract in
+`cloudflare/wrangler.jsonc`. The production promotion workflow reads those
+values only from the protected `cloudflare-production` GitHub environment,
+writes them to a mode-0600 temporary JSON file on the ephemeral runner, rejects
+missing or empty values, and passes that file to `wrangler deploy
+--secrets-file`. Wrangler uploads the code, bindings, and secrets together as a
+single Worker version. The temporary file is removed whether deployment
+succeeds or fails.
+
+This avoids an initial production Worker version that is routable without its
+secrets. Existing secrets not present in a later bulk upload are not deleted,
+but the declared required-secret contract prevents an incomplete deployment.
+
+Gate 11B is complete when:
+
+- the production D1 schema and reference data reconcile with all durable
+  application tables empty;
+- every production queue exists without producers or consumers;
+- the production Turnstile widget is restricted to `ordinarium.com`;
+- the protected GitHub environment contains every required variable and
+  secret;
+- the Cloudflare API token passes an end-to-end staging deployment;
+- production secret handling and fail-closed tests pass; and
+- `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` remains `false`.
+
 ## Gate 11A exit criteria
 
 Gate 11A is complete when:

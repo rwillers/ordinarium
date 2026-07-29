@@ -159,13 +159,56 @@ jobs:
       - name: Build static assets from tested commit
         run: npm run build:assets
 
+      - name: Prepare production Worker secrets
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          OPS_HEALTH_TOKEN: ${{ secrets.OPS_HEALTH_TOKEN }}
+          PCO_TOKEN_ENCRYPTION_KEYS: ${{ secrets.PCO_TOKEN_ENCRYPTION_KEYS }}
+          DOCUMENT_SERVICE_AUTH_TOKEN: ${{ secrets.DOCUMENT_SERVICE_AUTH_TOKEN }}
+          PCO_JOB_SERVICE_AUTH_TOKEN: ${{ secrets.PCO_JOB_SERVICE_AUTH_TOKEN }}
+          EMAIL_JOB_SERVICE_AUTH_TOKEN: ${{ secrets.EMAIL_JOB_SERVICE_AUTH_TOKEN }}
+          PCO_CLIENT_ID: ${{ secrets.PCO_CLIENT_ID }}
+          PCO_CLIENT_SECRET: ${{ secrets.PCO_CLIENT_SECRET }}
+          MAILERSEND_API_TOKEN: ${{ secrets.MAILERSEND_API_TOKEN }}
+          MAILERSEND_FROM_EMAIL: ${{ secrets.MAILERSEND_FROM_EMAIL }}
+          MAILERSEND_FROM_NAME: ${{ secrets.MAILERSEND_FROM_NAME }}
+          PASSWORD_RESET_DELIVERY_KEY: ${{ secrets.PASSWORD_RESET_DELIVERY_KEY }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: |
+          umask 077
+          secrets_file="$RUNNER_TEMP/ordinarium-production-worker-secrets.json"
+          jq -n 'env | {
+            SECRET_KEY,
+            OPS_HEALTH_TOKEN,
+            PCO_TOKEN_ENCRYPTION_KEYS,
+            DOCUMENT_SERVICE_AUTH_TOKEN,
+            PCO_JOB_SERVICE_AUTH_TOKEN,
+            EMAIL_JOB_SERVICE_AUTH_TOKEN,
+            PCO_CLIENT_ID,
+            PCO_CLIENT_SECRET,
+            MAILERSEND_API_TOKEN,
+            MAILERSEND_FROM_EMAIL,
+            MAILERSEND_FROM_NAME,
+            PASSWORD_RESET_DELIVERY_KEY,
+            TURNSTILE_SECRET_KEY
+          }' > "$secrets_file"
+          jq -e '
+            length == 13 and
+            all(to_entries[]; .value | type == "string" and length > 0)
+          ' "$secrets_file" > /dev/null
+
       - name: Deploy production application with pinned container digests
         run: >-
           npx wrangler deploy
           --config wrangler.production.generated.json
+          --secrets-file "$RUNNER_TEMP/ordinarium-production-worker-secrets.json"
           --tag "$COMMIT_SHA"
           --message "Production promotion of staging release $COMMIT_SHA"
           --strict
+
+      - name: Remove production Worker secret file
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/ordinarium-production-worker-secrets.json"
 
       - name: Verify production D1 and public health
         run: |
