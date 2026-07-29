@@ -19,6 +19,23 @@
     "enabled": true,
     "head_sampling_rate": 1
   },
+  "secrets": {
+    "required": [
+      "SECRET_KEY",
+      "OPS_HEALTH_TOKEN",
+      "PCO_TOKEN_ENCRYPTION_KEYS",
+      "DOCUMENT_SERVICE_AUTH_TOKEN",
+      "PCO_JOB_SERVICE_AUTH_TOKEN",
+      "EMAIL_JOB_SERVICE_AUTH_TOKEN",
+      "PCO_CLIENT_ID",
+      "PCO_CLIENT_SECRET",
+      "MAILERSEND_API_TOKEN",
+      "MAILERSEND_FROM_EMAIL",
+      "MAILERSEND_FROM_NAME",
+      "PASSWORD_RESET_DELIVERY_KEY",
+      "TURNSTILE_SECRET_KEY"
+    ]
+  },
   "tail_consumers": [
     {
       "service": "ordinarium-alerts-staging"

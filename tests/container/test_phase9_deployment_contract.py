@@ -316,6 +316,25 @@ def test_production_workflow_is_manual_disabled_and_exact_release_only():
     assert "pinned container digests" in workflow
 
 
+def test_production_workflow_uploads_complete_worker_secrets_atomically():
+    workflow = (
+        ROOT / ".github" / "workflows" / "promote-cloudflare-production.yml"
+    ).read_text()
+    app_config = json.loads((ROOT / "cloudflare" / "wrangler.jsonc").read_text())
+    required = app_config["secrets"]["required"]
+
+    assert len(required) == 13
+    assert len(set(required)) == len(required)
+    for secret in required:
+        assert f"{secret}: ${{{{ secrets.{secret} }}}}" in workflow
+    assert "length == 13" in workflow
+    assert (
+        '--secrets-file "$RUNNER_TEMP/ordinarium-production-worker-secrets.json"'
+        in workflow
+    )
+    assert "if: ${{ always() }}" in workflow
+
+
 def test_release_manifest_requires_exact_worker_versions_and_image_digests():
     manifest = _manifest()
 
