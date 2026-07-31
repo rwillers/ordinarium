@@ -24,34 +24,56 @@ from .database import (
 from .export import write_export
 from .preflight import run_preflight
 from .rehearsal import rehearse
+from .source_upgrade import apply_pending_source_migrations
 
 
-def prepare(source_path: Path, output_dir: Path, migrations_dir: Path) -> dict:
+def prepare(
+    source_path: Path,
+    output_dir: Path,
+    migrations_dir: Path,
+    source_migrations_dir: Path,
+) -> dict:
     output_dir.mkdir(parents=True, exist_ok=True)
     os.chmod(output_dir, 0o700)
     snapshot_path = output_dir / "source-snapshot.sqlite3"
     export_path = output_dir / "production-data.sql"
     manifest_path = output_dir / "manifest.json"
+    normalized_path = output_dir / ".normalized-source.sqlite3"
     export_path.unlink(missing_ok=True)
     manifest_path.unlink(missing_ok=True)
+    normalized_path.unlink(missing_ok=True)
     _create_snapshot(source_path, snapshot_path)
-
-    source = connect_read_only(snapshot_path)
-    target_schema = sqlite3.connect(":memory:")
-    target_schema.row_factory = sqlite3.Row
+    source = None
+    target_schema = None
     try:
+        _create_snapshot(snapshot_path, normalized_path)
+        source_schema_upgrade = apply_pending_source_migrations(
+            normalized_path, source_migrations_dir
+        )
+        source = connect_read_only(normalized_path)
+        target_schema = sqlite3.connect(":memory:")
+        target_schema.row_factory = sqlite3.Row
         apply_d1_migrations(target_schema, migrations_dir)
         checks = run_preflight(source, target_schema)
         write_export(source, export_path)
         rehearsal = rehearse(source, export_path, migrations_dir)
         manifest = _manifest(
-            source, snapshot_path, export_path, migrations_dir, checks, rehearsal
+            source,
+            snapshot_path,
+            export_path,
+            migrations_dir,
+            source_schema_upgrade,
+            checks,
+            rehearsal,
         )
         _write_manifest(manifest_path, manifest)
         return manifest
     finally:
-        target_schema.close()
-        source.close()
+        if target_schema is not None:
+            target_schema.close()
+        if source is not None:
+            source.close()
+        normalized_path.unlink(missing_ok=True)
 
 
 def _create_snapshot(source_path: Path, destination: Path) -> None:
@@ -74,6 +96,7 @@ def _manifest(
     snapshot_path,
     export_path,
     migrations_dir,
+    source_schema_upgrade,
     checks,
     rehearsal,
 ) -> dict:
@@ -93,6 +116,7 @@ def _manifest(
             "sha256": sha256_file(snapshot_path),
         },
         "d1_migrations_sha256": _migrations_digest(migrations_dir),
+        "source_schema_upgrade": source_schema_upgrade,
         "data_export": {
             "filename": export_path.name,
             "sha256": sha256_file(export_path),

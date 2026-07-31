@@ -24,19 +24,24 @@ def main() -> int:
     )
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         "--maintenance-confirmed",
         action="store_true",
         help="Confirm the source application is in maintenance/read-only mode.",
     )
+    mode.add_argument(
+        "--rehearsal-snapshot",
+        action="store_true",
+        help="Confirm the source is a consistent online-backup copy used only for rehearsal.",
+    )
     args = parser.parse_args()
-    if not args.maintenance_confirmed:
-        parser.error(
-            "--maintenance-confirmed is required; stop application writes first"
-        )
 
     migrations_dir = ROOT / "migrations" / "d1"
-    manifest = prepare(args.source, args.output_dir, migrations_dir)
+    source_migrations_dir = ROOT / "scripts" / "migrations"
+    manifest = prepare(
+        args.source, args.output_dir, migrations_dir, source_migrations_dir
+    )
     total_rows = sum(value["rows"] for value in manifest["migrated_tables"].values())
     print(f"Preflight and local D1 rehearsal passed for {total_rows} rows.")
     print(f"Private migration bundle: {args.output_dir.resolve()}")

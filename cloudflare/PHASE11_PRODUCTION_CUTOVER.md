@@ -137,6 +137,57 @@ Gate 11B is complete when:
 - production secret handling and fail-closed tests pass; and
 - `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` remains `false`.
 
+## Gate 11C: disposable remote rehearsal
+
+Gate 11C does not require a maintenance window. Take a consistent online
+SQLite backup on AWS, copy it to a private local directory, and pass that copy
+to the migration command with `--rehearsal-snapshot`. Never point rehearsal
+mode at the live database file.
+
+The migration command preserves the online backup as `source-snapshot.sqlite3`
+and creates a hidden working copy. Pending versioned SQLite migrations are
+applied only to the working copy before preflight and export. This allows the
+legacy AWS schema to be normalized without changing AWS production. The hidden
+copy is deleted on success or failure.
+
+Schema parity compares the properties that constrain the explicit-row import:
+column names, SQLite type affinity, nullability, and primary keys. Source-side
+default expressions are not required to match because every exported column is
+explicit and the D1 target owns post-cutover defaults.
+
+Create a disposable ENAM D1 database, apply every D1 migration, and import the
+generated `production-data.sql`. Export the remote database with `wrangler d1
+export --remote`, then run:
+
+```sh
+./venv/bin/python scripts/cloudflare/reconcile_d1_export.py \
+  --manifest /secure/path/rehearsal/manifest.json \
+  --d1-export /secure/path/rehearsal/d1-export.sql \
+  --evidence /secure/path/gate-11c-evidence.json
+```
+
+The reconciler compares deterministic row fingerprints for every migrated
+table and verifies foreign keys and numeric ID sequences. Its evidence file
+contains only pass/fail metadata and migration names, never row counts, row
+hashes, or values.
+
+After successful reconciliation, delete the disposable D1 database and the
+entire production-derived rehearsal bundle. Retain only the sanitized evidence
+and the repository proof note.
+
+Gate 11C is complete when:
+
+- the online AWS snapshot passes integrity, schema, and work-drain preflight;
+- pending source migrations apply only to the private working copy;
+- the local rehearsal reconciles exactly;
+- the disposable remote D1 import and export reconcile exactly;
+- the disposable D1 database and sensitive bundle are deleted; and
+- AWS production, the production D1 database, Workers, routes, and DNS remain
+  unchanged.
+
+The completed rehearsal evidence is recorded in
+`cloudflare/PHASE11_GATE11C_PROOF.md`.
+
 ## Gate 11A exit criteria
 
 Gate 11A is complete when:

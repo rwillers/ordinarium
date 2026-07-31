@@ -37,18 +37,31 @@ def table_columns(connection: sqlite3.Connection, table: str) -> tuple[str, ...]
 
 
 def table_schema(connection: sqlite3.Connection, table: str) -> tuple[tuple, ...]:
+    """Return the structural properties that constrain explicit-row imports."""
     return tuple(
         sorted(
             (
                 row["name"],
-                row["type"],
+                _type_affinity(row["type"]),
                 row["notnull"],
-                row["dflt_value"],
                 row["pk"],
             )
             for row in _table_info(connection, table)
         )
     )
+
+
+def _type_affinity(declared_type: str) -> str:
+    value = declared_type.strip().upper()
+    if "INT" in value:
+        return "INTEGER"
+    if any(token in value for token in ("CHAR", "CLOB", "TEXT")):
+        return "TEXT"
+    if not value or "BLOB" in value:
+        return "BLOB"
+    if any(token in value for token in ("REAL", "FLOA", "DOUB")):
+        return "REAL"
+    return "NUMERIC"
 
 
 def iter_table_rows(connection: sqlite3.Connection, table: str):
