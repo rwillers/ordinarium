@@ -13,8 +13,9 @@ The work is intentionally split into gates:
    production traffic.
 4. Enter a maintenance window, take the final snapshot, import and reconcile
    data, deploy the staging-tested release, and switch traffic.
-5. Observe the new production environment and retire AWS only after the
-   rollback window closes.
+5. Observe the new production environment and retire AWS after acceptance. The
+   planned seven-day rollback hold was waived because the AWS deployment never
+   reached general availability.
 
 No gate authorizes the next one automatically.
 
@@ -101,8 +102,9 @@ Gate 11D is the coordinated maintenance and traffic cutover. It requires a
 human go/no-go decision after final data reconciliation and before DNS or route
 changes.
 
-Gate 11E covers post-cutover monitoring, rollback readiness, and eventual AWS
-retirement.
+Gate 11E covers post-cutover acceptance and AWS retirement. Because the AWS
+deployment never reached general availability, manual acceptance may close the
+rollback hold without waiting seven days.
 
 ## Gate 11B: production resource and secret preparation
 
@@ -263,7 +265,9 @@ production and disabled only for local development.
    hostnames, and verifies D1, containers, `/health`, `/login`, CSRF, and the
    Turnstile widget.
 10. Perform the complete production smoke test before reopening writes. Disable
-    legacy AWS deployment and retain AWS read-only for at least seven days.
+    legacy AWS deployment. Retain AWS read-only for seven days unless the
+    operator explicitly waives that hold because the legacy deployment was not
+    generally available.
 
 The DNS record removal and environment approval in step 9 are one coordinated
 action. If the workflow fails before Cloudflare serves production, restore the
@@ -292,6 +296,8 @@ Gate 11D is complete when:
 
 The pre-cutover inventory and local implementation evidence are recorded in
 `cloudflare/PHASE11_GATE11D_READINESS.md`. That note is not cutover approval.
+The completed cutover and retirement decision are recorded in
+`cloudflare/PHASE11_GATE11D_PROOF.md`.
 
 ## Gate 11A exit criteria
 
