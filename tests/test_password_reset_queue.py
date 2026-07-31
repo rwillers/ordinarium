@@ -182,7 +182,12 @@ def test_delivery_envelope_authenticates_ciphertext(app, user_factory):
     _enable_queued_resets(app)
     reset, row = _create_reset(app, user_id)
     envelope = row["delivery_token_envelope"]
-    tampered = envelope[:-1] + ("A" if envelope[-1] != "A" else "B")
+    parts = envelope.split(":")
+    padding = "=" * (-len(parts[-1]) % 4)
+    ciphertext = bytearray(base64.urlsafe_b64decode(parts[-1] + padding))
+    ciphertext[0] ^= 1
+    parts[-1] = base64.urlsafe_b64encode(ciphertext).decode("ascii").rstrip("=")
+    tampered = ":".join(parts)
 
     with app.app_context(), pytest.raises(PasswordResetEnvelopeError):
         decrypt_delivery_token(reset["reset_id"], tampered)

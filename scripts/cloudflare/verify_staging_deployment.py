@@ -13,12 +13,19 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-EXPECTED_CONTAINERS = {
+STAGING_CONTAINERS = {
     "ordinarium-web",
     "ordinarium-documents",
     "ordinarium-pco-jobs",
     "ordinarium-email-jobs",
 }
+PRODUCTION_CONTAINERS = {
+    "ordinarium-production-web",
+    "ordinarium-production-documents",
+    "ordinarium-production-pco-jobs",
+    "ordinarium-production-email-jobs",
+}
+EXPECTED_CONTAINERS = STAGING_CONTAINERS
 IMAGE_PATTERN = re.compile(
     r"registry\.cloudflare\.com/[0-9a-f]+/[a-z0-9-]+@sha256:[0-9a-f]{64}"
 )
@@ -96,6 +103,8 @@ def _verify_edge_routes(base_url, headers):
         raise RuntimeError("web container login route is not ready")
     if b'name="csrf_token"' not in body:
         raise RuntimeError("web container login form is incomplete")
+    if b"challenges.cloudflare.com/turnstile/v0/api.js" not in body:
+        raise RuntimeError("web container login form has no Turnstile widget")
 
 
 def verify_access(base_url):
@@ -105,7 +114,7 @@ def verify_access(base_url):
     print("Cloudflare Access authenticated staging probes passed.")
 
 
-def _container_snapshot(wrangler, config):
+def _container_snapshot(wrangler, config, expected_containers=EXPECTED_CONTAINERS):
     result = subprocess.run(
         [wrangler, "containers", "list", "--json", "--config", config],
         check=True,
@@ -116,19 +125,19 @@ def _container_snapshot(wrangler, config):
     if not isinstance(payload, list):
         raise RuntimeError("container metadata is not a list")
     return sorted(
-        (item for item in payload if item.get("name") in EXPECTED_CONTAINERS),
+        (item for item in payload if item.get("name") in expected_containers),
         key=lambda item: item["name"],
     )
 
 
-def _container_snapshot_error(snapshot):
+def _container_snapshot_error(snapshot, expected_containers=EXPECTED_CONTAINERS):
     containers = {item.get("name"): item for item in snapshot}
-    missing = sorted(EXPECTED_CONTAINERS - set(containers))
+    missing = sorted(expected_containers - set(containers))
     if missing:
         return f"container metadata is missing: {', '.join(missing)}"
 
     invalid = []
-    for name in sorted(EXPECTED_CONTAINERS):
+    for name in sorted(expected_containers):
         container = containers[name]
         state = container.get("state")
         image = container.get("image", "")
@@ -151,23 +160,23 @@ def _write_snapshot(snapshot, output):
     Path(output).write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 
 
-def verify_staging(
+def _verify_deployment(
     base_url,
     wrangler,
     config,
+    headers,
+    expected_containers,
     attempts=60,
     stable_samples=2,
     containers_output=None,
 ):
-    headers = _access_headers()
-    print(_credential_metadata(headers))
     last_error = None
     previous_signature = None
     consecutive_samples = 0
     for _attempt in range(attempts):
         try:
-            snapshot = _container_snapshot(wrangler, config)
-            if error := _container_snapshot_error(snapshot):
+            snapshot = _container_snapshot(wrangler, config, expected_containers)
+            if error := _container_snapshot_error(snapshot, expected_containers):
                 previous_signature = None
                 consecutive_samples = 0
                 raise RuntimeError(error)
@@ -202,10 +211,52 @@ def verify_staging(
                 and error.status not in {408, 429}
             ):
                 raise RuntimeError(
-                    f"staging readiness failed without retry: {error}"
+                    f"deployment readiness failed without retry: {error}"
                 ) from error
             time.sleep(10)
-    raise RuntimeError(f"staging readiness checks did not pass: {last_error}")
+    raise RuntimeError(f"deployment readiness checks did not pass: {last_error}")
+
+
+def verify_staging(
+    base_url,
+    wrangler,
+    config,
+    attempts=60,
+    stable_samples=2,
+    containers_output=None,
+):
+    headers = _access_headers()
+    print(_credential_metadata(headers))
+    _verify_deployment(
+        base_url,
+        wrangler,
+        config,
+        headers,
+        STAGING_CONTAINERS,
+        attempts,
+        stable_samples,
+        containers_output,
+    )
+
+
+def verify_production(
+    base_url,
+    wrangler,
+    config,
+    attempts=60,
+    stable_samples=2,
+    containers_output=None,
+):
+    _verify_deployment(
+        base_url,
+        wrangler,
+        config,
+        {},
+        PRODUCTION_CONTAINERS,
+        attempts,
+        stable_samples,
+        containers_output,
+    )
 
 
 def _main():
@@ -214,20 +265,24 @@ def _main():
     parser.add_argument("--wrangler")
     parser.add_argument("--config")
     parser.add_argument("--containers-output")
-    parser.add_argument("--access-preflight", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--access-preflight", action="store_true")
+    mode.add_argument("--public-production", action="store_true")
     args = parser.parse_args()
     if args.access_preflight:
         verify_access(args.base_url)
         return
     if not args.wrangler or not args.config:
         parser.error("--wrangler and --config are required for readiness verification")
-    verify_staging(
+    verify = verify_production if args.public_production else verify_staging
+    verify(
         args.base_url,
         args.wrangler,
         args.config,
         containers_output=args.containers_output,
     )
-    print("Staging edge, container, and login readiness checks passed.")
+    environment = "Production" if args.public_production else "Staging"
+    print(f"{environment} edge, container, login, and Turnstile readiness passed.")
 
 
 if __name__ == "__main__":

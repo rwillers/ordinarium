@@ -148,6 +148,11 @@ jobs:
           --remote
           --config wrangler.production.generated.json
 
+      - name: Require reconciled production data
+        run: |
+          CUTOVER_STATE="$(npx wrangler d1 execute APP_DB --remote --json --config wrangler.production.generated.json --command "SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN 1 ELSE 0 END AS imported")"
+          printf '%s' "$CUTOVER_STATE" | jq -e '.[0].results[0].imported == 1' > /dev/null
+
       - name: Deploy production alert classifier
         run: >-
           npx wrangler deploy
@@ -210,7 +215,11 @@ jobs:
         if: ${{ always() }}
         run: rm -f "$RUNNER_TEMP/ordinarium-production-worker-secrets.json"
 
-      - name: Verify production D1 and public health
+      - name: Verify production D1 and public readiness
         run: |
           npx wrangler d1 execute APP_DB --remote --config wrangler.production.generated.json --command "select 1 as ok"
-          curl --fail --retry 30 --retry-delay 10 --retry-all-errors "https://$PRODUCTION_APP_DOMAIN/health"
+          python ../scripts/cloudflare/verify_staging_deployment.py \
+            --public-production \
+            --base-url "https://$PRODUCTION_APP_DOMAIN" \
+            --wrangler ./node_modules/.bin/wrangler \
+            --config wrangler.production.generated.json

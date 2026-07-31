@@ -188,6 +188,111 @@ Gate 11C is complete when:
 The completed rehearsal evidence is recorded in
 `cloudflare/PHASE11_GATE11C_PROOF.md`.
 
+## Gate 11D: coordinated production cutover
+
+Gate 11D is a scheduled maintenance-window operation, not a routine deployment.
+The final migration bundle remains on the operator's private workstation and is
+never uploaded to GitHub Actions. The production promotion workflow consumes
+only the successful staging release manifest and immutable container digests.
+
+### Readiness before the maintenance window
+
+Before scheduling the window:
+
+- select a successful `Deploy Cloudflare staging` run and its exact `main`
+  commit SHA;
+- complete the authentication, password-reset, service editing, document
+  export, queue retry, container restart, and Planning Center OAuth checks on
+  that staging release;
+- verify that production D1 still contains only the versioned schema and
+  reference data, with every migrated and transient table empty;
+- verify the production queues have no producers, consumers, or messages;
+- record the current D1 Time Travel bookmark;
+- inventory the current apex and `www` A/AAAA records needed for rollback; and
+- leave `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY=false` until final reconciliation
+  has passed.
+
+Export the still-empty production D1 database to a private temporary file and
+run this fail-closed target check before entering the maintenance window:
+
+```sh
+umask 077
+cloudflare/node_modules/.bin/wrangler d1 export \
+  ordinarium-app-production \
+  --remote \
+  --output /secure/path/production-empty.sql
+./venv/bin/python scripts/cloudflare/validate_d1_cutover_target.py \
+  --d1-export /secure/path/production-empty.sql \
+  --evidence /secure/path/production-empty-evidence.json
+```
+
+The check verifies schema parity, foreign keys, empty application and transient
+tables, versioned reference data, and initial ID sequences. Its evidence does
+not retain table contents, counts, or fingerprints.
+
+Both `ordinarium.com` and `www.ordinarium.com` currently reach AWS directly.
+The production configuration therefore attaches both hostnames to the same
+Worker. Requests for `www` receive a 308 redirect to the canonical apex before
+rate limiting, Turnstile, or container processing. This prevents split-brain
+writes to AWS after the apex moves. Turnstile is enabled in both staging and
+production and disabled only for local development.
+
+### Maintenance-window sequence
+
+1. Put AWS in maintenance/read-only mode and verify that application writes are
+   blocked.
+2. Drain Planning Center jobs, operations, rows, claims, and service leases.
+3. Take the immutable final SQLite backup and run
+   `migrate_production.py --maintenance-confirmed` against that backup.
+4. Reconfirm that production D1 is empty, then import `production-data.sql`
+   with Wrangler.
+5. Export production D1 to the private bundle and run
+   `reconcile_d1_export.py` against the final manifest.
+6. Record the post-import D1 Time Travel bookmark. If reconciliation fails,
+   stop, restore the pre-import empty bookmark, and reopen AWS without changing
+   traffic.
+7. Pause for the explicit human go/no-go decision. No DNS record or Worker
+   custom domain changes before approval.
+8. After approval, set `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY=true` and dispatch
+   `Promote Cloudflare production` with the selected staging run ID, commit SHA,
+   and `PROMOTE`. Let its read-only release verification finish and pause at the
+   protected `cloudflare-production` environment approval.
+9. Remove the legacy apex and `www` A/AAAA records and immediately approve the
+   waiting environment deployment. The workflow refuses to deploy if production
+   data is still empty, promotes the pinned staging images, attaches both
+   hostnames, and verifies D1, containers, `/health`, `/login`, CSRF, and the
+   Turnstile widget.
+10. Perform the complete production smoke test before reopening writes. Disable
+    legacy AWS deployment and retain AWS read-only for at least seven days.
+
+The DNS record removal and environment approval in step 9 are one coordinated
+action. If the workflow fails before Cloudflare serves production, restore the
+recorded AWS A/AAAA records and keep AWS authoritative.
+
+### Rollback boundary
+
+- Before any D1-backed user write, rollback is domain detachment plus restoration
+  of the recorded AWS A/AAAA records, followed by reopening AWS writes.
+- After D1-backed writes begin, do not send traffic back to the stale AWS
+  database. Prefer a forward fix. If data recovery is necessary, D1 Time Travel
+  can restore the database to a recorded bookmark, but restore is destructive
+  and requires a separate explicit decision.
+
+Gate 11D is complete when:
+
+- the final private source snapshot and local rehearsal pass;
+- production D1 imports and reconciles exactly;
+- the human go/no-go is recorded after reconciliation;
+- the staging-tested release serves both production hostnames with `www`
+  redirecting to the apex;
+- authentication, Turnstile, password reset, application workflows, exports,
+  queues, container stability, alerting, and Planning Center OAuth pass; and
+- AWS is read-only, rollback records and D1 bookmarks are retained, and no
+  production-derived bundle has entered the repository or GitHub Actions.
+
+The pre-cutover inventory and local implementation evidence are recorded in
+`cloudflare/PHASE11_GATE11D_READINESS.md`. That note is not cutover approval.
+
 ## Gate 11A exit criteria
 
 Gate 11A is complete when:

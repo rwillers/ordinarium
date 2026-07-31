@@ -13,6 +13,7 @@ from scripts.cloudflare.production_migration.source_upgrade import (
     apply_pending_source_migrations,
 )
 from scripts.cloudflare.reconcile_d1_export import reconcile_export
+from scripts.cloudflare.validate_d1_cutover_target import validate_export
 
 
 ROOT = Path(__file__).parents[1]
@@ -295,3 +296,39 @@ def test_remote_d1_export_reconciles_without_retaining_row_evidence(tmp_path):
     assert evidence["status"] == "passed"
     assert evidence["migrated_table_count"] == 11
     assert "tables" not in evidence
+
+
+def test_empty_d1_cutover_target_matches_versioned_schema_and_data(tmp_path):
+    export_path = tmp_path / "empty-target.sql"
+    target = sqlite3.connect(":memory:")
+    try:
+        apply_d1_migrations(target, MIGRATIONS)
+        export_path.write_text("\n".join(target.iterdump()) + "\n")
+    finally:
+        target.close()
+
+    evidence = validate_export(export_path, MIGRATIONS)
+
+    assert evidence["status"] == "passed"
+    assert evidence["migrated_tables_empty"] == "ok"
+    assert evidence["versioned_reference_data"] == "ok"
+
+
+def test_d1_cutover_target_rejects_existing_application_data(tmp_path):
+    export_path = tmp_path / "nonempty-target.sql"
+    target = sqlite3.connect(":memory:")
+    try:
+        apply_d1_migrations(target, MIGRATIONS)
+        target.execute(
+            """
+            INSERT INTO users (id, email, default_rite) VALUES (1, ?, ?)
+            """,
+            ("already@example.com", "Renewed Ancient Text"),
+        )
+        target.commit()
+        export_path.write_text("\n".join(target.iterdump()) + "\n")
+    finally:
+        target.close()
+
+    with pytest.raises(RuntimeError, match="contains application data"):
+        validate_export(export_path, MIGRATIONS)
