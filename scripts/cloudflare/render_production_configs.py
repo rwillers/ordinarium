@@ -43,14 +43,17 @@ def render_configs(
     alert_email,
 ):
     validate_manifest(manifest, manifest.get("commit_sha"))
-    if not domain or "/" in domain:
-        raise ValueError("production domain must be a hostname")
+    if not domain or "/" in domain or domain.startswith("www."):
+        raise ValueError("production domain must be a canonical hostname")
     if not database_id:
         raise ValueError("production D1 database ID is required")
 
     app = _replace_staging_queue_names(copy.deepcopy(app_source))
     app["name"] = "ordinarium-app-production"
-    app["routes"] = [{"pattern": domain, "custom_domain": True}]
+    app["routes"] = [
+        {"pattern": domain, "custom_domain": True},
+        {"pattern": f"www.{domain}", "custom_domain": True},
+    ]
     app["tail_consumers"] = [{"service": "ordinarium-alerts-production"}]
     app["vars"].update(
         {

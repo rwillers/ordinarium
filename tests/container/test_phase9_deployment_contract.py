@@ -63,6 +63,18 @@ def _containers():
     ]
 
 
+def _production_containers():
+    return [
+        {
+            "name": name.replace("ordinarium-", "ordinarium-production-", 1),
+            "state": item["state"],
+            "image": item["image"],
+        }
+        for item in _containers()
+        for name in [item["name"]]
+    ]
+
+
 def _manifest():
     return deployment_manifest.create_manifest(
         COMMIT,
@@ -125,7 +137,12 @@ def test_staging_access_preflight_checks_health_and_login(monkeypatch, capsys):
         paths.append(path)
         if path == "/health":
             return 200, Headers(), b'{"status": "ok"}'
-        return 200, Headers(), b'<input name="csrf_token">'
+        return (
+            200,
+            Headers(),
+            b'<input name="csrf_token">'
+            b"challenges.cloudflare.com/turnstile/v0/api.js",
+        )
 
     monkeypatch.setattr(staging_verifier, "_request", request)
 
@@ -314,6 +331,40 @@ def test_production_workflow_is_manual_disabled_and_exact_release_only():
     assert "deployment_manifest.py validate" in workflow
     assert "render_production_configs.py" in workflow
     assert "pinned container digests" in workflow
+    assert "--public-production" in workflow
+    assert "Require reconciled production data" in workflow
+    assert "EXISTS (SELECT 1 FROM users)" in workflow
+
+
+def test_production_readiness_is_public_and_requires_production_containers(
+    monkeypatch,
+):
+    observed = {}
+    monkeypatch.setattr(
+        staging_verifier,
+        "_container_snapshot",
+        lambda _wrangler, _config, expected: (
+            observed.update(expected=expected) or _production_containers()
+        ),
+    )
+    monkeypatch.setattr(
+        staging_verifier,
+        "_verify_edge_routes",
+        lambda _base_url, headers: observed.update(headers=headers),
+    )
+
+    staging_verifier.verify_production(
+        "https://ordinarium.com",
+        "wrangler",
+        "production.json",
+        attempts=1,
+        stable_samples=1,
+    )
+
+    assert observed == {
+        "expected": staging_verifier.PRODUCTION_CONTAINERS,
+        "headers": {},
+    }
 
 
 def test_production_workflow_uploads_complete_worker_secrets_atomically():
@@ -382,7 +433,11 @@ def test_production_renderer_uses_separate_resources_and_tested_images():
     )
 
     assert app["name"] == "ordinarium-app-production"
-    assert app["routes"] == [{"pattern": "ordinarium.com", "custom_domain": True}]
+    assert app["routes"] == [
+        {"pattern": "ordinarium.com", "custom_domain": True},
+        {"pattern": "www.ordinarium.com", "custom_domain": True},
+    ]
+    assert app["vars"]["APP_ORIGIN"] == "https://ordinarium.com"
     assert app["d1_databases"][0]["database_name"] == "ordinarium-app-production"
     assert alerts["name"] == "ordinarium-alerts-production"
     assert all(

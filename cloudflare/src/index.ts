@@ -1,6 +1,7 @@
 import { Container, ContainerProxy } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
+import { redirectAliasToCanonicalOrigin } from "./canonical_origin";
 import { handleD1Request } from "./d1_bridge";
 import { handleDocumentRequest } from "./document_orchestrator";
 import { handleEdgeRateLimit } from "./edge_security";
@@ -8,6 +9,7 @@ import { handleEdgeRoute } from "./edge_routes";
 import { handleQueueBatch } from "./queue_consumer";
 import { emitQueueMetrics } from "./queue_observability";
 import { handleQueuePublishRequest } from "./queue_publisher";
+import { turnstileEnabledForDeployment } from "./runtime_policy";
 import {
   reconcilePasswordResetEmails,
   reconcilePcoRows,
@@ -81,7 +83,9 @@ export class WebContainer extends Container {
   envVars = {
     ORDINARIUM_CONTAINER_ROLE: "web",
     SECRET_KEY: env.SECRET_KEY,
-    TURNSTILE_ENABLED: env.DEPLOYMENT_ENV === "staging" ? "true" : "false",
+    TURNSTILE_ENABLED: turnstileEnabledForDeployment(env.DEPLOYMENT_ENV)
+      ? "true"
+      : "false",
     TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY || "",
     TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY ? "worker-managed" : "",
     TURNSTILE_EXPECTED_HOSTNAME: env.TURNSTILE_EXPECTED_HOSTNAME || "",
@@ -250,6 +254,14 @@ const worker: ExportedHandler<Cloudflare.Env> = {
     let containerRole = "edge";
     let response: Response | undefined;
     try {
+      const canonicalRedirect = redirectAliasToCanonicalOrigin(
+        request,
+        environment.APP_ORIGIN,
+      );
+      if (canonicalRedirect) {
+        response = canonicalRedirect;
+        return responseWithRequestId(response, requestId);
+      }
       const rateLimitResponse = await handleEdgeRateLimit(
         request,
         environment,
