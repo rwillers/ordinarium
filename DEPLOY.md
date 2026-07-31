@@ -1,159 +1,65 @@
-# Deployment Guide (Lightsail + HTTPS)
+# Deployment guide (Cloudflare)
 
-This guide assumes Ubuntu, a `deploy` user, and the domain `ordinarium.com`.
+Ordinarium is deployed to Cloudflare Workers, Containers, D1, and Queues. The
+former Lightsail deployment path was retired after the Phase 11 production
+cutover and must not be recreated from this repository.
 
-## Server setup
+## Validation and staging
 
-```bash
-sudo apt update
-sudo apt install -y \
-  python3 python3-venv python3-pip apache2 certbot python3-certbot-apache git \
-  libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf-2.0-0 shared-mime-info fonts-dejavu-core
+Pull requests run the Python, SQLite, Worker, and container checks in GitHub
+Actions. They do not receive deployment credentials and cannot change remote
+Cloudflare resources.
 
-sudo adduser deploy
-sudo usermod -aG www-data deploy
-```
+Every commit merged to `main` runs `Deploy Cloudflare staging`. That workflow:
 
-### SSH key for deploy
+1. verifies the exact merged commit;
+2. tests the Worker and container images;
+3. applies compatible staging D1 migrations;
+4. deploys the staging alert and application Workers;
+5. checks queues, containers, `/health`, login, CSRF, and Turnstile; and
+6. retains an immutable staging release manifest for 90 days.
 
-```bash
-sudo mkdir -p /home/deploy/.ssh
-sudo chmod 700 /home/deploy/.ssh
-sudo nano /home/deploy/.ssh/authorized_keys
-sudo chmod 600 /home/deploy/.ssh/authorized_keys
-sudo chown -R deploy:deploy /home/deploy/.ssh
-```
+The `cloudflare-staging` GitHub environment owns its Cloudflare and Access
+credentials. Do not copy those secrets into pull-request workflows.
 
-## App install
+## Production promotion
 
-```bash
-sudo mkdir -p /srv/ordinarium
-sudo chown deploy:deploy /srv/ordinarium
-su - deploy
+Production promotion is manual and uses only a successful staging release. To
+promote a release:
 
-cd /srv/ordinarium
-git clone git@github.com:rwillers/ordinarium.git .
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python scripts/migrate_db.py
-```
+1. Find the successful `Deploy Cloudflare staging` run ID and its exact
+   40-character commit SHA.
+2. Confirm the repository variable `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` is
+   `true`. It may remain `false` between planned promotions as an additional
+   operational lock.
+3. Run `Promote Cloudflare production` with the staging run ID, commit SHA, and
+   the confirmation value `PROMOTE`.
+4. Review and approve the protected `cloudflare-production` deployment.
+5. Verify the public health endpoint and the affected application workflows.
 
-### Repo deploy key (server -> GitHub)
+The workflow rejects a failed or non-`main` staging run, a mismatched commit,
+mutable container tags, missing secrets, or an empty production database. It
+promotes the staging image digests rather than rebuilding them.
 
-```bash
-su - deploy
-ssh-keygen -t ed25519 -C "ordinarium-server"
-cat ~/.ssh/id_ed25519.pub
-```
+Production D1 contains live user writes. Do not roll traffic back to an old
+SQLite database. Prefer a forward fix; any D1 Time Travel restore is a separate
+destructive recovery decision.
 
-Add the public key as a Deploy Key in GitHub (read-only is fine).
+## Configuration ownership
 
-Create `/srv/ordinarium/.env`:
-```
-FLASK_ENV=production
-SECRET_KEY=REPLACE_WITH_LONG_RANDOM
-PASSWORD_RESET_EXPIRY_MINUTES=60
-RATELIMIT_STORAGE_URI=redis://localhost:6379/0
-TURNSTILE_ENABLED=true
-TURNSTILE_SITE_KEY=REPLACE_WITH_TURNSTILE_SITE_KEY
-TURNSTILE_SECRET_KEY=REPLACE_WITH_TURNSTILE_SECRET_KEY
+- `.github/workflows/deploy-cloudflare-staging.yml` owns automatic staging
+  deployment.
+- `.github/workflows/promote-cloudflare-production.yml` owns protected manual
+  production promotion.
+- `cloudflare/wrangler.jsonc` and
+  `cloudflare/wrangler.alerts.jsonc` define the staging resources.
+- `scripts/cloudflare/render_production_configs.py` renders production
+  configuration from the tested release and protected environment values.
+- `cloudflare/PHASE9_DEPLOYMENT_PATHS.md` documents the deployment controls and
+  required GitHub environment configuration.
+- `cloudflare/PHASE11_PRODUCTION_CUTOVER.md` records the migration and recovery
+  boundaries.
 
-# SMTP (optional: required for real password reset emails)
-# If SMTP_HOST is not set, reset emails are logged in the app logs.
-#
-# MailerSend SMTP relay example:
-# SMTP_HOST=smtp.mailersend.net
-# SMTP_PORT=587
-# SMTP_USERNAME=REPLACE_WITH_SMTP_USERNAME
-# SMTP_PASSWORD=REPLACE_WITH_SMTP_PASSWORD
-# SMTP_USE_TLS=true
-# SMTP_USE_SSL=false
-# SMTP_SENDER="Ordinarium <no-reply@your-verified-domain.com>"
-#
-# MailerSend requires TLS via port 587 and a sender address on a verified domain.
-SMTP_HOST=mail.example.com
-SMTP_PORT=587
-SMTP_USERNAME=ordinarium@example.com
-SMTP_PASSWORD=REPLACE_WITH_SMTP_PASSWORD
-SMTP_USE_TLS=true
-SMTP_USE_SSL=false
-SMTP_SENDER="Ordinarium <no-reply@ordinarium.com>"
-```
-Note: debug is disabled by default; do not set `ORDINARIUM_DEBUG` or `FLASK_DEBUG` in production.
-
-## systemd (gunicorn)
-
-Create `/etc/systemd/system/ordinarium.service`:
-```
-[Unit]
-Description=Ordinarium Gunicorn
-After=network.target
-
-[Service]
-User=deploy
-Group=www-data
-WorkingDirectory=/srv/ordinarium
-EnvironmentFile=/srv/ordinarium/.env
-ExecStart=/srv/ordinarium/venv/bin/gunicorn -w 3 -b 127.0.0.1:8000 app:app
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable ordinarium
-sudo systemctl start ordinarium
-```
-
-## Apache (virtual host)
-
-Enable Apache proxy modules:
-
-```bash
-sudo a2enmod proxy proxy_http headers rewrite ssl
-sudo systemctl restart apache2
-```
-
-Create `/etc/apache2/sites-available/ordinarium.com.conf`:
-```
-<VirtualHost *:80>
-    ServerName ordinarium.com
-    ServerAlias www.ordinarium.com
-
-    ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:8000/
-    ProxyPassReverse / http://127.0.0.1:8000/
-
-    RequestHeader set X-Forwarded-Proto "http"
-</VirtualHost>
-```
-
-```bash
-sudo a2ensite ordinarium.com.conf
-sudo apache2ctl configtest
-sudo systemctl reload apache2
-```
-
-## HTTPS (Let’s Encrypt)
-
-```bash
-sudo certbot --apache -d ordinarium.com -d www.ordinarium.com
-```
-
-## GitHub Actions deployment
-
-Add GitHub secrets:
-- `LIGHTSAIL_HOST`
-- `LIGHTSAIL_USER` (set to `deploy`)
-- `LIGHTSAIL_SSH_KEY` (private key for deploy)
-
-The workflow in `.github/workflows/deploy.yml` runs `./scripts/deploy.sh` on push to `main`.
-`scripts/deploy.sh` now runs `python scripts/migrate_db.py` to apply any new migrations.
-
-If `deploy` cannot run `sudo systemctl restart ordinarium`, add a sudoers entry:
-```
-deploy ALL=NOPASSWD: /bin/systemctl restart ordinarium
-```
+Keep secrets out of the repository. Runtime application secrets and deployment
+credentials belong only in their protected GitHub environments and Cloudflare
+Worker secret stores.

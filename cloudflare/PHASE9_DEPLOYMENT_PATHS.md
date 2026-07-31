@@ -2,9 +2,10 @@
 
 ## Scope
 
-Phase 9 keeps the existing Cloudflare staging runtime. The `cloudflare-staging`
-GitHub environment is only an Actions deployment gate and secret scope; it does
-not create another Worker, D1 database, queue set, hostname, or container fleet.
+The `cloudflare-staging` and `cloudflare-production` GitHub environments are
+Actions deployment gates and secret scopes for their corresponding Cloudflare
+runtimes. They do not themselves create Workers, D1 databases, queues,
+hostnames, or container fleets.
 
 Labeled per-PR Cloudflare environments are intentionally deferred. Pull requests
 run all validation without receiving deployment credentials or changing remote
@@ -70,10 +71,10 @@ the explicit word `PROMOTE`. The verification job then confirms:
 - every container reference is pinned by digest.
 
 The deploy job is disabled while the repository variable
-`ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` is not `true`. Enabling it is part of the
-later production cutover gate, after the `cloudflare-production` environment,
-production D1 database, queues, Turnstile configuration, Worker secrets, and
-domain are ready. That environment must require approval.
+`ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` is not `true`. Production is now live on
+Cloudflare; the variable may remain `false` between planned promotions as an
+additional operational lock. The `cloudflare-production` environment must
+require approval.
 
 When enabled, the workflow checks out the staging-tested commit and renders a
 production configuration with separate Worker, Durable Object, container, D1,
@@ -95,7 +96,7 @@ enable flag is changed.
 
 ## Operational policy
 
-Production promotion remains manual after cutover. Automatic staging-to-
-production promotion should be considered only after several uneventful manual
-releases. Cloudflare Git integration remains disabled; GitHub Actions is the
-deployment authority.
+Production promotion remains manual. Cloudflare Git integration remains
+disabled; GitHub Actions is the deployment authority. The retired Lightsail
+workflow, environment, variables, and secrets are not part of this deployment
+path.
