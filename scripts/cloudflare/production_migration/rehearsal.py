@@ -16,22 +16,18 @@ def rehearse(
     target.row_factory = sqlite3.Row
     try:
         apply_d1_migrations(target, migrations_dir)
-        target.executescript(export_path.read_text(encoding="utf-8"))
+        target.executescript(export_path.read_bytes().decode("utf-8"))
         target.commit()
-        fingerprints = _reconcile_tables(source, target)
-        _check_foreign_keys(target)
-        sequences = _check_sequences(target)
+        result = reconcile_source(source, target)
         return {
             "status": "passed",
-            "tables": fingerprints,
-            "foreign_keys": "ok",
-            "id_sequences": sequences,
+            **result,
         }
     finally:
         target.close()
 
 
-def _reconcile_tables(source: sqlite3.Connection, target: sqlite3.Connection) -> dict:
+def reconcile_source(source: sqlite3.Connection, target: sqlite3.Connection) -> dict:
     fingerprints = {}
     for table in MIGRATED_TABLES:
         source_value = table_fingerprint(source, table)
@@ -42,7 +38,33 @@ def _reconcile_tables(source: sqlite3.Connection, target: sqlite3.Connection) ->
                 f"source={source_value}, target={target_value}"
             )
         fingerprints[table] = source_value
-    return fingerprints
+    _check_foreign_keys(target)
+    sequences = _check_sequences(target)
+    return {
+        "tables": fingerprints,
+        "foreign_keys": "ok",
+        "id_sequences": sequences,
+    }
+
+
+def reconcile_manifest(manifest: dict, target: sqlite3.Connection) -> dict:
+    fingerprints = {}
+    for table in MIGRATED_TABLES:
+        expected = manifest["migrated_tables"][table]
+        actual = table_fingerprint(target, table)
+        if actual != expected:
+            raise RuntimeError(
+                f"Remote D1 rehearsal mismatch for {table}: "
+                f"expected={expected}, actual={actual}"
+            )
+        fingerprints[table] = actual
+    _check_foreign_keys(target)
+    sequences = _check_sequences(target)
+    return {
+        "tables": fingerprints,
+        "foreign_keys": "ok",
+        "id_sequences": sequences,
+    }
 
 
 def _check_foreign_keys(connection: sqlite3.Connection) -> None:
