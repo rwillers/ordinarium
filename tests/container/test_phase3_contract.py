@@ -25,12 +25,15 @@ def test_staging_has_one_access_protectable_origin():
     assert '"custom_domain": true' in config
 
 
-def test_web_proof_marks_sqlite_as_disposable():
+def test_web_startup_is_optimized_for_d1():
     worker = (ROOT / "cloudflare/src/index.ts").read_text()
     startup = (ROOT / "scripts/cloudflare/start_web_proof.sh").read_text()
+    dockerfile = (ROOT / "containers/web/Dockerfile").read_text()
 
-    assert 'ORDINARIUM_DISPOSABLE_SQLITE: "true"' in worker
-    assert "flask --app ordinarium init-db" in startup
+    assert "ORDINARIUM_DISPOSABLE_SQLITE" not in worker
+    assert "init-db" not in startup
+    assert "--preload" in startup
+    assert "python -m compileall -q /app/ordinarium /app/app.py" in dockerfile
     assert "--timeout=125" in startup
 
 
