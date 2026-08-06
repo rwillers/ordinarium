@@ -21,6 +21,7 @@ def _module(name):
 deployment_manifest = _module("deployment_manifest")
 production_configs = _module("render_production_configs")
 staging_verifier = _module("verify_staging_deployment")
+release_images = _module("prepare_release_images")
 
 
 COMMIT = "a" * 40
@@ -75,6 +76,14 @@ def _production_containers():
     ]
 
 
+def _image_config(containers):
+    return {
+        "containers": [
+            {"name": item["name"], "image": item["image"]} for item in containers
+        ]
+    }
+
+
 def _manifest():
     return deployment_manifest.create_manifest(
         COMMIT,
@@ -108,15 +117,20 @@ def test_staging_workflow_migrates_deploys_verifies_and_records_release():
     assert "name: cloudflare-staging" in workflow
     assert "cancel-in-progress: false" in workflow
     assert workflow.index("Apply compatible D1 migrations") < workflow.index(
-        "Deploy application and containers"
+        "Deploy application with exact container digests"
     )
     assert workflow.index("Verify staging Access credentials") < workflow.index(
         "Apply compatible D1 migrations"
     )
     assert workflow.index("Deploy alert classifier") < workflow.index(
-        "Deploy application and containers"
+        "Deploy application with exact container digests"
     )
     assert "verify_staging_deployment.py" in workflow
+    assert "prepare_release_images.py" in workflow
+    assert "--containers-rollout=immediate" in workflow
+    assert (
+        "--expected-images-config wrangler.staging.release.generated.json" in workflow
+    )
     assert '--containers-output "$RUNNER_TEMP/containers.json"' in workflow
     capture_step = workflow.split("- name: Capture immutable deployment metadata", 1)[1]
     assert "wrangler containers list" not in capture_step
@@ -277,8 +291,59 @@ def test_staging_readiness_reports_actual_transient_container_state(monkeypatch)
         )
 
 
+def test_staging_readiness_rejects_a_stale_configured_or_serving_image():
+    snapshot = _containers()
+    expected = {item["name"]: item["image"] for item in snapshot}
+    for item in snapshot:
+        item["summary_image"] = item["image"]
+        item["health"] = {"errors": [], "instances": {"healthy": 1, "failed": 0}}
+    snapshot[0]["image"] = snapshot[0]["image"].replace("1" * 64, "9" * 64)
+    snapshot[0]["summary_image"] = snapshot[0]["image"]
+
+    error = staging_verifier._container_snapshot_error(
+        snapshot, staging_verifier.STAGING_CONTAINERS, expected
+    )
+
+    assert "image:unexpected" in error
+    assert "serving-image:unexpected" in error
+
+
+def test_container_snapshot_uses_application_detail_image_and_health(monkeypatch):
+    summaries = _containers()
+    for index, item in enumerate(summaries):
+        item["id"] = f"application-{index}"
+        item["image"] = item["image"].replace("@sha256:", ":old@sha256:")
+    details = {
+        item["id"]: {
+            "version": index + 10,
+            "configuration": {"image": _containers()[index]["image"]},
+            "health": {"errors": [], "instances": {"healthy": 1, "failed": 0}},
+        }
+        for index, item in enumerate(summaries)
+    }
+
+    def wrangler_json(command):
+        if command[1:3] == ["containers", "list"]:
+            return summaries
+        return details[command[3]]
+
+    monkeypatch.setattr(staging_verifier, "_wrangler_json", wrangler_json)
+
+    snapshot = staging_verifier._container_snapshot(
+        "wrangler", "config", staging_verifier.STAGING_CONTAINERS
+    )
+
+    assert {item["image"] for item in snapshot} == {
+        item["image"] for item in _containers()
+    }
+    assert all(item["summary_image"] != item["image"] for item in snapshot)
+    assert all(item["health"]["instances"]["healthy"] == 1 for item in snapshot)
+
+
 def test_staging_cli_forwards_the_verified_container_snapshot(monkeypatch, tmp_path):
     output = tmp_path / "containers.json"
+    expected_config = tmp_path / "expected.json"
+    expected_config.write_text(json.dumps(_image_config(_containers())))
     observed = {}
     monkeypatch.setattr(
         sys,
@@ -293,6 +358,8 @@ def test_staging_cli_forwards_the_verified_container_snapshot(monkeypatch, tmp_p
             "wrangler.jsonc",
             "--containers-output",
             str(output),
+            "--expected-images-config",
+            str(expected_config),
         ],
     )
     monkeypatch.setattr(
@@ -315,6 +382,7 @@ def test_staging_cli_forwards_the_verified_container_snapshot(monkeypatch, tmp_p
         "wrangler": "wrangler",
         "config": "wrangler.jsonc",
         "containers_output": str(output),
+        "expected_images": {item["name"]: item["image"] for item in _containers()},
     }
 
 
@@ -334,6 +402,8 @@ def test_production_workflow_is_manual_disabled_and_exact_release_only():
     assert "--public-production" in workflow
     assert "Require reconciled production data" in workflow
     assert "EXISTS (SELECT 1 FROM users)" in workflow
+    assert "--containers-rollout=immediate" in workflow
+    assert "--expected-images-config wrangler.production.generated.json" in workflow
 
 
 def test_production_readiness_is_public_and_requires_production_containers(
@@ -413,6 +483,41 @@ def test_release_manifest_reports_the_actual_container_state():
             _deployment("alert-deployment", "alert-version"),
             _version("alert-version"),
             containers,
+        )
+
+
+def test_release_image_config_is_pinned_to_the_exact_built_digests():
+    source = {
+        "name": "ordinarium-app-staging",
+        "containers": [
+            {
+                "name": item["name"],
+                "image": f"../containers/{item['name']}/Dockerfile",
+                "image_build_context": "..",
+            }
+            for item in _containers()
+        ],
+    }
+    images = {item["name"]: item["image"] for item in _containers()}
+
+    rendered = release_images.render_pinned_config(source, images)
+
+    assert {item["name"]: item["image"] for item in rendered["containers"]} == images
+    assert all("image_build_context" not in item for item in rendered["containers"])
+    assert all("image_build_context" in item for item in source["containers"])
+
+
+def test_release_image_digest_resolution_rejects_the_wrong_repository():
+    repository = (
+        "registry.cloudflare.com/04d97a760786b6d5cc30242a4851976e/ordinarium-web"
+    )
+    expected = f"{repository}@sha256:{'1' * 64}"
+
+    assert release_images._digest_reference([expected], repository) == expected
+    with pytest.raises(RuntimeError, match="expected one immutable digest"):
+        release_images._digest_reference(
+            [expected.replace("ordinarium-web", "ordinarium-documents")],
+            repository,
         )
 
 

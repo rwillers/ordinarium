@@ -207,6 +207,7 @@ jobs:
           npx wrangler deploy
           --config wrangler.production.generated.json
           --secrets-file "$RUNNER_TEMP/ordinarium-production-worker-secrets.json"
+          --containers-rollout=immediate
           --tag "$COMMIT_SHA"
           --message "Production promotion of staging release $COMMIT_SHA"
           --strict
@@ -222,4 +223,5 @@ jobs:
             --public-production \
             --base-url "https://$PRODUCTION_APP_DOMAIN" \
             --wrangler ./node_modules/.bin/wrangler \
-            --config wrangler.production.generated.json
+            --config wrangler.production.generated.json \
+            --expected-images-config wrangler.production.generated.json
