@@ -1,0 +1,3 @@
+-r requirements.txt
+
+pytest-xdist==3.8.0

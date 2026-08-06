@@ -131,7 +131,8 @@ Use this sequence for every production release:
    `cloudflare-production` environment when prompted.
 7. Wait for both `Verify staging-tested release` and `Promote exact release to
    production` to succeed. The production job deploys the staging digests with
-   an immediate rollout and rechecks the configured and serving images.
+   an immediate rollout, rechecks the configured images, and requires the
+   running web instance generation to match the configured generation.
 8. Verify `https://ordinarium.com/login` and the released production behavior.
    For a UI release, use a hard refresh or a private window to rule out browser
    asset caching.
@@ -151,13 +152,14 @@ container rollback.
 Cloudflare updates Worker code immediately but rolls container instances
 separately, as described in Cloudflare's
 [container rollout documentation](https://developers.cloudflare.com/containers/platform-details/rollouts/).
-`wrangler containers list` can therefore expose an older serving or
-summary image while the per-application configuration already targets a newer
-digest, particularly for dormant queue containers. Release metadata must never
-be derived from that list image alone.
+`wrangler containers list` can therefore expose an older summary image while
+the per-application configuration and running instance metadata have already
+advanced, particularly for dormant queue containers. Release metadata and
+readiness must never be derived from that list image alone.
 
 The staging workflow uses `prepare_release_images.py` to establish the expected
 digests before deployment. `verify_staging_deployment.py` then reads each
 application's detailed configuration and health, compares it with those expected
-digests, and separately requires the public web container's serving image to
-match. `deployment_manifest.py` receives only that verified snapshot.
+digests, and separately requires a running public web instance whose generation
+matches the configured application generation. `deployment_manifest.py`
+receives only that verified snapshot.

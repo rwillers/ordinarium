@@ -43,7 +43,7 @@ def test_split_rule_condition_parses_parts():
     assert condition == "before 12/26"
 
 
-def test_resolve_observance_options_sorts_by_priority_and_index(monkeypatch):
+def test_resolve_observance_options_sorts_by_priority_and_index(app, monkeypatch):
     def fake_holidays():
         return [
             {
@@ -79,12 +79,13 @@ def test_resolve_observance_options_sorts_by_priority_and_index(monkeypatch):
         ]
 
     monkeypatch.setattr("ordinarium.liturgical_calendar._load_holidays", fake_holidays)
-    options = resolve_observance_options(date(2024, 12, 1))
+    with app.app_context():
+        options = resolve_observance_options(date(2024, 12, 1))
     handles = [option.handle for option in options]
     assert handles == ["A", "B", "C"]
 
 
-def test_resolve_observance_prefers_handle_match(monkeypatch):
+def test_resolve_observance_prefers_handle_match(app, monkeypatch):
     def fake_holidays():
         return [
             {
@@ -110,5 +111,6 @@ def test_resolve_observance_prefers_handle_match(monkeypatch):
         ]
 
     monkeypatch.setattr("ordinarium.liturgical_calendar._load_holidays", fake_holidays)
-    observance = resolve_observance(date(2024, 12, 1), handle="B")
+    with app.app_context():
+        observance = resolve_observance(date(2024, 12, 1), handle="B")
     assert observance.handle == "B"
