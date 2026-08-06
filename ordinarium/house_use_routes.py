@@ -46,6 +46,7 @@ RITE_SECTION_BANDS = (
 
 def register_house_use_routes(bp):
     @bp.get("/house-uses")
+    @bp.get("/settings/house-uses")
     @login_required
     def house_uses():
         overrides = load_user_text_overrides(g.user["id"])
@@ -65,9 +66,11 @@ def register_house_use_routes(bp):
             house_use_filter_options=filter_options,
             selected_house_use_filter=selected_filter,
             has_customizable_texts=bool(groups),
+            settings_section="house_uses",
         )
 
     @bp.post("/house-uses/<int:text_id>/save")
+    @bp.post("/settings/house-uses/<int:text_id>/save")
     @login_required
     def house_use_save(text_id):
         if "replacement_text" not in request.form:
@@ -82,6 +85,7 @@ def register_house_use_routes(bp):
         return _house_use_redirect(text_id)
 
     @bp.post("/house-uses/<int:text_id>/restore")
+    @bp.post("/settings/house-uses/<int:text_id>/restore")
     @login_required
     def house_use_restore(text_id):
         if not delete_user_text_override(g.user["id"], text_id):
@@ -90,6 +94,7 @@ def register_house_use_routes(bp):
         return _house_use_redirect(text_id)
 
     @bp.post("/house-uses/<int:text_id>/review")
+    @bp.post("/settings/house-uses/<int:text_id>/review")
     @login_required
     def house_use_review(text_id):
         try:

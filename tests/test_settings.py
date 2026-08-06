@@ -30,17 +30,24 @@ def test_settings_renders_saved_defaults(auth_client):
     assert 'option value="with_your_spirit" selected' in body
     assert 'name="default_service_time"' in body
     assert 'value="10:00"' in body
+    assert 'aria-label="Settings sections"' in body
+    assert 'href="/settings" aria-current="page"' in body
+    assert 'href="/settings/house-uses"' in body
+    assert 'href="/settings/reusable-elements"' in body
+    assert 'href="/settings/connections"' in body
+    assert "New service defaults" in body
+    assert "Text choices" in body
 
 
-def test_settings_shows_integrations_section_when_pco_enabled(app, auth_client):
+def test_settings_shows_connections_page_when_pco_enabled(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
-    response = client.get("/settings")
+    response = client.get("/settings/connections")
     assert response.status_code == 200
     body = response.data.decode("utf-8")
-    assert 'id="settings-integrations"' in body
-    assert 'name="default_service_time"' in body
-    assert "Planning Center connection" in body
+    assert 'id="settings-connections"' in body
+    assert 'href="/settings/connections" aria-current="page"' in body
+    assert "Planning Center" in body
 
 
 def test_header_shows_settings_and_hides_integrations_link(auth_client):
@@ -50,6 +57,30 @@ def test_header_shows_settings_and_hides_integrations_link(auth_client):
     body = response.data.decode("utf-8")
     assert ">Settings</a>" in body
     assert ">Integrations</a>" not in body
+    assert 'class="dropdown-menu-item" role="menuitem" href="/templates"' not in body
+    assert 'class="dropdown-menu-item" role="menuitem" href="/house-uses"' not in body
+
+
+def test_settings_updates_service_time_without_pco_feature(app, auth_client):
+    client, user_id = auth_client
+    response = client.post(
+        "/settings",
+        data={
+            "default_rite": "Renewed Ancient Text",
+            "default_bible_translation": "ESV",
+            "default_service_time": "09:30",
+            "greeting_response_form": "with_your_spirit",
+        },
+    )
+
+    assert response.status_code == 302
+    with app.app_context():
+        row = (
+            get_db()
+            .execute("select default_service_time from users where id=?", (user_id,))
+            .fetchone()
+        )
+        assert row["default_service_time"] == "09:30"
 
 
 def test_settings_post_persists_valid_values(app, auth_client):

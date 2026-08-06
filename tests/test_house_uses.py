@@ -24,7 +24,8 @@ def test_house_uses_lists_texts_by_rite_and_source_with_navigation(auth_client):
 
     assert response.status_code == 200
     body = response.data.decode("utf-8")
-    assert "<h2>House uses</h2>" in body
+    assert "<h2>Settings</h2>" in body
+    assert "<h3>House-use texts</h3>" in body
     assert "Renewed Ancient Text" in body
     assert "Anglican Standard Text" in body
     assert "Renewed Ancient Text — Opening" in body
@@ -39,9 +40,17 @@ def test_house_uses_lists_texts_by_rite_and_source_with_navigation(auth_client):
     assert 'name="group"' in body
     assert "Currently customized (0)" in body
     assert "All house-use texts" in body
-    assert 'href="/house-uses"' in body
+    assert 'href="/settings/house-uses" aria-current="page"' in body
     assert "<details" in body
     assert "<details open" not in body
+
+
+def test_house_uses_canonical_route_requires_login(client):
+    response = client.get("/settings/house-uses")
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+    assert "settings%2Fhouse-uses" in response.headers["Location"]
 
 
 def test_house_uses_defaults_to_preferred_rite_and_filters_on_the_server(auth_client):
@@ -176,9 +185,9 @@ def test_plain_override_remains_visible_and_reviewable_after_becoming_templated(
     assert "Editing locked" in card
     assert "Active local wording" in card
     assert "readonly" in card
-    assert f'/house-uses/{canonical["id"]}/restore' in card
-    assert f'/house-uses/{canonical["id"]}/review' in card
-    assert f'/house-uses/{canonical["id"]}/save' not in card
+    assert f'/settings/house-uses/{canonical["id"]}/restore' in card
+    assert f'/settings/house-uses/{canonical["id"]}/review' in card
+    assert f'/settings/house-uses/{canonical["id"]}/save' not in card
     assert f'name="current_text_hash" value="{current_text_hash}"' in card
 
     rejected_save = client.post(

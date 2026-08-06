@@ -1,12 +1,14 @@
 {% extends 'base.html' %}
 
-{% block title %}House uses &mdash; Ordinarium{% endblock %}
+{% block title %}House-use texts &mdash; Settings &mdash; Ordinarium{% endblock %}
 
 {% block content %}
 <div id="page" class="house-uses-page">
 	<div class="plan-header">
-		<h2>House uses</h2>
+		<h2>Settings</h2>
 	</div>
+	{% include '_settings_nav.html' %}
+	<h3>House-use texts</h3>
 	<p class="house-uses-intro">Customize official service language for every service in this account. The official text remains the source for the title, placement, and service-plan identity.</p>
 	<form class="house-use-filter" action="{{ url_for('main.house_uses') }}" method="get">
 		<label for="house-use-group-filter">Show</label>

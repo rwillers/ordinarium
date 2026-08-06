@@ -1,16 +1,21 @@
 {% extends 'base.html' %}
 {% from '_dropdown_menu.html' import dropdown_menu, dropdown_item_icon %}
 
+{% block title %}Reusable elements &mdash; Settings &mdash; Ordinarium{% endblock %}
+
 {% block content %}
 
 <div id="page">
 
 	<div class="plan-header">
-		<h2>Templates</h2>
+		<h2>Settings</h2>
 	</div>
+	{% include '_settings_nav.html' %}
+	<h3>Reusable elements</h3>
+	<p>Save frequently used custom text here, then use it as a starting point when adding a custom element to a service.</p>
 
 	{% if templates %}
-	<form class="shared-table-bulk" id="templates-bulk" method="post" action="{{ url_for('main.templates_bulk_delete') }}" data-bulk-actions data-bulk-target="#templates-table" data-bulk-confirm="Delete the selected templates? This cannot be undone.">
+	<form class="shared-table-bulk" id="templates-bulk" method="post" action="{{ url_for('main.templates_bulk_delete') }}" data-bulk-actions data-bulk-target="#templates-table" data-bulk-confirm="Delete the selected reusable elements? This cannot be undone.">
 		<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 		<div class="shared-table-bulk-actions">
 			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add</button>
@@ -31,7 +36,7 @@
 		{% set checkbox_id = 'template-' ~ template.id %}
 		<tr class="plan-row plan-row-template" data-template-id="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">
 			<td class="shared-table-select">
-				<input id="{{ checkbox_id }}" type="checkbox" form="templates-bulk" name="template_ids" value="{{ template.id }}" aria-label="Select template {{ template.title }}">
+				<input id="{{ checkbox_id }}" type="checkbox" form="templates-bulk" name="template_ids" value="{{ template.id }}" aria-label="Select reusable element {{ template.title }}">
 			</td>
 			<td>
 				<label class="plan-item" for="{{ checkbox_id }}">
@@ -42,7 +47,7 @@
 			<td class="shared-table-actions">
 				{% call dropdown_menu(
 					variant='icon',
-					toggle_aria_label='Template actions',
+					toggle_aria_label='Reusable element actions',
 					menu_classes='shared-table-menu',
 					toggle_classes='plan-menu-toggle',
 					layered=true
@@ -56,7 +61,7 @@
 						data-template-text="{{ template.text | e }}"
 						role="menuitem"
 					>{{ dropdown_item_icon('✎') }}Edit</button>
-					<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this template? This cannot be undone.')">
+					<form action="{{ url_for('main.templates_delete', template_id=template.id) }}" method="post" onsubmit="return confirm('Delete this reusable element? This cannot be undone.')">
 						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 						<button class="dropdown-menu-item dropdown-menu-delete" type="submit" role="menuitem">{{ dropdown_item_icon('✕') }}Delete</button>
 					</form>
@@ -73,13 +78,13 @@
 			<button class="plan-submit" type="button" id="template-toggle" aria-expanded="false" aria-controls="template-modal">Add</button>
 		</div>
 	</form>
-	<p>No templates yet.</p>
+	<p>No reusable elements yet.</p>
 	{% endif %}
 
 	<div class="share-modal" id="template-modal" aria-hidden="true">
 		<div class="share-modal-backdrop" data-template-close></div>
 		<div class="share-modal-card" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
-			<h3 id="template-modal-title">Add template</h3>
+			<h3 id="template-modal-title">Add reusable element</h3>
 			<form class="plan-custom-form" action="{{ url_for('main.templates') }}" method="post">
 				<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 				<input type="hidden" name="template_id" value="">
@@ -138,7 +143,7 @@
 					initialTextInput.value = mode.text || ''
 				}
 				if (modalTitle) {
-					modalTitle.textContent = 'Edit template'
+					modalTitle.textContent = 'Edit reusable element'
 				}
 			} else {
 				if (titleInput) {
@@ -157,7 +162,7 @@
 					initialTextInput.value = ''
 				}
 				if (modalTitle) {
-					modalTitle.textContent = 'Add template'
+					modalTitle.textContent = 'Add reusable element'
 				}
 			}
 			templateModal.setAttribute('aria-hidden', 'false')
@@ -214,7 +219,7 @@
 					const initialText = initialTextInput ? initialTextInput.value : ''
 					const hasChanges = currentTitle !== initialTitle || currentText !== initialText
 					if (hasChanges) {
-						const confirmed = window.confirm('Discard this template? Your changes will be lost.')
+						const confirmed = window.confirm('Discard this reusable element? Your changes will be lost.')
 						if (!confirmed) {
 							return
 						}

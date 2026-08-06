@@ -520,15 +520,15 @@
 				<input type="hidden" name="initial_text" value="">
 				<p>
 					<label class="plan-field">
-						<span>Apply template</span>
+						<span>Start from reusable element</span>
 						<select id="custom-template-select">
-							<option value="">Choose a template</option>
+							<option value="">Choose a reusable element</option>
 							{% if custom_templates %}
 								{% for template in custom_templates %}
 								<option value="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">{{ template.title }}</option>
 								{% endfor %}
 							{% else %}
-								<option value="" disabled>No templates available</option>
+							<option value="" disabled>No reusable elements available</option>
 							{% endif %}
 						</select>
 					</label>

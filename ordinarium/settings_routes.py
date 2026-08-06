@@ -18,15 +18,13 @@ def register_settings_routes(bp):
     @login_required
     def settings():
         rite_options = load_rite_options()
-        pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
         user_row = get_user_by_id(g.user["id"])
         settings_values = resolve_user_settings(user_row, rite_options)
 
         if request.method == "POST":
             posted_service_time = (
                 request.form.get("default_service_time")
-                if pco_enabled
-                else settings_values["default_service_time"]
+                or settings_values["default_service_time"]
             )
             updated_settings, error = validate_user_settings(
                 request.form.get("default_rite"),
@@ -44,10 +42,9 @@ def register_settings_routes(bp):
                     ).strip()
                     or settings_values["default_bible_translation"],
                     "default_service_time": (
-                        (request.form.get("default_service_time") or "").strip()
-                        if pco_enabled
-                        else settings_values["default_service_time"]
-                    ),
+                        request.form.get("default_service_time") or ""
+                    ).strip()
+                    or settings_values["default_service_time"],
                     "greeting_response_form": (
                         request.form.get("greeting_response_form") or ""
                     ).strip()
@@ -58,13 +55,23 @@ def register_settings_routes(bp):
                 flash("Settings updated.", "success")
                 return redirect(url_for("main.settings"))
 
-        pco_connection = get_pco_connection(g.user["id"]) if pco_enabled else None
         return render_template(
             "settings.html",
             rite_options=rite_options,
             bible_translation_options=BIBLE_TRANSLATION_OPTIONS,
             greeting_response_options=GREETING_RESPONSE_OPTIONS,
             settings_values=settings_values,
+            settings_section="defaults",
+        )
+
+    @bp.get("/settings/connections")
+    @login_required
+    def settings_connections():
+        pco_enabled = user_has_feature(g.user, FEATURE_PCO_SYNC)
+        pco_connection = get_pco_connection(g.user["id"]) if pco_enabled else None
+        return render_template(
+            "integrations.html",
             pco_enabled=pco_enabled,
             pco_connection=pco_connection,
+            settings_section="connections",
         )

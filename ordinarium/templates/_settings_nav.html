@@ -1,0 +1,6 @@
+<nav class="settings-nav" aria-label="Settings sections">
+	<a href="{{ url_for('main.settings') }}"{% if settings_section == 'defaults' %} aria-current="page"{% endif %}>Service defaults</a>
+	<a href="{{ url_for('main.house_uses') }}"{% if settings_section == 'house_uses' %} aria-current="page"{% endif %}>House-use texts</a>
+	<a href="{{ url_for('main.templates') }}"{% if settings_section == 'reusable_elements' %} aria-current="page"{% endif %}>Reusable elements</a>
+	<a href="{{ url_for('main.settings_connections') }}"{% if settings_section == 'connections' %} aria-current="page"{% endif %}>Connections</a>
+</nav>

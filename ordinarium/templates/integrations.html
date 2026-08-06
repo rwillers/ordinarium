@@ -1,14 +1,19 @@
 {% extends 'base.html' %}
 
+{% block title %}Connections &mdash; Settings &mdash; Ordinarium{% endblock %}
+
 {% block content %}
 
 <div id="page">
 	<div class="plan-header">
-		<h2>Integrations</h2>
+		<h2>Settings</h2>
 	</div>
+	{% include '_settings_nav.html' %}
 
-	<section class="integration-card">
-		<h3>Planning Center Online</h3>
+	<section class="integration-card" id="settings-connections">
+		<h3>Connections</h3>
+		{% if pco_enabled %}
+		<h4>Planning Center</h4>
 		{% if pco_connection %}
 			{% if pco_connection.pco_account_name %}
 				<p>Connected to {{ pco_connection.pco_account_name }}.</p>
@@ -26,6 +31,9 @@
 			<div class="auth-actions">
 				<a class="plan-submit" href="{{ url_for('main.pco_connect') }}">Connect</a>
 			</div>
+		{% endif %}
+		{% else %}
+		<p>No connections are available for this account.</p>
 		{% endif %}
 	</section>
 </div>
