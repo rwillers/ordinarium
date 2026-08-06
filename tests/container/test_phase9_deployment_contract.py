@@ -308,6 +308,26 @@ def test_staging_readiness_rejects_a_stale_configured_or_serving_image():
     assert "serving-image:unexpected" in error
 
 
+def test_staging_readiness_accepts_an_active_serving_instance():
+    snapshot = _containers()
+    expected = {item["name"]: item["image"] for item in snapshot}
+    for item in snapshot:
+        item["summary_image"] = item["image"]
+        item["health"] = {
+            "errors": [],
+            "instances": {"active": 0, "healthy": 1, "failed": 0},
+        }
+    web = next(item for item in snapshot if item["name"] == "ordinarium-web")
+    web["health"]["instances"].update(active=1, healthy=0)
+
+    assert (
+        staging_verifier._container_snapshot_error(
+            snapshot, staging_verifier.STAGING_CONTAINERS, expected
+        )
+        is None
+    )
+
+
 def test_container_snapshot_uses_application_detail_image_and_health(monkeypatch):
     summaries = _containers()
     for index, item in enumerate(summaries):

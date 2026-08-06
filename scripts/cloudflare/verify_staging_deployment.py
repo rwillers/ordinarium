@@ -215,8 +215,8 @@ def _container_snapshot_error(
                 invalid.append(f"{name}=health:errors")
             if instances.get("failed", 0):
                 invalid.append(f"{name}=health:failed")
-            if instances.get("healthy", 0) < 1:
-                invalid.append(f"{name}=health:no-healthy-instances")
+            if instances.get("active", 0) + instances.get("healthy", 0) < 1:
+                invalid.append(f"{name}=health:no-ready-instances")
     if invalid:
         return f"container rollout is not ready: {', '.join(invalid)}"
     return None
