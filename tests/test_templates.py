@@ -29,7 +29,7 @@ def test_templates_create_and_list(app, auth_client):
         data={"title": "Seasonal Template", "text": "Blessing text"},
     )
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/templates")
+    assert response.headers["Location"].endswith("/settings/reusable-elements")
     with app.app_context():
         db = get_db()
         template = db.execute(
@@ -43,6 +43,16 @@ def test_templates_create_and_list(app, auth_client):
     assert response.status_code == 200
     assert b"Seasonal Template" in response.data
     assert b"Blessing text" in response.data
+    assert b"Reusable elements" in response.data
+    assert b'href="/settings/reusable-elements" aria-current="page"' in response.data
+
+
+def test_reusable_elements_canonical_route_requires_login(client):
+    response = client.get("/settings/reusable-elements")
+
+    assert response.status_code == 302
+    assert "/login" in response.headers["Location"]
+    assert "settings%2Freusable-elements" in response.headers["Location"]
 
 
 def test_templates_escape_html_in_preview(app, auth_client):
@@ -86,7 +96,7 @@ def test_templates_page_edit_button_carries_template_payload(app, auth_client):
 
     assert response.status_code == 200
     body = response.data.decode("utf-8")
-    assert 'data-template-edit' in body
+    assert "data-template-edit" in body
     assert f'data-template-id="{template_id}"' in body
     assert 'data-template-title="Old"' in body
     assert 'data-template-text="Original"' in body
@@ -192,6 +202,6 @@ def test_service_page_includes_template_select(app, auth_client, service_factory
     )
     response = client.get(f"/service/{service_id}")
     assert response.status_code == 200
-    assert b"Apply template" in response.data
+    assert b"Start from reusable element" in response.data
     assert f'value="{template_id}"'.encode() in response.data
     assert b"Service Template" in response.data

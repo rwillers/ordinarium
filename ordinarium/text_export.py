@@ -202,7 +202,7 @@ def build_text_export_context(service_id, saved_service, saved_data, user_id=Non
     for ordinary in payload["ordinaries"]:
         render_markdown = (
             markdown_user_filter
-            if ordinary.get("type") == "custom"
+            if ordinary.get("type") == "custom" or ordinary.get("house_use_applied")
             else markdown_filter
         )
         title_markdown = ordinary.get("title") or ""
@@ -212,7 +212,7 @@ def build_text_export_context(service_id, saved_service, saved_data, user_id=Non
         body_markdown = ordinary.get("text") or ""
         body_html = str(render_markdown(body_markdown))
         body_html = str(trailing_indent_filter(body_html))
-        if ordinary.get("type") != "custom":
+        if ordinary.get("type") != "custom" and not ordinary.get("house_use_content"):
             body_html = _rewrite_variant_lists(body_html)
 
         show_title = bool(title_markdown) and title_markdown != previous_title
@@ -221,6 +221,9 @@ def build_text_export_context(service_id, saved_service, saved_data, user_id=Non
         ordinaries.append(
             {
                 "type": ordinary.get("type"),
+                "house_use_applied": bool(ordinary.get("house_use_applied")),
+                "house_use_embedded": bool(ordinary.get("house_use_embedded")),
+                "house_use_content": bool(ordinary.get("house_use_content")),
                 "title_markdown": title_markdown,
                 "title_inline_html": title_inline_html,
                 "body_html": body_html,
@@ -249,6 +252,9 @@ def build_docx_render_context(context):
     document_context["ordinaries"] = [
         {
             "type": ordinary.get("type"),
+            "house_use_applied": bool(ordinary.get("house_use_applied")),
+            "house_use_embedded": bool(ordinary.get("house_use_embedded")),
+            "house_use_content": bool(ordinary.get("house_use_content")),
             "title_inline_html": ordinary.get("title_inline_html", ""),
             "body_html": ordinary.get("body_html", ""),
             "show_title": bool(ordinary.get("show_title")),

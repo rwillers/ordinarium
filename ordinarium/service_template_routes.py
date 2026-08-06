@@ -8,6 +8,7 @@ from .service_planning import load_custom_templates
 
 def register_service_template_routes(bp):
     @bp.route("/templates", methods=["GET", "POST"])
+    @bp.route("/settings/reusable-elements", methods=["GET", "POST"])
     @login_required
     def templates():
         error = None
@@ -16,7 +17,7 @@ def register_service_template_routes(bp):
             text_value = (request.form.get("text") or "").strip()
             template_id = (request.form.get("template_id") or "").strip()
             if not title:
-                error = "Title is required for a template."
+                error = "Title is required for a reusable element."
             if template_id:
                 try:
                     template_id = int(template_id)
@@ -30,7 +31,7 @@ def register_service_template_routes(bp):
                         (template_id, g.user["id"]),
                     )
                     if not existing:
-                        return render_error("Template not found.", 404)
+                        return render_error("Reusable element not found.", 404)
                     db.execute(
                         "update service_custom_templates set title=?, text=?, updated_at=CURRENT_TIMESTAMP where id=? and user_id=?",
                         (title, text_value, template_id, g.user["id"]),
@@ -46,10 +47,13 @@ def register_service_template_routes(bp):
         if error:
             flash(error, "error")
         return render_template(
-            "templates.html", templates=load_custom_templates(g.user["id"])
+            "templates.html",
+            templates=load_custom_templates(g.user["id"]),
+            settings_section="reusable_elements",
         )
 
-    @bp.route("/templates/<int:template_id>/delete", methods=["POST"])
+    @bp.post("/templates/<int:template_id>/delete")
+    @bp.post("/settings/reusable-elements/<int:template_id>/delete")
     @login_required
     def templates_delete(template_id):
         db = get_database_gateway()
@@ -58,14 +62,15 @@ def register_service_template_routes(bp):
             (template_id, g.user["id"]),
         )
         if not existing:
-            return render_error("Template not found.", 404)
+            return render_error("Reusable element not found.", 404)
         db.execute(
             "delete from service_custom_templates where id=? and user_id=?",
             (template_id, g.user["id"]),
         )
         return redirect(url_for("main.templates"))
 
-    @bp.route("/templates/bulk-delete", methods=["POST"])
+    @bp.post("/templates/bulk-delete")
+    @bp.post("/settings/reusable-elements/bulk-delete")
     @login_required
     def templates_bulk_delete():
         raw_ids = request.form.getlist("template_ids")
@@ -76,7 +81,7 @@ def register_service_template_routes(bp):
             except (TypeError, ValueError):
                 continue
         if not template_ids:
-            flash("No templates selected.", "error")
+            flash("No reusable elements selected.", "error")
             return redirect(url_for("main.templates"))
 
         placeholders = ",".join(["?"] * len(template_ids))

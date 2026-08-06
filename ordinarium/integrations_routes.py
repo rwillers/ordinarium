@@ -38,7 +38,7 @@ def _pco_redirect_uri():
 
 def register_integration_routes(bp):
     def _settings_integrations_redirect():
-        return redirect(url_for("main.settings", _anchor="settings-integrations"))
+        return redirect(url_for("main.settings_connections"))
 
     def _require_pco_feature():
         if not user_has_feature(g.user, FEATURE_PCO_SYNC):

@@ -13,7 +13,7 @@ def apply_greeting_response_preference(ordinaries, greeting_response_form):
     updated = []
     for item in ordinaries:
         output = dict(item)
-        if output.get("type") != "custom":
+        if output.get("type") != "custom" and not output.get("house_use_applied"):
             output["text"] = (output.get("text") or "").replace(
                 "**And with your spirit.**",
                 "**And also with you.**",
@@ -31,7 +31,7 @@ def apply_service_option_overrides(ordinaries, service_option_values, season=Non
     updated = []
     for item in ordinaries:
         output = dict(item)
-        if output.get("type") == "custom":
+        if output.get("type") == "custom" or output.get("house_use_applied"):
             updated.append(output)
             continue
         title = _normalize_title(output.get("title"))

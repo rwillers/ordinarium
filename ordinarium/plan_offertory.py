@@ -1,6 +1,6 @@
 def _offertory_default_row(db, default_prefix):
     return db.fetch_one(
-        "select id, text from texts where type=? and text like ? order by id limit 1",
+        "select id, type, title, detailed_title, default_order, text from texts where type=? and text like ? order by id limit 1",
         ("offertory_sentence", f"{default_prefix}%"),
     )
 
@@ -43,7 +43,7 @@ def _resolve_offertory_sentence(db, default_prefix, offertory_sentence_id=None):
             sentence_id = None
     if sentence_id:
         row = db.fetch_one(
-            "select text from texts where id=? and type=? limit 1",
+            "select id, type, title, detailed_title, default_order, text from texts where id=? and type=? limit 1",
             (sentence_id, "offertory_sentence"),
         )
         if row:
@@ -52,6 +52,6 @@ def _resolve_offertory_sentence(db, default_prefix, offertory_sentence_id=None):
     if default_row:
         return default_row
     return db.fetch_one(
-        "select text from texts where type=? order by id limit 1",
+        "select id, type, title, detailed_title, default_order, text from texts where type=? order by id limit 1",
         ("offertory_sentence",),
     )

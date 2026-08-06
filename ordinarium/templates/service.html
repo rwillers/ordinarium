@@ -412,8 +412,15 @@
 		{% if ordinary.title == 'The Prayer of Humble Access' and service_option_values.get('humble_access.grace_intro') %}
 			{% set service_option_indicator_value = 'set' %}
 		{% endif %}
+		{% if ordinary.house_use_applied %}
+			{% set lesson_kind = '' %}
+			{% set is_offertory = false %}
+			{% set proper_key = '' %}
+			{% set service_option_key = '' %}
+			{% set service_option_indicator_value = '' %}
+		{% endif %}
 		{% set checkbox_id = 'include-' ~ loop.index0 %}
-			<tr class="plan-row{% if ordinary.title == 'The Trisagion' %} plan-row-penitential-hidden{% endif %}" data-plan-token="{{ ordinary.token }}" data-ordinary-title="{{ ordinary.title | e }}" data-ordinary-detailed-title="{{ (ordinary.detailed_title or '') | e }}"{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if ordinary.title == 'The Trisagion' %} data-penitential-hidden="true"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %}{% if service_option_key %} data-service-option-key="{{ service_option_key }}" data-service-option-value="{{ service_option_value | e }}"{% endif %} draggable="{{ 'false' if ordinary.title == 'The Trisagion' else 'true' }}">
+			<tr class="plan-row{% if ordinary.title == 'The Trisagion' %} plan-row-penitential-hidden{% endif %}" data-plan-token="{{ ordinary.token }}" data-ordinary-title="{{ ordinary.title | e }}" data-ordinary-detailed-title="{{ (ordinary.detailed_title or '') | e }}"{% if ordinary.house_use_applied %} data-house-use-applied="true"{% endif %}{% if ordinary.type == 'custom' %} data-custom-title="{{ ordinary.title | e }}" data-custom-text="{{ ordinary.text | e }}" data-custom-id="{{ ordinary.id }}"{% endif %}{% if ordinary.title == 'The Trisagion' %} data-penitential-hidden="true"{% endif %}{% if lesson_kind %} data-lesson-kind="{{ lesson_kind }}" data-lesson-default="{{ (lesson_defaults.get(lesson_kind) or '') | e }}" data-lesson-custom="{{ (lesson_overrides.get(lesson_kind) or '') | e }}"{% endif %}{% if proper_key %} data-proper-key="{{ proper_key }}" data-proper-selected-id="{{ proper_selected_id }}"{% endif %}{% if is_offertory %} data-offertory-row data-offertory-sentence-id="{{ offertory_sentence_id or '' }}"{% endif %}{% if service_option_key %} data-service-option-key="{{ service_option_key }}" data-service-option-value="{{ service_option_value | e }}"{% endif %} draggable="{{ 'false' if ordinary.title == 'The Trisagion' else 'true' }}">
 			<td class="shared-table-select">
 				<input id="{{ checkbox_id }}" type="checkbox" name="ordinaries" value="{{ ordinary.token }}"{% if ordinary.default_order is not none %} data-default-order="{{ ordinary.default_order }}"{% endif %} {% if not ordinary.disabled %}checked{% endif %}>
 			</td>
@@ -437,9 +444,14 @@
 							{% if service_option_key %}
 							<span class="plan-lesson-override"{% if not service_option_indicator_value %} hidden{% endif %} data-service-option-indicator>Option set</span>
 							{% endif %}
+							{% if ordinary.house_use_applied %}
+							<span class="plan-lesson-override">House use applied</span>
+							{% elif ordinary.house_use_supporting_configured %}
+							<span class="plan-lesson-override">House use configured</span>
+							{% endif %}
 						</span>
 						{% if ordinary.text %}
-							{% if ordinary.type == 'custom' %}
+							{% if ordinary.type == 'custom' or ordinary.house_use_applied %}
 								<small>{{ ordinary.text | markdown_user | striptags | clean | truncate(200) }}</small>
 							{% else %}
 								<small>{{ ordinary.text | markdown_template | striptags | clean | truncate(200) }}</small>
@@ -508,15 +520,15 @@
 				<input type="hidden" name="initial_text" value="">
 				<p>
 					<label class="plan-field">
-						<span>Apply template</span>
+						<span>Start from reusable element</span>
 						<select id="custom-template-select">
-							<option value="">Choose a template</option>
+							<option value="">Choose a reusable element</option>
 							{% if custom_templates %}
 								{% for template in custom_templates %}
 								<option value="{{ template.id }}" data-template-title="{{ template.title | e }}" data-template-text="{{ template.text | e }}">{{ template.title }}</option>
 								{% endfor %}
 							{% else %}
-								<option value="" disabled>No templates available</option>
+							<option value="" disabled>No reusable elements available</option>
 							{% endif %}
 						</select>
 					</label>
@@ -2534,11 +2546,17 @@
 							return
 						}
 						if (data.preview_html) {
-							const elementClass = data.is_custom
+							const baseElementClass = data.is_custom
 								? 'text-element text-element-custom'
 								: 'text-element'
+							const elementClass = data.house_use_content
+								? `${baseElementClass} text-element-house-use`
+								: baseElementClass
+							const houseUseIndicator = data.house_use_content
+								? '<small class="house-use-indicator">House use applied</small>'
+								: ''
 							serviceOptionPreviewContent.innerHTML =
-								`<div class="propers-search-markdown"><div class="${elementClass}">${data.preview_html}</div></div>`
+								`<div class="propers-search-markdown"><div class="${elementClass}">${data.preview_html}${houseUseIndicator}</div></div>`
 						} else {
 							serviceOptionPreviewContent.innerHTML = '<p>No preview available.</p>'
 						}

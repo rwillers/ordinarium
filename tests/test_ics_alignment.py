@@ -192,6 +192,7 @@ def _sunday_dates(start, end):
         current += timedelta(days=7)
 
 
+@pytest.mark.skip(reason="Remote ICS alignment is not a deterministic CI check.")
 def test_sunday_sample_matches_ics_observance_and_season():
     ics_text = _fetch_ics(ICS_URL)
     events = _parse_events(ics_text)

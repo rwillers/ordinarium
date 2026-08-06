@@ -43,6 +43,7 @@ def test_prepare_builds_private_reconciled_bundle(tmp_path):
     assert manifest["source_schema_upgrade"]["applied"] == []
     assert manifest["migrated_tables"]["pco_connections"]["rows"] == 1
     assert manifest["migrated_tables"]["service_custom_templates"]["rows"] == 1
+    assert manifest["migrated_tables"]["user_text_overrides"]["rows"] == 1
     assert manifest["excluded_tables"]["password_reset_requests"]["rows"] == 1
     assert (first_output / "production-data.sql").read_text() == (
         second_output / "production-data.sql"
@@ -53,6 +54,7 @@ def test_prepare_builds_private_reconciled_bundle(tmp_path):
     assert "\nCOMMIT;" not in export
     assert "PRAGMA defer_foreign_keys = true;" in export
     assert "O''Brien" in export
+    assert "House-use consecration response" in export
     for filename in (
         "source-snapshot.sqlite3",
         "production-data.sql",
@@ -186,6 +188,12 @@ def _add_representative_data(path: Path) -> None:
             INSERT INTO service_custom_templates (
               id, user_id, title, text
             ) VALUES (9, 1, 'O''Brien', 'Line 1\nLine 2');
+            INSERT INTO user_text_overrides (
+              user_id, text_id, replacement_text, base_text_hash
+            ) VALUES (
+              1, 1282, 'House-use consecration response',
+              'representative-canonical-hash'
+            );
             INSERT INTO password_reset_requests (
               id, user_id, token_hash, expires_at
             ) VALUES ('reset-1', 1, 'hash', '2099-01-01T00:00:00Z');
@@ -294,7 +302,7 @@ def test_remote_d1_export_reconciles_without_retaining_row_evidence(tmp_path):
     evidence = reconcile_export(output / "manifest.json", export_path)
 
     assert evidence["status"] == "passed"
-    assert evidence["migrated_table_count"] == 11
+    assert evidence["migrated_table_count"] == 12
     assert "tables" not in evidence
 
 

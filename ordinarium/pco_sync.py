@@ -58,6 +58,7 @@ def _load_service_plan(service_id, user_id):
         """
         select
           services.id,
+          services.user_id,
           services.rite,
           services.text_order,
           services.text_disabled,
@@ -79,6 +80,7 @@ def _load_service_plan(service_id, user_id):
     if not saved:
         return None, []
     saved_data = {
+        "owner_user_id": saved["user_id"],
         "observance_handle": saved["observance_handle"],
         "lesson_overrides": parse_json_object(saved["lesson_overrides"]),
         "offertory_sentence_id": saved["offertory_sentence_id"],
@@ -101,7 +103,12 @@ def build_pco_item_payloads(items):
     for position, item in enumerate(items):
         title = item.get("detailed_title") or item.get("title") or "Untitled"
         text = item.get("text") or ""
-        html_details = _render_markdown_html(text)
+        html_details = _render_markdown_html(
+            text,
+            user_authored=(
+                item.get("type") == "custom" or bool(item.get("house_use_applied"))
+            ),
+        )
         attributes = {
             "title": title,
             "html_details": html_details,
@@ -135,19 +142,22 @@ def _pco_item_content_hash(attributes):
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _render_markdown_html(value):
+def _render_markdown_html(value, user_authored=False):
     if not value:
         return ""
-    markdown_filter = current_app.jinja_env.filters.get("markdown")
+    filter_name = "markdown_user" if user_authored else "markdown"
+    markdown_filter = current_app.jinja_env.filters.get(filter_name)
     if not markdown_filter:
         return value
     rendered = str(markdown_filter(value))
+    if user_authored:
+        return rendered
     return _strip_pre_code_tags(rendered)
 
 
 class _StripPreCodeTags(HTMLParser):
     def __init__(self):
-        super().__init__()
+        super().__init__(convert_charrefs=False)
         self._parts = []
 
     def handle_starttag(self, tag, attrs):
@@ -800,6 +810,7 @@ def _build_custom_payloads_for_tokens(db, service_id, order_tokens):
                 "token": f"custom:{row['id']}",
                 "title": row["title"],
                 "text": row["text"],
+                "type": "custom",
             }
             for row in rows
         ]

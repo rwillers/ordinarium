@@ -11,6 +11,8 @@ them in filename order with Wrangler.
   resilience state from the archived Python Worker experiment.
 - `0005_legacy_id_sequence_sync.sql` prevents legacy SQLite-style ID writers
   from leaving sequences stale during the Phase 5 transition.
+- `0006_user_text_overrides.sql` adds account-scoped house-use replacements for
+  canonical liturgical texts.
 
 Regenerate the first two files from a freshly initialized main SQLite database:
 
@@ -18,9 +20,10 @@ Regenerate the first two files from a freshly initialized main SQLite database:
 ./venv/bin/python scripts/cloudflare/generate_d1_baseline.py
 ```
 
-The generator deliberately excludes `schema_migrations` and `id_sequences`.
-The latter is maintained as an explicit cross-backend migration so its behavior
-can be reviewed and tested independently.
+The generator deliberately excludes `schema_migrations`, `id_sequences`, and
+`user_text_overrides`. The latter two are maintained as explicit cross-backend
+migrations so existing and newly initialized D1 databases follow the same
+reviewed forward-migration path.
 
 Validate from an empty local D1 before applying remotely:
 

@@ -20,7 +20,9 @@ RUN python -m pip install --no-cache-dir --require-hashes -r /tmp/requirements.t
     && rm /tmp/requirements.txt
 
 COPY --chown=ordinarium:ordinarium . /app
-RUN mkdir -p /app/instance && chown ordinarium:ordinarium /app/instance
+RUN mkdir -p /app/instance \
+    && chown ordinarium:ordinarium /app/instance \
+    && python -m compileall -q /app/ordinarium /app/app.py
 
 USER ordinarium
 EXPOSE 8080

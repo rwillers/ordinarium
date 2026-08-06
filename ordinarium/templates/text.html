@@ -15,16 +15,16 @@
 		{% for ordinary in ordinaries %}
 			<div class="text-element{% if ordinary.type == 'custom' %} text-element-custom{% endif %}">
 				{% if not loop.previtem or ordinary.title != loop.previtem.title %}
-					{% if ordinary.type == 'custom' %}
+					{% if ordinary.type == 'custom' or ordinary.house_use_applied %}
 						<h3>{{ ordinary.title | markdown_user }}</h3>
 					{% else %}
-						<h3>{{ ordinary.title | markdown_template }}</h3>
+						<h3>{{ ordinary.title | markdown }}</h3>
 					{% endif %}
 				{% endif %}
-				{% if ordinary.type == 'custom' %}
+				{% if ordinary.type == 'custom' or ordinary.house_use_applied %}
 					{{ ordinary.text | markdown_user | trailing_indent }}
 				{% else %}
-					{{ ordinary.text | markdown_template | trailing_indent }}
+					{{ ordinary.text | markdown | trailing_indent }}
 				{% endif %}
 			</div>
 		{% endfor %}

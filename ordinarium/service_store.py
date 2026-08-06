@@ -197,6 +197,7 @@ def load_service_for_text(service_id, user_id=None):
         saved_service = db.fetch_one(
             """
             select
+              services.user_id,
               services.text_order,
               services.text_disabled,
               services.season,
@@ -220,6 +221,7 @@ def load_service_for_text(service_id, user_id=None):
         saved_service = db.fetch_one(
             """
             select
+              services.user_id,
               services.text_order,
               services.text_disabled,
               services.season,
@@ -242,6 +244,7 @@ def load_service_for_text(service_id, user_id=None):
     if not saved_service:
         return None, {}
     saved_data = {
+        "owner_user_id": saved_service["user_id"],
         "observance_handle": saved_service["observance_handle"],
         "lesson_overrides": _parse_json_object(saved_service["lesson_overrides"]),
         "offertory_sentence_id": saved_service["offertory_sentence_id"],

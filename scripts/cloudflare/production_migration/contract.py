@@ -14,6 +14,7 @@ MIGRATED_TABLES = (
     "service_shares",
     "service_custom_elements",
     "service_custom_templates",
+    "user_text_overrides",
 )
 
 REFERENCE_TABLES = {

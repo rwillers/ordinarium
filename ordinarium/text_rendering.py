@@ -25,6 +25,13 @@ from .user_settings import (
     resolve_default_bible_translation,
     resolve_greeting_response_form,
 )
+from .text_overrides import (
+    house_use_slot_keys,
+    load_user_text_overrides,
+    mark_house_use_text,
+    render_house_use_slots,
+    resolve_text_override,
+)
 
 RAT_RITE = "Renewed Ancient Text"
 AST_RITE = "Anglican Standard Text"
@@ -49,14 +56,23 @@ def _other_rite_name(rite_name):
     return None
 
 
-def _load_cross_rite_swap_texts(db, rite_name):
+def _resolve_swap_row(row, overrides_by_text_id):
+    if not row:
+        return row
+    resolved = resolve_text_override(row, overrides_by_text_id)
+    if resolved.get("house_use_applied"):
+        resolved["text"] = mark_house_use_text(resolved.get("text"))
+    return resolved
+
+
+def _load_cross_rite_swap_texts(db, rite_name, overrides_by_text_id):
     other_rite = _other_rite_name(rite_name)
     if not other_rite:
         return {}
     placeholders = ",".join("?" for _ in _CROSS_RITE_TITLES)
     rows = db.fetch_all(
         f"""
-        select title, text
+        select id, type, title, detailed_title, default_order, text
         from texts
         where type=?
           and filter_type=?
@@ -65,14 +81,14 @@ def _load_cross_rite_swap_texts(db, rite_name):
         """,
         ("ordinarium", "rite", other_rite, *_CROSS_RITE_TITLES),
     )
-    return {row["title"]: row["text"] for row in rows}
+    return {row["title"]: _resolve_swap_row(row, overrides_by_text_id) for row in rows}
 
 
-def _load_option_variant_texts(db):
+def _load_option_variant_texts(db, overrides_by_text_id):
     placeholders = ",".join("?" for _ in _OPTION_VARIANT_HANDLES)
     rows = db.fetch_all(
         f"""
-        select filter_content, title, text
+        select id, type, filter_content, title, detailed_title, default_order, text
         from texts
         where type=?
           and filter_type=?
@@ -81,9 +97,22 @@ def _load_option_variant_texts(db):
         ("ordinarium", "handle", *_OPTION_VARIANT_HANDLES),
     )
     return {
-        row["filter_content"]: {"title": row["title"], "text": row["text"]}
+        row["filter_content"]: _resolve_swap_row(row, overrides_by_text_id)
         for row in rows
     }
+
+
+def _apply_selected_canonical_text(output, selected, include_title=False):
+    if not selected:
+        return
+    output["text"] = selected["text"]
+    if include_title:
+        output["title"] = selected["title"]
+        output["detailed_title"] = selected["title"]
+    if selected.get("house_use_applied"):
+        output["house_use_applied"] = True
+        output["house_use_stale"] = bool(selected.get("house_use_stale"))
+        output["house_use_slots"] = selected.get("house_use_slots") or ()
 
 
 def _apply_service_option_text_swaps(
@@ -130,18 +159,18 @@ def _apply_service_option_text_swaps(
     updated = []
     for item in ordinaries:
         output = dict(item)
-        if output.get("type") == "custom":
+        if output.get("type") == "custom" or output.get("house_use_applied"):
             updated.append(output)
             continue
         title = output.get("title") or ""
         if swap_prayers and title == "The Prayers of the People":
             swapped = swap_texts.get("The Prayers of the People")
             if swapped:
-                output["text"] = swapped
+                _apply_selected_canonical_text(output, swapped)
         elif swap_post_communion and title == "The Post Communion Prayer":
             swapped = swap_texts.get("The Post Communion Prayer")
             if swapped:
-                output["text"] = swapped
+                _apply_selected_canonical_text(output, swapped)
         elif title == "The Nicene Creed":
             variant_handle = {
                 "apostles": "creed.apostles",
@@ -151,25 +180,26 @@ def _apply_service_option_text_swaps(
                 option_variant_texts.get(variant_handle) if variant_handle else None
             )
             if variant:
-                output["title"] = variant["title"]
-                output["detailed_title"] = variant["title"]
-                output["text"] = variant["text"]
+                _apply_selected_canonical_text(output, variant, include_title=True)
         elif title == "The Confession and Absolution of Sin":
             if confession_form == "morning_prayer":
                 variant = option_variant_texts.get("confession.morning_prayer")
                 if variant:
-                    output["text"] = variant["text"]
+                    _apply_selected_canonical_text(output, variant)
             elif swap_confession:
                 swapped = swap_texts.get("The Confession and Absolution of Sin")
                 if swapped:
-                    output["text"] = swapped
+                    _apply_selected_canonical_text(output, swapped)
         elif title == "The Ministration of Communion" and swap_distribution_source:
             swapped = swap_texts.get("The Ministration of Communion")
             if swapped:
                 output["text"] = _swap_communion_distribution_formulas(
                     output.get("text") or "",
-                    swapped,
+                    swapped.get("text") or "",
                 )
+                if swapped.get("house_use_applied"):
+                    output["house_use_applied"] = True
+                    output["house_use_stale"] = bool(swapped.get("house_use_stale"))
         updated.append(output)
     return updated
 
@@ -224,6 +254,7 @@ def build_rendered_ordinaries(
     user_id=None,
     include_metadata=False,
     link_lesson_references=True,
+    overrides_by_text_id=None,
 ):
     if not saved_service:
         return None
@@ -232,7 +263,20 @@ def build_rendered_ordinaries(
     if not saved_service.get("rite"):
         return None
     db = get_database_gateway()
+    owner_user_id = saved_data.get("owner_user_id") or user_id
+    if overrides_by_text_id is None:
+        overrides_by_text_id = (
+            load_user_text_overrides(owner_user_id) if owner_user_id is not None else {}
+        )
     text_cache = {}
+
+    def resolve_canonical_row(row):
+        if not row:
+            return row
+        resolved = resolve_text_override(row, overrides_by_text_id)
+        if resolved.get("house_use_applied"):
+            resolved["text"] = mark_house_use_text(resolved.get("text"))
+        return resolved
 
     def fetch_text(text_type, filter_type, filter_content, random_choice=False):
         key = (text_type, filter_type, filter_content)
@@ -240,11 +284,12 @@ def build_rendered_ordinaries(
             return text_cache[key]
         order_clause = "order by random()" if random_choice else ""
         row = db.fetch_one(
-            f"select text from texts where type=? and filter_type=? and filter_content=? {order_clause} limit 1",
+            f"select id, type, title, detailed_title, default_order, text from texts where type=? and filter_type=? and filter_content=? {order_clause} limit 1",
             (text_type, filter_type, filter_content),
         )
-        text_cache[key] = row
-        return row
+        resolved = resolve_canonical_row(row)
+        text_cache[key] = resolved
+        return resolved
 
     def render_template_text(value, context):
         if not value:
@@ -265,7 +310,8 @@ def build_rendered_ordinaries(
         rite_name,
         order_tokens,
         disabled_tokens,
-        user_id=user_id,
+        user_id=owner_user_id,
+        overrides_by_text_id=overrides_by_text_id,
     )
     ordinaries = [
         {
@@ -274,6 +320,10 @@ def build_rendered_ordinaries(
             "detailed_title": item.get("detailed_title"),
             "text": item.get("text"),
             "type": item.get("type"),
+            "canonical_type": item.get("canonical_type"),
+            "house_use_applied": bool(item.get("house_use_applied")),
+            "house_use_stale": bool(item.get("house_use_stale")),
+            "house_use_slots": item.get("house_use_slots") or (),
         }
         for item in plan_items
         if not item.get("disabled")
@@ -282,8 +332,10 @@ def build_rendered_ordinaries(
         return None
 
     season = saved_service.get("season") or ""
-    cross_rite_swap_texts = _load_cross_rite_swap_texts(db, rite_name)
-    option_variant_texts = _load_option_variant_texts(db)
+    cross_rite_swap_texts = _load_cross_rite_swap_texts(
+        db, rite_name, overrides_by_text_id
+    )
+    option_variant_texts = _load_option_variant_texts(db, overrides_by_text_id)
     ordinaries = _apply_service_option_text_swaps(
         ordinaries,
         rite_name,
@@ -305,9 +357,11 @@ def build_rendered_ordinaries(
     if season:
         acclamation = fetch_text("acclamation", "season", season, random_choice=True)
     if not acclamation:
-        acclamation = db.fetch_one(
-            "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
-            ("acclamation", "other", "At Any Time", "day", "The Lord’s Day"),
+        acclamation = resolve_canonical_row(
+            db.fetch_one(
+                "select id, type, title, detailed_title, default_order, text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
+                ("acclamation", "other", "At Any Time", "day", "The Lord’s Day"),
+            )
         )
     offertory_sentence = _resolve_offertory_sentence(
         db, OFFERTORY_DEFAULT_PREFIX, saved_data.get("offertory_sentence_id")
@@ -318,9 +372,17 @@ def build_rendered_ordinaries(
             "proper_preface", "season", season, random_choice=True
         )
     if not proper_preface:
-        proper_preface = db.fetch_one(
-            "select text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
-            ("proper_preface", "other", "At Any Time", "day", "The Lord’s Day"),
+        proper_preface = resolve_canonical_row(
+            db.fetch_one(
+                "select id, type, title, detailed_title, default_order, text from texts where type=? and ((filter_type=? and filter_content=?) or (filter_type=? and filter_content=?)) order by random() limit 1",
+                (
+                    "proper_preface",
+                    "other",
+                    "At Any Time",
+                    "day",
+                    "The Lord’s Day",
+                ),
+            )
         )
     decalogue_text = fetch_text("law_form", "rite", rite_name)
 
@@ -341,45 +403,54 @@ def build_rendered_ordinaries(
     if propers_list:
         propers_json = json.dumps(propers_list)
         collect_text = db.fetch_one(
-            "select texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
+            "select texts.id, texts.type, texts.title, texts.detailed_title, texts.default_order, texts.text from texts join json_each(?) propers on texts.filter_content=propers.value where texts.type=? and texts.filter_type=? order by propers.key, texts.default_order limit 1",
             (propers_json, "collect", "proper"),
         )
+        collect_text = resolve_canonical_row(collect_text)
     proper_overrides = saved_data.get("proper_overrides")
     collect_override = _resolve_proper_override(
         db, proper_overrides, "collect_of_the_day"
     )
     if collect_override:
-        collect_text = collect_override
+        collect_text = resolve_canonical_row(collect_override)
     preface_override = _resolve_proper_override(db, proper_overrides, "proper_preface")
     if preface_override:
-        proper_preface = preface_override
+        proper_preface = resolve_canonical_row(preface_override)
+
+    offertory_sentence = resolve_canonical_row(offertory_sentence)
 
     subcycle = observance.subcycle if observance else None
     readings = _build_lesson_readings(propers_list, subcycle)
     bible_translation = resolve_default_bible_translation(
         (saved_data or {}).get("default_bible_translation")
     )
+    plain_lesson_defaults = {
+        "lesson_1_reference": _format_lesson_reference(readings.get(1)),
+        "psalm_reference": _format_lesson_reference(readings.get(2)),
+        "lesson_2_reference": _format_lesson_reference(readings.get(3)),
+        "gospel_reference": _format_lesson_reference(readings.get(5)),
+    }
     lesson_defaults = {
         "lesson_1_reference": _render_lesson_reference(
-            _format_lesson_reference(readings.get(1)),
+            plain_lesson_defaults["lesson_1_reference"],
             bible_translation,
             lesson=readings.get(1),
             link_lesson_references=link_lesson_references,
         ),
         "psalm_reference": _render_lesson_reference(
-            _format_lesson_reference(readings.get(2)),
+            plain_lesson_defaults["psalm_reference"],
             bible_translation,
             lesson=readings.get(2),
             link_lesson_references=link_lesson_references,
         ),
         "lesson_2_reference": _render_lesson_reference(
-            _format_lesson_reference(readings.get(3)),
+            plain_lesson_defaults["lesson_2_reference"],
             bible_translation,
             lesson=readings.get(3),
             link_lesson_references=link_lesson_references,
         ),
         "gospel_reference": _render_lesson_reference(
-            _format_lesson_reference(readings.get(5)),
+            plain_lesson_defaults["gospel_reference"],
             bible_translation,
             lesson=readings.get(5),
             link_lesson_references=link_lesson_references,
@@ -431,6 +502,7 @@ def build_rendered_ordinaries(
     for override_key, prop_key in override_map.items():
         custom_value = lesson_overrides.get(override_key)
         if custom_value:
+            plain_lesson_defaults[prop_key] = custom_value
             propers[prop_key] = _render_lesson_reference(
                 custom_value,
                 bible_translation,
@@ -461,21 +533,66 @@ def build_rendered_ordinaries(
         "generated_at_display": generated_at_display,
         **propers,
     }
+    house_slot_context = dict(context)
+    house_slot_context.update(
+        {key: value for key, value in plain_lesson_defaults.items() if value}
+    )
+    supporting_rows = {
+        "acclamation": acclamation,
+        "collect_of_the_day": collect_text,
+        "offertory_sentence": offertory_sentence,
+        "proper_preface": proper_preface,
+        "decalogue_text": decalogue_text,
+    }
+    house_fragment_keys = {
+        key
+        for key, row in supporting_rows.items()
+        if row and row.get("house_use_applied")
+    }
+    stale_house_fragment_keys = {
+        key
+        for key, row in supporting_rows.items()
+        if row and row.get("house_use_stale")
+    }
 
     rendered = []
     for item in ordinaries:
+        source_text = item.get("text") or ""
+        applied_fragment_keys = sorted(
+            key
+            for key in house_fragment_keys
+            if (
+                re.search(r"{{\s*" + re.escape(key) + r"\b", source_text)
+                or key in house_use_slot_keys(source_text)
+            )
+        )
         if item.get("type") == "custom":
-            rendered_text = item.get("text") or ""
+            rendered_text = source_text
             rendered_title = item.get("title") or ""
         else:
-            rendered_text = render_template_text(item.get("text"), context)
+            if item.get("house_use_applied"):
+                rendered_text = render_house_use_slots(source_text, house_slot_context)
+            else:
+                rendered_text = render_template_text(source_text, context)
             rendered_title = render_template_text(item.get("title"), context)
         rendered.append(
             {
                 "token": item.get("token"),
                 "title": rendered_title,
+                "detailed_title": item.get("detailed_title"),
                 "text": rendered_text,
                 "type": item.get("type"),
+                "canonical_type": item.get("canonical_type"),
+                "house_use_applied": bool(item.get("house_use_applied")),
+                "house_use_embedded": bool(applied_fragment_keys),
+                "house_use_content": bool(
+                    item.get("house_use_applied") or applied_fragment_keys
+                ),
+                "house_use_fragments": applied_fragment_keys,
+                "house_use_stale": bool(
+                    item.get("house_use_stale")
+                    or stale_house_fragment_keys.intersection(applied_fragment_keys)
+                ),
             }
         )
     if include_metadata:

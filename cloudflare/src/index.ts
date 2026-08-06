@@ -93,7 +93,6 @@ export class WebContainer extends Container {
     REQUESTS_CA_BUNDLE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
     RATELIMIT_ENABLED: "false",
     SESSION_COOKIE_SECURE: env.DEPLOYMENT_ENV === "local" ? "false" : "true",
-    ORDINARIUM_DISPOSABLE_SQLITE: "true",
     DOCUMENT_SERVICE_URL: "http://documents.internal/render",
     DOCUMENT_SERVICE_TIMEOUT_SECONDS: "120",
     DOCUMENT_SERVICE_MAX_REQUEST_BYTES: String(5 * 1024 * 1024),

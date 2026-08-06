@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+
+{% block title %}House-use texts &mdash; Settings &mdash; Ordinarium{% endblock %}
+
+{% block content %}
+<div id="page" class="house-uses-page">
+	<div class="plan-header">
+		<h2>Settings</h2>
+	</div>
+	{% include '_settings_nav.html' %}
+	<h3>House-use texts</h3>
+	<p class="house-uses-intro">Customize official service language for every service in this account. The official text remains the source for the title, placement, and service-plan identity.</p>
+	<form class="house-use-filter" action="{{ url_for('main.house_uses') }}" method="get">
+		<label for="house-use-group-filter">Show</label>
+		<select id="house-use-group-filter" name="group" onchange="this.form.submit()">
+		{% for option in house_use_filter_options %}
+			<option value="{{ option.value }}"{% if option.value == selected_house_use_filter %} selected{% endif %}>{{ option.label }} ({{ option.count }})</option>
+		{% endfor %}
+		</select>
+		<button type="submit">Apply</button>
+	</form>
+
+	{% for group in house_use_groups %}
+	<section class="house-use-group" aria-labelledby="house-use-group-{{ loop.index }}">
+		<h3 id="house-use-group-{{ loop.index }}">{{ group.label }}</h3>
+		<div class="house-use-list">
+		{% for item in group['items'] %}
+			<details class="house-use-card{% if item.has_override %} has-override{% endif %}{% if item.is_locked %} is-locked{% endif %}" id="text-{{ item.id }}">
+				<summary class="house-use-card-header">
+					<div>
+						<h4>{{ item.display_label }}</h4>
+						<p>{{ item.type_label }}{% if item.filter_type and item.filter_type != 'rite' %} &middot; {{ item.filter_type | replace('_', ' ') | title }}{% endif %}</p>
+					</div>
+					<span class="house-use-status">
+						{% if item.has_override %}House use applied{% else %}Official text{% endif %}
+						{% if item.is_stale %} &middot; Review needed{% endif %}
+						{% if item.is_locked %} &middot; Editing locked{% endif %}
+					</span>
+				</summary>
+				<div class="house-use-card-body">
+
+				{% if item.is_stale %}
+				<div class="house-use-warning" role="status">
+					<strong>Official text changed&mdash;review local version.</strong>
+					<p>Your local replacement remains active until you change or restore it.</p>
+				</div>
+				{% endif %}
+				{% if item.is_locked %}
+				<div class="house-use-locked-note">
+					This official row is no longer eligible for editing. Its existing house use remains active and can be reviewed or restored.
+				</div>
+				{% endif %}
+
+				<div class="house-use-columns">
+					<section class="house-use-official" aria-labelledby="official-{{ item.id }}">
+						<h5 id="official-{{ item.id }}">Official text</h5>
+						<div class="house-use-markdown">{{ item.official_display_text | markdown_user }}</div>
+					</section>
+					{% if item.is_locked %}
+					<div class="house-use-form">
+						<label class="plan-field" for="replacement-{{ item.id }}">
+							<span>Active local replacement (Markdown)</span>
+							<textarea id="replacement-{{ item.id }}" rows="12" readonly>{{ item.replacement_text }}</textarea>
+						</label>
+					</div>
+					{% else %}
+					<form class="house-use-form" action="{{ url_for('main.house_use_save', text_id=item.id) }}" method="post">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="return_group" value="{{ selected_house_use_filter }}">
+						<label class="plan-field" for="replacement-{{ item.id }}">
+							<span>Local replacement (Markdown)</span>
+							<textarea id="replacement-{{ item.id }}" name="replacement_text" rows="12">{{ item.replacement_text }}</textarea>
+						</label>
+						{% if item.dynamic_slots %}
+						<div class="house-use-slot-note">
+							<strong>Dynamic text</strong>
+							<p>Keep each slot exactly once. Ordinarium fills it with the service&rsquo;s selected text when the service is rendered.</p>
+							<ul>
+							{% for slot in item.dynamic_slots %}
+								<li><code>{{ slot.token }}</code> &mdash; {{ slot.label }}</li>
+							{% endfor %}
+							</ul>
+						</div>
+						{% endif %}
+						<div class="house-use-actions">
+							<button class="plan-submit" type="submit">Save</button>
+						</div>
+					</form>
+					{% endif %}
+				</div>
+
+				{% if item.has_override %}
+				<div class="house-use-secondary-actions">
+					<form action="{{ url_for('main.house_use_restore', text_id=item.id) }}" method="post">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="return_group" value="{{ selected_house_use_filter }}">
+						<button type="submit">Restore official text</button>
+					</form>
+					{% if item.is_stale %}
+					<form action="{{ url_for('main.house_use_review', text_id=item.id) }}" method="post">
+						<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+						<input type="hidden" name="return_group" value="{{ selected_house_use_filter }}">
+						<input type="hidden" name="current_text_hash" value="{{ item.current_text_hash }}">
+						<button type="submit">Review updated official text</button>
+					</form>
+					{% endif %}
+				</div>
+				{% endif %}
+				</div>
+			</details>
+		{% endfor %}
+		</div>
+	</section>
+	{% else %}
+		{% if has_customizable_texts %}
+		<p class="house-use-empty">No house uses match this filter.</p>
+		{% else %}
+		<p class="house-use-empty">No official texts are available for customization.</p>
+		{% endif %}
+	{% endfor %}
+</div>
+{% endblock %}

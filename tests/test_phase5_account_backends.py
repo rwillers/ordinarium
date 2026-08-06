@@ -278,7 +278,7 @@ def test_pco_persistence_uses_gateway_and_encrypted_envelopes(
     assert job["status"] == "queued"
 
     authenticate(gateway_client, user["id"])
-    response = gateway_client.get("/settings")
+    response = gateway_client.get("/settings/connections")
     assert response.status_code == 200
     assert b"Disconnect" in response.data
     assert not direct_database_has_tables(gateway_app.config["DATABASE"])

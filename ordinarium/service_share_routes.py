@@ -11,6 +11,7 @@ from .service_option_registry import (
 from .service_planning import build_plan_items, parse_plan_tokens
 from .service_store import load_service_payload, update_service_columns
 from .service_share_store import get_or_create_service_share
+from .text_overrides import load_user_text_overrides
 from .text_rendering import build_rendered_ordinaries
 
 
@@ -368,7 +369,6 @@ def register_service_share_routes(bp):
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             return jsonify({"ok": False, "error": "Service not found."}), 404
-
         merged_values, error_message = _apply_option_patch(
             service_data.get("rite"),
             service_data.get("service_option_values") or {},
@@ -402,6 +402,7 @@ def register_service_share_routes(bp):
         service_data = load_service_payload(db, service_id, g.user["id"])
         if not service_data:
             return jsonify({"ok": False, "error": "Service not found."}), 404
+        overrides_by_text_id = load_user_text_overrides(g.user["id"])
 
         merged_values, error_message = _apply_option_patch(
             service_data.get("rite"),
@@ -515,6 +516,7 @@ def register_service_share_routes(bp):
             order_tokens,
             disabled_tokens,
             user_id=g.user["id"],
+            overrides_by_text_id=overrides_by_text_id,
         )
         enabled_items = [item for item in plan_items if not item.get("disabled")]
         row_item = next(
@@ -546,8 +548,10 @@ def register_service_share_routes(bp):
                 ),
                 "service_option_values": preview_data.get("service_option_values")
                 or {},
+                "owner_user_id": g.user["id"],
             },
             user_id=g.user["id"],
+            overrides_by_text_id=overrides_by_text_id,
         )
         if not rendered_ordinaries:
             return jsonify({"ok": False, "error": "Plan row not found."}), 404
@@ -586,14 +590,14 @@ def register_service_share_routes(bp):
                 }
             )
         preview_text = preview_row.get("text") or ""
-        if preview_row.get("type") == "custom":
+        if preview_row.get("type") == "custom" or preview_row.get("house_use_applied"):
             preview_html = render_template_string(
                 "{{ value | markdown_user | trailing_indent }}",
                 value=preview_text,
             )
         else:
             preview_html = render_template_string(
-                "{{ value | markdown_template | trailing_indent }}",
+                "{{ value | markdown | trailing_indent }}",
                 value=preview_text,
             )
         return jsonify(
@@ -602,5 +606,8 @@ def register_service_share_routes(bp):
                 "title": preview_row.get("title") or row_item.get("title") or "",
                 "preview_html": preview_html,
                 "is_custom": preview_row.get("type") == "custom",
+                "house_use_applied": bool(preview_row.get("house_use_applied")),
+                "house_use_embedded": bool(preview_row.get("house_use_embedded")),
+                "house_use_content": bool(preview_row.get("house_use_content")),
             }
         )

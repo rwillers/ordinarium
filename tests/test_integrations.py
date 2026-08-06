@@ -19,18 +19,18 @@ def test_integrations_requires_login(client):
     assert "/login" in response.headers["Location"]
 
 
-def test_integrations_redirects_to_settings_anchor(app, auth_client):
+def test_integrations_redirects_to_settings_connections(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
     response = client.get("/integrations")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings#settings-integrations")
+    assert response.headers["Location"].endswith("/settings/connections")
 
 
 def test_settings_shows_connect_for_pco(app, auth_client):
     client, user_id = auth_client
     _enable_pco_feature(app, user_id)
-    response = client.get("/settings")
+    response = client.get("/settings/connections")
     assert response.status_code == 200
     assert b"Connect" in response.data
 
@@ -45,7 +45,7 @@ def test_settings_shows_disconnect_for_pco(app, auth_client):
             (user_id, "token"),
         )
         db.commit()
-    response = client.get("/settings")
+    response = client.get("/settings/connections")
     assert response.status_code == 200
     assert b"Disconnect" in response.data
 
@@ -66,7 +66,7 @@ def test_settings_shows_connected_org_name(app, auth_client):
             (user_id, "token", "St. Mark Church"),
         )
         db.commit()
-    response = client.get("/settings")
+    response = client.get("/settings/connections")
     assert response.status_code == 200
     assert b"Connected to St. Mark Church." in response.data
 
@@ -148,7 +148,7 @@ def test_pco_disconnect_clears_only_upcoming_links_for_user(
 
     response = client.post("/integrations/pco/disconnect")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings#settings-integrations")
+    assert response.headers["Location"].endswith("/settings/connections")
 
     with app.app_context():
         db = get_db()
@@ -208,7 +208,7 @@ def test_pco_callback_stores_org_name(app, auth_client, monkeypatch):
 
     response = client.get("/integrations/pco/callback?state=state-token&code=code-123")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings#settings-integrations")
+    assert response.headers["Location"].endswith("/settings/connections")
 
     with app.app_context():
         db = get_db()
@@ -257,7 +257,7 @@ def test_pco_callback_allows_org_lookup_failure(app, auth_client, monkeypatch):
 
     response = client.get("/integrations/pco/callback?state=state-token&code=code-123")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/settings#settings-integrations")
+    assert response.headers["Location"].endswith("/settings/connections")
 
     with app.app_context():
         db = get_db()
