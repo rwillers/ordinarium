@@ -39,10 +39,11 @@ the `cloudflare-staging` GitHub environment. The job:
    their immutable registry digests, and renders a staging configuration pinned
    to those exact digests;
 7. deploys the pinned configuration with an immediate container rollout;
-8. waits until every container application's configured digest and active or
-   healthy instance state match the pinned configuration, verifies that the web
-   application's serving digest also matches, then checks `/health` and the
-   login form through a Cloudflare Access service token; and
+8. probes `/health` and the login form through a Cloudflare Access service token
+   on every readiness attempt to wake the named web container, then waits until
+   every container application's configured digest and active or healthy
+   instance state match the pinned configuration and verifies that the web
+   application's serving digest also matches; and
 9. uploads a 90-day `staging-release-<commit>` manifest.
 
 The release manifest binds the Git commit to both Worker version IDs and all four
