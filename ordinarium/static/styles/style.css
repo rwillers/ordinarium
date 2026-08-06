@@ -2431,9 +2431,8 @@ div#text, .propers-search-markdown {
 
 .house-use-card {
 	background: var(--surface-background-color);
-	border: 1px solid var(--line-color);
+	border: 1px solid var(--surface-border-subtle-color);
 	border-radius: var(--radius-lg);
-	box-shadow: var(--shadow-card);
 	overflow: hidden;
 	scroll-margin-top: 1em;
 }
