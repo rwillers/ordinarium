@@ -26,6 +26,7 @@ PRODUCTION_CONTAINERS = {
     "ordinarium-production-email-jobs",
 }
 EXPECTED_CONTAINERS = STAGING_CONTAINERS
+USER_FACING_CONTAINERS = {"ordinarium-web", "ordinarium-production-web"}
 IMAGE_PATTERN = re.compile(
     r"registry\.cloudflare\.com/[0-9a-f]+/[a-z0-9-]+@sha256:[0-9a-f]{64}"
 )
@@ -114,23 +115,76 @@ def verify_access(base_url):
     print("Cloudflare Access authenticated staging probes passed.")
 
 
-def _container_snapshot(wrangler, config, expected_containers=EXPECTED_CONTAINERS):
+def _wrangler_json(command):
     result = subprocess.run(
-        [wrangler, "containers", "list", "--json", "--config", config],
+        command,
         check=True,
         capture_output=True,
         text=True,
     )
-    payload = json.loads(result.stdout)
+    return json.loads(result.stdout)
+
+
+def _container_snapshot(wrangler, config, expected_containers=EXPECTED_CONTAINERS):
+    payload = _wrangler_json(
+        [wrangler, "containers", "list", "--json", "--config", config]
+    )
     if not isinstance(payload, list):
         raise RuntimeError("container metadata is not a list")
-    return sorted(
-        (item for item in payload if item.get("name") in expected_containers),
-        key=lambda item: item["name"],
+    summaries = {
+        item.get("name"): item
+        for item in payload
+        if item.get("name") in expected_containers
+    }
+    snapshot = []
+    for name in sorted(expected_containers & set(summaries)):
+        summary = summaries[name]
+        details = _wrangler_json(
+            [
+                wrangler,
+                "containers",
+                "info",
+                summary["id"],
+                "--config",
+                config,
+            ]
+        )
+        snapshot.append(
+            {
+                "name": name,
+                "state": summary.get("state"),
+                "image": details.get("configuration", {}).get("image", ""),
+                "summary_image": summary.get("image", ""),
+                "version": details.get("version"),
+                "health": details.get("health", {}),
+            }
+        )
+    return snapshot
+
+
+def _expected_images(config, expected_containers):
+    payload = json.loads(Path(config).read_text())
+    images = {
+        container.get("name"): container.get("image", "")
+        for container in payload.get("containers", [])
+        if container.get("name") in expected_containers
+    }
+    if set(images) != expected_containers:
+        missing = sorted(expected_containers - set(images))
+        raise RuntimeError(f"expected-image config is missing: {', '.join(missing)}")
+    invalid = sorted(
+        name for name, image in images.items() if not IMAGE_PATTERN.fullmatch(image)
     )
+    if invalid:
+        raise RuntimeError(
+            f"expected-image config is not pinned by digest: {', '.join(invalid)}"
+        )
+    return images
 
 
-def _container_snapshot_error(snapshot, expected_containers=EXPECTED_CONTAINERS):
+def _container_snapshot_error(
+    snapshot, expected_containers=EXPECTED_CONTAINERS, expected_images=None
+):
     containers = {item.get("name"): item for item in snapshot}
     missing = sorted(expected_containers - set(containers))
     if missing:
@@ -145,6 +199,24 @@ def _container_snapshot_error(snapshot, expected_containers=EXPECTED_CONTAINERS)
             invalid.append(f"{name}=state:{state or 'missing'}")
         if not IMAGE_PATTERN.fullmatch(image):
             invalid.append(f"{name}=image:not-immutable")
+        if expected_images and image != expected_images[name]:
+            invalid.append(f"{name}=image:unexpected")
+        if (
+            expected_images
+            and name in USER_FACING_CONTAINERS
+            and container.get("summary_image") != expected_images[name]
+        ):
+            invalid.append(f"{name}=serving-image:unexpected")
+        health = container.get("health")
+        if health is not None:
+            errors = health.get("errors", [])
+            instances = health.get("instances", {})
+            if errors:
+                invalid.append(f"{name}=health:errors")
+            if instances.get("failed", 0):
+                invalid.append(f"{name}=health:failed")
+            if instances.get("healthy", 0) < 1:
+                invalid.append(f"{name}=health:no-healthy-instances")
     if invalid:
         return f"container rollout is not ready: {', '.join(invalid)}"
     return None
@@ -152,7 +224,14 @@ def _container_snapshot_error(snapshot, expected_containers=EXPECTED_CONTAINERS)
 
 def _snapshot_signature(snapshot):
     return tuple(
-        (item.get("name"), item.get("state"), item.get("image")) for item in snapshot
+        (
+            item.get("name"),
+            item.get("state"),
+            item.get("image"),
+            item.get("summary_image"),
+            item.get("version"),
+        )
+        for item in snapshot
     )
 
 
@@ -166,6 +245,7 @@ def _verify_deployment(
     config,
     headers,
     expected_containers,
+    expected_images,
     attempts=60,
     stable_samples=2,
     containers_output=None,
@@ -176,7 +256,9 @@ def _verify_deployment(
     for _attempt in range(attempts):
         try:
             snapshot = _container_snapshot(wrangler, config, expected_containers)
-            if error := _container_snapshot_error(snapshot, expected_containers):
+            if error := _container_snapshot_error(
+                snapshot, expected_containers, expected_images
+            ):
                 previous_signature = None
                 consecutive_samples = 0
                 raise RuntimeError(error)
@@ -224,6 +306,7 @@ def verify_staging(
     attempts=60,
     stable_samples=2,
     containers_output=None,
+    expected_images=None,
 ):
     headers = _access_headers()
     print(_credential_metadata(headers))
@@ -233,6 +316,7 @@ def verify_staging(
         config,
         headers,
         STAGING_CONTAINERS,
+        expected_images,
         attempts,
         stable_samples,
         containers_output,
@@ -246,6 +330,7 @@ def verify_production(
     attempts=60,
     stable_samples=2,
     containers_output=None,
+    expected_images=None,
 ):
     _verify_deployment(
         base_url,
@@ -253,6 +338,7 @@ def verify_production(
         config,
         {},
         PRODUCTION_CONTAINERS,
+        expected_images,
         attempts,
         stable_samples,
         containers_output,
@@ -265,6 +351,7 @@ def _main():
     parser.add_argument("--wrangler")
     parser.add_argument("--config")
     parser.add_argument("--containers-output")
+    parser.add_argument("--expected-images-config")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--access-preflight", action="store_true")
     mode.add_argument("--public-production", action="store_true")
@@ -275,11 +362,19 @@ def _main():
     if not args.wrangler or not args.config:
         parser.error("--wrangler and --config are required for readiness verification")
     verify = verify_production if args.public_production else verify_staging
+    expected_containers = (
+        PRODUCTION_CONTAINERS if args.public_production else STAGING_CONTAINERS
+    )
+    if not args.expected_images_config:
+        parser.error("--expected-images-config is required for readiness verification")
     verify(
         args.base_url,
         args.wrangler,
         args.config,
         containers_output=args.containers_output,
+        expected_images=_expected_images(
+            args.expected_images_config, expected_containers
+        ),
     )
     environment = "Production" if args.public_production else "Staging"
     print(f"{environment} edge, container, login, and Turnstile readiness passed.")

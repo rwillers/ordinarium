@@ -82,10 +82,22 @@ jobs:
       - name: Build static assets
         run: npm run build:assets
 
-      - name: Deploy application and containers
+      - name: Build, push, and pin release container images
+        run: >-
+          python ../scripts/cloudflare/prepare_release_images.py
+          --repository-root ..
+          --source-config wrangler.jsonc
+          --output-config wrangler.staging.release.generated.json
+          --output-images "$RUNNER_TEMP/expected-images.json"
+          --wrangler ./node_modules/.bin/wrangler
+          --account-id "$CLOUDFLARE_ACCOUNT_ID"
+          --tag "$GITHUB_SHA"
+
+      - name: Deploy application with exact container digests
         run: >-
           npx wrangler deploy
-          --config wrangler.jsonc
+          --config wrangler.staging.release.generated.json
+          --containers-rollout=immediate
           --tag "$GITHUB_SHA"
           --message "GitHub staging deployment $GITHUB_SHA"
           --strict
@@ -95,16 +107,17 @@ jobs:
           python ../scripts/cloudflare/verify_staging_deployment.py
           --base-url https://staging.ordinarium.com
           --wrangler ./node_modules/.bin/wrangler
-          --config wrangler.jsonc
+          --config wrangler.staging.release.generated.json
+          --expected-images-config wrangler.staging.release.generated.json
           --containers-output "$RUNNER_TEMP/containers.json"
 
       - name: Capture immutable deployment metadata
         run: |
-          npx wrangler deployments status --json > "$RUNNER_TEMP/app-deployment.json"
+          npx wrangler deployments status --config wrangler.staging.release.generated.json --json > "$RUNNER_TEMP/app-deployment.json"
           npx wrangler deployments status --config wrangler.alerts.jsonc --json > "$RUNNER_TEMP/alert-deployment.json"
           APP_VERSION_ID="$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync(process.argv[1])); process.stdout.write(d.versions[0].version_id)" "$RUNNER_TEMP/app-deployment.json")"
           ALERT_VERSION_ID="$(node -e "const fs=require('fs'); const d=JSON.parse(fs.readFileSync(process.argv[1])); process.stdout.write(d.versions[0].version_id)" "$RUNNER_TEMP/alert-deployment.json")"
-          npx wrangler versions view "$APP_VERSION_ID" --json > "$RUNNER_TEMP/app-version.json"
+          npx wrangler versions view "$APP_VERSION_ID" --config wrangler.staging.release.generated.json --json > "$RUNNER_TEMP/app-version.json"
           npx wrangler versions view "$ALERT_VERSION_ID" --config wrangler.alerts.jsonc --json > "$RUNNER_TEMP/alert-version.json"
           python ../scripts/cloudflare/deployment_manifest.py capture \
             --commit "$GITHUB_SHA" \

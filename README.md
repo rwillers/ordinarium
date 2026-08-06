@@ -54,6 +54,9 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 5) Run the app: `flask --app ordinarium run`.
 6) Alternate run (debug enabled): `ORDINARIUM_DEBUG=1 python app.py`.
 
+Cloudflare staging deployments and production promotions follow the
+[production promotion runbook](cloudflare/PHASE9_DEPLOYMENT_PATHS.md#production-promotion-runbook).
+
 ## UI patterns: shared table
 
 The app uses a shared table pattern for tabular data. New table-like views should default to this pattern unless there is a specific reason to diverge.

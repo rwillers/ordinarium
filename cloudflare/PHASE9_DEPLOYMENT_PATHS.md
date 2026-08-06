@@ -35,15 +35,22 @@ the `cloudflare-staging` GitHub environment. The job:
 3. verifies the six staging queues;
 4. applies compatible remote D1 migrations and executes a read-only D1 probe;
 5. deploys the alert classifier before the application Worker;
-6. builds and deploys the static assets and four container roles;
-7. waits for all container applications, then verifies `/health` and the login
-   form through a Cloudflare Access service token; and
-8. uploads a 90-day `staging-release-<commit>` manifest.
+6. builds and pushes commit-tagged images for all four container roles, resolves
+   their immutable registry digests, and renders a staging configuration pinned
+   to those exact digests;
+7. deploys the pinned configuration with an immediate container rollout;
+8. waits until every container application's configured digest and health match
+   the pinned configuration, verifies that the web application's serving digest
+   also matches, then checks `/health` and the login form through a Cloudflare
+   Access service token; and
+9. uploads a 90-day `staging-release-<commit>` manifest.
 
 The release manifest binds the Git commit to both Worker version IDs and all four
 Cloudflare Registry image references. Every image must use an immutable
-`@sha256:` digest. A staging workflow is successful only after the manifest and
-the side-effect-free readiness checks pass.
+`@sha256:` digest and must equal the commit-tagged image built by that workflow
+run. A staging workflow is successful only after two stable matching samples,
+container health, the user-facing serving-image check, the manifest capture, and
+the side-effect-free readiness checks all pass.
 
 ## GitHub staging environment
 
@@ -100,3 +107,56 @@ Production promotion remains manual. Cloudflare Git integration remains
 disabled; GitHub Actions is the deployment authority. The retired Lightsail
 workflow, environment, variables, and secrets are not part of this deployment
 path.
+
+## Production promotion runbook
+
+Use this sequence for every production release:
+
+1. Merge the intended release to `main`. Record the exact 40-character commit
+   SHA.
+2. Open the `Deploy Cloudflare staging` run triggered by that `main` commit.
+   Wait for `Migrate, deploy, and verify staging` to succeed. Do not use a run
+   from a branch, a different SHA, or a previously generated manifest.
+3. Confirm the run uploaded `staging-release-<commit>`. A successful repaired
+   workflow means the manifest contains the exact digests built in that run;
+   readiness cannot substitute an older stable digest.
+4. Verify the release behavior at `https://staging.ordinarium.com`, including
+   the user-visible change being released. Automated health checks are necessary
+   but do not replace this feature verification.
+5. Temporarily set the repository variable
+   `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` to `true`.
+6. Dispatch `Promote Cloudflare production` with the successful staging run ID,
+   the exact commit SHA, and confirmation value `PROMOTE`. Approve the
+   `cloudflare-production` environment when prompted.
+7. Wait for both `Verify staging-tested release` and `Promote exact release to
+   production` to succeed. The production job deploys the staging digests with
+   an immediate rollout and rechecks the configured and serving images.
+8. Verify `https://ordinarium.com/login` and the released production behavior.
+   For a UI release, use a hard refresh or a private window to rule out browser
+   asset caching.
+9. Restore `ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` to `false` after verification.
+   Record the staging run ID, production run URL, SHA, and verification result in
+   the release handoff.
+
+If staging or production reports an unexpected digest, stop. Do not rerun an old
+production promotion because it reuses the same manifest. Correct the rollout,
+run `Deploy Cloudflare staging` again, verify the newly generated manifest and
+feature behavior, and promote that new staging run. Database migrations are
+forward-only operational state and must be assessed separately from a Worker or
+container rollback.
+
+## Digest-capture incident guard
+
+Cloudflare updates Worker code immediately but rolls container instances
+separately, as described in Cloudflare's
+[container rollout documentation](https://developers.cloudflare.com/containers/platform-details/rollouts/).
+`wrangler containers list` can therefore expose an older serving or
+summary image while the per-application configuration already targets a newer
+digest, particularly for dormant queue containers. Release metadata must never
+be derived from that list image alone.
+
+The staging workflow uses `prepare_release_images.py` to establish the expected
+digests before deployment. `verify_staging_deployment.py` then reads each
+application's detailed configuration and health, compares it with those expected
+digests, and separately requires the public web container's serving image to
+match. `deployment_manifest.py` receives only that verified snapshot.
