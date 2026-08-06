@@ -7,8 +7,26 @@ cutover and must not be recreated from this repository.
 ## Validation and staging
 
 Pull requests run the Python, SQLite, Worker, and container checks in GitHub
-Actions. They do not receive deployment credentials and cannot change remote
-Cloudflare resources.
+Actions. The Python gate initializes one pristine seeded database per pytest
+worker, copies it for each isolated test, runs deployment contracts once, and
+runs the remaining behavioral suite in parallel. Markdown-only changes take a
+documented fast path through the same required check. Pull-request workflows do
+not receive deployment credentials and cannot change remote Cloudflare
+resources.
+
+The complete deterministic behavioral suite is a merge gate, not a production
+deployment step. Staging rechecks the Worker and release-specific contracts,
+then validates migrations, pinned images, container generations, health, and
+public behavior. Production verifies the exact successful staging artifact and
+repeats only production-specific migration, provenance, generation, health, and
+public-readiness checks. Do not add the full application suite to staging or
+production; improve the pull-request gate when broader coverage is needed.
+
+The protected `main` branch requires the `Tests` check and requires pull-request
+branches to be current before merge, including for administrators. CI therefore
+runs the complete behavioral suite on the pull-request merge result and does not
+repeat it on the resulting `main` push. The staging workflow remains triggered
+by that push and performs the release-specific checks below.
 
 Every commit merged to `main` runs `Deploy Cloudflare staging`. That workflow:
 

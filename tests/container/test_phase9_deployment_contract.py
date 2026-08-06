@@ -108,6 +108,26 @@ def test_pull_request_workflows_validate_without_deploying():
     assert "Run container integration smoke test" in workflows[2]
 
 
+def test_python_ci_is_complete_once_parallel_and_docs_aware():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    test_requirements = (ROOT / "requirements-test.txt").read_text()
+
+    assert "push:" not in workflow
+    assert "dorny/paths-filter@v4" in workflow
+    assert "predicate-quantifier: every" in workflow
+    assert "- '!**/*.md'" in workflow
+    assert "pytest -q -n auto --durations=25" in workflow
+    for path in (
+        "tests/test_database_gateways.py",
+        "tests/test_d1_migrations.py",
+        "tests/test_phase4_persistence_workflows.py",
+        "tests/container",
+    ):
+        assert workflow.count(path) == 2
+        assert f"--ignore={path}" in workflow
+    assert "pytest-xdist==3.8.0" in test_requirements
+
+
 def test_staging_workflow_migrates_deploys_verifies_and_records_release():
     workflow = (
         ROOT / ".github" / "workflows" / "deploy-cloudflare-staging.yml"

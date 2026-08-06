@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import sqlite3
 import sys
 from pathlib import Path
@@ -38,22 +39,36 @@ class CSRFClient(FlaskClient):
         return super().open(*args, **kwargs)
 
 
-@pytest.fixture()
-def app(tmp_path):
-    app = create_app()
-    app.config.update(
-        TESTING=True,
-        DATABASE=str(tmp_path / "test.db"),
-        SECRET_KEY="test",
-        WTF_CSRF_ENABLED=False,
-        RATELIMIT_ENABLED=False,
-        PCO_TOKEN_ENCRYPTION_KEYS={
+def _test_config(database):
+    return {
+        "TESTING": True,
+        "DATABASE": str(database),
+        "SECRET_KEY": "test",
+        "WTF_CSRF_ENABLED": False,
+        "RATELIMIT_ENABLED": False,
+        "PCO_TOKEN_ENCRYPTION_KEYS": {
             "v1": "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
         },
-    )
-    app.test_client_class = CSRFClient
+    }
+
+
+@pytest.fixture(scope="session")
+def seeded_database(tmp_path_factory):
+    database = tmp_path_factory.mktemp("database-template") / "ordinarium.db"
+    app = create_app()
+    app.config.update(_test_config(database))
     with app.app_context():
         init_db()
+    return database
+
+
+@pytest.fixture()
+def app(tmp_path, seeded_database):
+    database = tmp_path / "test.db"
+    shutil.copyfile(seeded_database, database)
+    app = create_app()
+    app.config.update(_test_config(database))
+    app.test_client_class = CSRFClient
     if os.environ.get("ORDINARIUM_TEST_GATEWAY_BACKEND") == "gateway":
         database_path = app.config["DATABASE"]
 

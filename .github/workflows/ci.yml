@@ -2,14 +2,13 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -20,20 +19,37 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - name: Classify changed paths
+        id: changes
+        uses: dorny/paths-filter@v4
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
 
       - name: Set up Python
+        if: steps.changes.outputs.code == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
+          cache-dependency-path: requirements-test.txt
 
       - name: Report runtime versions
+        if: steps.changes.outputs.code == 'true'
         run: python -c "import platform, sqlite3; print(platform.python_version()); print(sqlite3.sqlite_version)"
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        if: steps.changes.outputs.code == 'true'
+        run: python -m pip install -r requirements-test.txt
 
       - name: Run D1 and container integration contracts
+        if: steps.changes.outputs.code == 'true'
         run: >-
           pytest -q
           tests/test_database_gateways.py
@@ -41,5 +57,15 @@ jobs:
           tests/test_phase4_persistence_workflows.py
           tests/container
 
-      - name: Run tests
-        run: pytest -q
+      - name: Run remaining tests in parallel
+        if: steps.changes.outputs.code == 'true'
+        run: >-
+          pytest -q -n auto --durations=25
+          --ignore=tests/test_database_gateways.py
+          --ignore=tests/test_d1_migrations.py
+          --ignore=tests/test_phase4_persistence_workflows.py
+          --ignore=tests/container
+
+      - name: Record documentation-only fast path
+        if: steps.changes.outputs.code != 'true'
+        run: echo "Only Markdown documentation changed; behavioral tests are unchanged."
