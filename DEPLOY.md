@@ -18,9 +18,9 @@ Every commit merged to `main` runs `Deploy Cloudflare staging`. That workflow:
 4. deploys the staging alert Worker;
 5. builds and pushes commit-tagged container images, resolves their immutable
    registry digests, and deploys the application with those exact digests;
-6. checks queues, per-application container configuration and active/healthy
-   instance state, the web
-   serving image, `/health`, login, CSRF, and Turnstile; and
+6. checks queues, probes `/health` and login to wake and validate the web
+   container, then checks per-application configuration, active/healthy instance
+   state, the web serving image, CSRF, and Turnstile; and
 7. retains an immutable staging release manifest for 90 days.
 
 Cloudflare updates Worker code immediately and container instances through a

@@ -255,6 +255,7 @@ def _verify_deployment(
     consecutive_samples = 0
     for _attempt in range(attempts):
         try:
+            _verify_edge_routes(base_url, headers)
             snapshot = _container_snapshot(wrangler, config, expected_containers)
             if error := _container_snapshot_error(
                 snapshot, expected_containers, expected_images
@@ -275,7 +276,6 @@ def _verify_deployment(
                     f"{consecutive_samples}/{stable_samples} consecutive samples"
                 )
 
-            _verify_edge_routes(base_url, headers)
             if containers_output:
                 _write_snapshot(snapshot, containers_output)
             return

@@ -268,8 +268,34 @@ def test_staging_readiness_persists_the_stable_container_snapshot(
     )
 
     assert json.loads(output.read_text()) == second
-    assert edge_checks == [True]
+    assert edge_checks == [True, True, True]
     assert sleeps == [10, 10]
+
+
+def test_staging_readiness_wakes_the_web_container_before_digest_checks(monkeypatch):
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_ID", "client.access")
+    monkeypatch.setenv("CLOUDFLARE_ACCESS_CLIENT_SECRET", "secret")
+    events = []
+    monkeypatch.setattr(
+        staging_verifier,
+        "_verify_edge_routes",
+        lambda *_args: events.append("edge-probe"),
+    )
+    monkeypatch.setattr(
+        staging_verifier,
+        "_container_snapshot",
+        lambda *_args: events.append("container-snapshot") or _containers(),
+    )
+
+    staging_verifier.verify_staging(
+        "https://staging.example.com",
+        "wrangler",
+        "config",
+        attempts=1,
+        stable_samples=1,
+    )
+
+    assert events == ["edge-probe", "container-snapshot"]
 
 
 def test_staging_readiness_reports_actual_transient_container_state(monkeypatch):
@@ -280,6 +306,7 @@ def test_staging_readiness_reports_actual_transient_container_state(monkeypatch)
     monkeypatch.setattr(
         staging_verifier, "_container_snapshot", lambda *_args: snapshot
     )
+    monkeypatch.setattr(staging_verifier, "_verify_edge_routes", lambda *_args: None)
     monkeypatch.setattr(staging_verifier.time, "sleep", lambda *_args: None)
 
     with pytest.raises(RuntimeError, match=r"state:deploying"):
