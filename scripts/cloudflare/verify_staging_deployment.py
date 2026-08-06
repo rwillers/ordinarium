@@ -149,6 +149,21 @@ def _container_snapshot(wrangler, config, expected_containers=EXPECTED_CONTAINER
                 config,
             ]
         )
+        serving_instances = []
+        if name in USER_FACING_CONTAINERS:
+            serving_instances = _wrangler_json(
+                [
+                    wrangler,
+                    "containers",
+                    "instances",
+                    summary["id"],
+                    "--json",
+                    "--config",
+                    config,
+                ]
+            )
+            if not isinstance(serving_instances, list):
+                raise RuntimeError("container instance metadata is not a list")
         snapshot.append(
             {
                 "name": name,
@@ -156,6 +171,7 @@ def _container_snapshot(wrangler, config, expected_containers=EXPECTED_CONTAINER
                 "image": details.get("configuration", {}).get("image", ""),
                 "summary_image": summary.get("image", ""),
                 "version": details.get("version"),
+                "serving_instances": serving_instances,
                 "health": details.get("health", {}),
             }
         )
@@ -201,12 +217,15 @@ def _container_snapshot_error(
             invalid.append(f"{name}=image:not-immutable")
         if expected_images and image != expected_images[name]:
             invalid.append(f"{name}=image:unexpected")
-        if (
-            expected_images
-            and name in USER_FACING_CONTAINERS
-            and container.get("summary_image") != expected_images[name]
-        ):
-            invalid.append(f"{name}=serving-image:unexpected")
+        if expected_images and name in USER_FACING_CONTAINERS:
+            configured_version = container.get("version")
+            serving_instances = container.get("serving_instances", [])
+            if not any(
+                instance.get("state") == "running"
+                and instance.get("version") == configured_version
+                for instance in serving_instances
+            ):
+                invalid.append(f"{name}=serving-generation:unexpected")
         health = container.get("health")
         if health is not None:
             errors = health.get("errors", [])
@@ -228,8 +247,17 @@ def _snapshot_signature(snapshot):
             item.get("name"),
             item.get("state"),
             item.get("image"),
-            item.get("summary_image"),
             item.get("version"),
+            tuple(
+                sorted(
+                    (
+                        instance.get("id", ""),
+                        instance.get("state", ""),
+                        instance.get("version"),
+                    )
+                    for instance in item.get("serving_instances", [])
+                )
+            ),
         )
         for item in snapshot
     )

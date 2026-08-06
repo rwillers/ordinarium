@@ -20,15 +20,17 @@ Every commit merged to `main` runs `Deploy Cloudflare staging`. That workflow:
    registry digests, and deploys the application with those exact digests;
 6. checks queues, probes `/health` and login to wake and validate the web
    container, then checks per-application configuration, active/healthy instance
-   state, the web serving image, CSRF, and Turnstile; and
+   state, the running web instance generation, CSRF, and Turnstile; and
 7. retains an immutable staging release manifest for 90 days.
 
 Cloudflare updates Worker code immediately and container instances through a
 separate rollout. The release gate therefore does not use a stable
-`wrangler containers list` image as proof of the new release. It compares each
-application's detailed configuration with the exact digest built by the current
-workflow and requires the public web serving image to match before capturing the
-manifest. See Cloudflare's [container rollout documentation](https://developers.cloudflare.com/containers/platform-details/rollouts/).
+`wrangler containers list` image as proof of the new release because that summary
+can remain stale after the detailed application and running instance metadata
+have advanced. It compares each application's detailed configuration with the
+exact digest built by the current workflow and requires the running public web
+instance generation to equal the configured application generation before
+capturing the manifest. See Cloudflare's [container rollout documentation](https://developers.cloudflare.com/containers/platform-details/rollouts/).
 
 The `cloudflare-staging` GitHub environment owns its Cloudflare and Access
 credentials. Do not copy those secrets into pull-request workflows.

@@ -318,12 +318,16 @@ def test_staging_readiness_reports_actual_transient_container_state(monkeypatch)
         )
 
 
-def test_staging_readiness_rejects_a_stale_configured_or_serving_image():
+def test_staging_readiness_rejects_a_stale_configured_or_serving_generation():
     snapshot = _containers()
     expected = {item["name"]: item["image"] for item in snapshot}
     for item in snapshot:
         item["summary_image"] = item["image"]
         item["health"] = {"errors": [], "instances": {"healthy": 1, "failed": 0}}
+        item["version"] = 2
+        item["serving_instances"] = []
+    web = next(item for item in snapshot if item["name"] == "ordinarium-web")
+    web["serving_instances"] = [{"state": "running", "version": 1}]
     snapshot[0]["image"] = snapshot[0]["image"].replace("1" * 64, "9" * 64)
     snapshot[0]["summary_image"] = snapshot[0]["image"]
 
@@ -332,7 +336,7 @@ def test_staging_readiness_rejects_a_stale_configured_or_serving_image():
     )
 
     assert "image:unexpected" in error
-    assert "serving-image:unexpected" in error
+    assert "serving-generation:unexpected" in error
 
 
 def test_staging_readiness_accepts_an_active_serving_instance():
@@ -340,12 +344,15 @@ def test_staging_readiness_accepts_an_active_serving_instance():
     expected = {item["name"]: item["image"] for item in snapshot}
     for item in snapshot:
         item["summary_image"] = item["image"]
+        item["version"] = 2
+        item["serving_instances"] = []
         item["health"] = {
             "errors": [],
             "instances": {"active": 0, "healthy": 1, "failed": 0},
         }
     web = next(item for item in snapshot if item["name"] == "ordinarium-web")
     web["health"]["instances"].update(active=1, healthy=0)
+    web["serving_instances"] = [{"state": "running", "version": 2}]
 
     assert (
         staging_verifier._container_snapshot_error(
@@ -368,10 +375,21 @@ def test_container_snapshot_uses_application_detail_image_and_health(monkeypatch
         }
         for index, item in enumerate(summaries)
     }
+    instances = {
+        summaries[0]["id"]: [
+            {
+                "id": "web-instance",
+                "state": "running",
+                "version": details[summaries[0]["id"]]["version"],
+            }
+        ]
+    }
 
     def wrangler_json(command):
         if command[1:3] == ["containers", "list"]:
             return summaries
+        if command[1:3] == ["containers", "instances"]:
+            return instances[command[3]]
         return details[command[3]]
 
     monkeypatch.setattr(staging_verifier, "_wrangler_json", wrangler_json)
@@ -385,6 +403,10 @@ def test_container_snapshot_uses_application_detail_image_and_health(monkeypatch
     }
     assert all(item["summary_image"] != item["image"] for item in snapshot)
     assert all(item["health"]["instances"]["healthy"] == 1 for item in snapshot)
+    web = next(item for item in snapshot if item["name"] == "ordinarium-web")
+    assert web["serving_instances"] == [
+        {"id": "web-instance", "state": "running", "version": web["version"]}
+    ]
 
 
 def test_staging_cli_forwards_the_verified_container_snapshot(monkeypatch, tmp_path):
