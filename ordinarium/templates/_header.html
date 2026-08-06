@@ -33,6 +33,7 @@
 			) %}
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.services') }}">Services</a>
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.templates') }}">Templates</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.house_uses') }}">House uses</a>
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.settings') }}">Settings</a>
 					{% if user.has_feature('admin') %}
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.admin_index') }}">Admin</a>

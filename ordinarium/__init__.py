@@ -162,6 +162,10 @@ def create_app():
 
     @pass_context
     def markdown_template(context, value):
+        from .text_overrides import is_house_use_text
+
+        if is_house_use_text(value):
+            return Markup(render_markdown(value, safe_mode="escape"))
         template = context.environment.from_string(value or "")
         rendered = template.render(context.get_all())
         html_text = render_markdown(rendered)
@@ -201,7 +205,13 @@ def create_app():
 
         return Markup(paragraph_re.sub(wrap_paragraph, str(value)))
 
-    app.jinja_env.filters["markdown"] = lambda value: Markup(render_markdown(value))
+    def markdown_filter(value):
+        from .text_overrides import is_house_use_text
+
+        safe_mode = "escape" if is_house_use_text(value) else None
+        return Markup(render_markdown(value, safe_mode=safe_mode))
+
+    app.jinja_env.filters["markdown"] = markdown_filter
     app.jinja_env.filters["markdown_template"] = markdown_template
     app.jinja_env.filters["markdown_user"] = markdown_user
     app.jinja_env.filters["trailing_indent"] = wrap_trailing_indent

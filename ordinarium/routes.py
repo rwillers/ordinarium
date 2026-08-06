@@ -3,6 +3,7 @@ from flask import Blueprint
 from .account_routes import register_account_routes
 from .admin_routes import register_admin_routes
 from .auth_session import register_user_context
+from .house_use_routes import register_house_use_routes
 from .integrations_routes import register_integration_routes
 from .login_routes import register_login_routes
 from .page_routes import register_page_routes
@@ -20,6 +21,7 @@ register_login_routes(bp)
 register_password_reset_routes(bp)
 register_account_routes(bp)
 register_settings_routes(bp)
+register_house_use_routes(bp)
 register_admin_routes(bp)
 register_service_routes(bp)
 register_service_pco_routes(bp)

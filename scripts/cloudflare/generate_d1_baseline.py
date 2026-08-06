@@ -23,6 +23,7 @@ EXCLUDED_TABLES = {
     "pco_rate_limit_windows",
     "pco_service_sync_leases",
     "schema_migrations",
+    "user_text_overrides",
 }
 EXCLUDED_OBJECT_PREFIXES = ("sync_id_sequence_",)
 EXCLUDED_INDEXES = {

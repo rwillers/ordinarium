@@ -129,7 +129,7 @@ def _resolve_proper_override(db, proper_overrides, proper_key):
     if not text_id:
         return None
     return db.fetch_one(
-        "select id, text from texts where id=? and type=? limit 1",
+        "select id, type, title, detailed_title, default_order, text from texts where id=? and type=? limit 1",
         (text_id, text_type),
     )
 
