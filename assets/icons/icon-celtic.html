@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ordinarium Celtic icon generator</title>
+    <style>
+      :root { color: #30272a; font-family: system-ui, sans-serif; }
+      body { margin: 2rem; background: #f4f0eb; }
+      h1 { color: #592630; }
+      .outputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; }
+      figure { margin: 0; padding: 1rem; background: white; border-radius: .5rem; box-shadow: 0 1px 5px #0002; }
+      canvas { display: block; width: 128px; height: 128px; margin: 0 auto 1rem; }
+      figcaption { text-align: center; }
+      a { display: inline-block; margin-top: .5rem; color: #76323f; }
+    </style>
+  </head>
+  <body>
+    <h1>Ordinarium Celtic cross icon outputs</h1>
+    <p>Each PNG below is rendered directly from the vector geometry at its final pixel dimensions.</p>
+    <main class="outputs" id="outputs"></main>
+
+    <script>
+      const outputs = [
+        { name: "touch-icon-1024.png", size: 1024 },
+        { name: "touch-icon-512.png", size: 512 },
+        { name: "touch-icon-192.png", size: 192 },
+        { name: "touch-icon-180.png", size: 180 },
+        { name: "touch-icon-167.png", size: 167 },
+        { name: "touch-icon-152.png", size: 152 },
+        { name: "touch-icon-120.png", size: 120 },
+        { name: "favicon-32.png", size: 32 },
+        { name: "coda.png", size: 256, coda: true },
+      ];
+
+      const vectorMarkup = (coda = false) => `
+        <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+          <defs>
+            <linearGradient id="background" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#e0c5ab"/><stop offset="1" stop-color="#b69c83"/>
+            </linearGradient>
+            <path id="arm" d="M446 512 L416 172 Q512 144 608 172 L578 512 Z"/>
+            <g id="cross">
+              <use href="#arm"/><use href="#arm" transform="rotate(90 512 512)"/>
+              <use href="#arm" transform="rotate(180 512 512)"/><use href="#arm" transform="rotate(270 512 512)"/>
+            </g>
+            <mask id="ring-gap" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+              <rect width="1024" height="1024" fill="white"/>
+              <use href="#cross" fill="black" stroke="black" stroke-width="40" stroke-linejoin="round"/>
+            </mask>
+          </defs>
+          ${coda ? "" : '<rect width="1024" height="1024" fill="url(#background)"/>'}
+          <g fill="${coda ? "#000" : "#76323f"}" opacity="${coda ? ".1" : "1"}">
+            <circle cx="512" cy="512" r="252" fill="none" stroke="${coda ? "#000" : "#76323f"}" stroke-width="88" mask="url(#ring-gap)"/>
+            <use href="#cross"/>
+          </g>
+        </svg>`;
+
+      const renderOutput = ({ name, size, coda = false }) => new Promise((resolve, reject) => {
+        const image = new Image();
+        const source = URL.createObjectURL(new Blob([vectorMarkup(coda)], { type: "image/svg+xml" }));
+
+        image.onerror = () => {
+          URL.revokeObjectURL(source);
+          reject(new Error(`Could not render ${name}`));
+        };
+        image.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = size;
+          canvas.height = size;
+          canvas.getContext("2d").drawImage(image, 0, 0, size, size);
+          URL.revokeObjectURL(source);
+
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error(`Could not encode ${name}`));
+              return;
+            }
+
+            const figure = document.createElement("figure");
+            const caption = document.createElement("figcaption");
+            const link = document.createElement("a");
+            caption.textContent = `${name} (${size}×${size})`;
+            link.textContent = "Download PNG";
+            link.download = name;
+            link.href = URL.createObjectURL(blob);
+            figure.append(canvas, caption, link);
+            document.querySelector("#outputs").append(figure);
+            resolve();
+          }, "image/png");
+        };
+        image.src = source;
+      });
+
+      Promise.all(outputs.map(renderOutput)).catch((error) => {
+        document.querySelector("#outputs").textContent = error.message;
+      });
+    </script>
+  </body>
+</html>
