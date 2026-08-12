@@ -10,8 +10,10 @@ class FakeContainer {
     this.requests = [];
   }
 
-  async fetch(request) {
+  async fetchWithReadiness(request, forceReadinessCheck) {
     this.requests.push(request);
+    this.forceReadinessChecks ||= [];
+    this.forceReadinessChecks.push(forceReadinessCheck);
     const response = this.responses.shift();
     if (response instanceof Error) {
       throw response;
@@ -20,6 +22,10 @@ class FakeContainer {
   }
 }
 
+const immediateRetries = {
+  sleep: async () => undefined,
+  random: () => 0.5,
+};
 
 const transientResponse = (message = "Failed to start container: port timeout") =>
   new Response(message, {
@@ -28,7 +34,7 @@ const transientResponse = (message = "Failed to start container: port timeout") 
   });
 
 
-test("safe requests retry one recognized container startup failure", async () => {
+test("safe requests retry recognized container startup failures", async () => {
   const container = new FakeContainer([
     transientResponse(),
     new Response("ready", { status: 200 }),
@@ -37,12 +43,15 @@ test("safe requests retry one recognized container startup failure", async () =>
   const result = await fetchWebContainer(
     container,
     new Request("https://ordinarium.com/login"),
+    immediateRetries,
   );
 
   assert.equal(result.response.status, 200);
   assert.equal(await result.response.text(), "ready");
   assert.equal(result.retryOutcome, "succeeded");
+  assert.equal(result.attempts, 2);
   assert.equal(container.requests.length, 2);
+  assert.deepEqual(container.forceReadinessChecks, [false, true]);
 });
 
 
@@ -50,11 +59,15 @@ test("repeated transient startup failures become a controlled 503", async () => 
   const container = new FakeContainer([
     transientResponse(),
     transientResponse("Container suddenly disconnected, try again"),
+    new Response("There is no Container instance available at this time.", {
+      status: 503,
+    }),
   ]);
 
   const result = await fetchWebContainer(
     container,
     new Request("https://ordinarium.com/"),
+    immediateRetries,
   );
 
   assert.equal(result.response.status, 503);
@@ -63,7 +76,66 @@ test("repeated transient startup failures become a controlled 503", async () => 
     error: "web_container_unavailable",
   });
   assert.equal(result.retryOutcome, "exhausted");
-  assert.equal(container.requests.length, 2);
+  assert.equal(result.attempts, 3);
+  assert.equal(container.requests.length, 3);
+  assert.deepEqual(container.forceReadinessChecks, [false, true, true]);
+});
+
+
+test("safe requests recover from a thrown container RPC failure", async () => {
+  const container = new FakeContainer([
+    new Error("internal container RPC error"),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/"),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 200);
+  assert.equal(result.retryOutcome, "succeeded");
+  assert.equal(result.attempts, 2);
+  assert.deepEqual(container.forceReadinessChecks, [false, true]);
+});
+
+
+test("temporary platform HTTP statuses are retried", async () => {
+  const container = new FakeContainer([
+    new Response("rate limited", { status: 429 }),
+    new Response("bad gateway", { status: 502 }),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/"),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 200);
+  assert.equal(result.retryOutcome, "succeeded");
+  assert.equal(result.attempts, 3);
+  assert.deepEqual(container.forceReadinessChecks, [false, false, false]);
+});
+
+
+test("application 503 retries without forcing a redundant readiness probe", async () => {
+  const container = new FakeContainer([
+    Response.json({ error: "database_unavailable" }, { status: 503 }),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/"),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 200);
+  assert.equal(result.retryOutcome, "succeeded");
+  assert.deepEqual(container.forceReadinessChecks, [false, false]);
 });
 
 
@@ -81,6 +153,7 @@ test("application 500 responses are not retried", async () => {
 
   assert.equal(result.response.status, 500);
   assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
   assert.equal(container.requests.length, 1);
 });
 
@@ -99,6 +172,7 @@ test("unrecognized text application failures are not retried", async () => {
 
   assert.equal(result.response.status, 500);
   assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
   assert.equal(container.requests.length, 1);
 });
 
@@ -124,6 +198,7 @@ test("oversized text failures return without waiting for clone cancellation", as
   assert.equal(result.response.status, 500);
   assert.equal(await result.response.text(), body);
   assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
   assert.equal(container.requests.length, 1);
 });
 
@@ -138,5 +213,23 @@ test("unsafe requests are never retried", async () => {
 
   assert.equal(result.response.status, 500);
   assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+  assert.deepEqual(container.forceReadinessChecks, [false]);
+});
+
+
+test("unsafe requests surface thrown failures without replaying", async () => {
+  const error = new Error("container RPC unavailable");
+  const container = new FakeContainer([error]);
+
+  await assert.rejects(
+    fetchWebContainer(
+      container,
+      new Request("https://ordinarium.com/login", { method: "POST" }),
+      immediateRetries,
+    ),
+    error,
+  );
   assert.equal(container.requests.length, 1);
 });
