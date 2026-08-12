@@ -103,6 +103,31 @@ test("unrecognized text application failures are not retried", async () => {
 });
 
 
+test("oversized text failures return without waiting for clone cancellation", async () => {
+  const body = "Failed to start container:" + "x".repeat(1024);
+  const applicationFailure = new Response(body, {
+    status: 500,
+    headers: { "content-type": "text/plain;charset=UTF-8" },
+  });
+  const container = new FakeContainer([applicationFailure]);
+
+  const result = await Promise.race([
+    fetchWebContainer(
+      container,
+      new Request("https://ordinarium.com/service/1"),
+    ),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("fetchWebContainer timed out")), 250),
+    ),
+  ]);
+
+  assert.equal(result.response.status, 500);
+  assert.equal(await result.response.text(), body);
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(container.requests.length, 1);
+});
+
+
 test("unsafe requests are never retried", async () => {
   const container = new FakeContainer([transientResponse()]);
 

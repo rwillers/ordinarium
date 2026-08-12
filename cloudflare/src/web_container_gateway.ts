@@ -88,7 +88,11 @@ const readBoundedText = async (
         return new TextDecoder().decode(joinChunks(chunks, totalBytes));
       }
       if (totalBytes + value.byteLength > maxBytes) {
-        await reader.cancel();
+        // This reader belongs to a cloned response, so cancellation does not
+        // settle until the original tee branch is consumed or canceled. The
+        // original must remain available to the caller; do not block on the
+        // clone's cancellation here.
+        void reader.cancel().catch(() => undefined);
         return null;
       }
       chunks.push(value);
