@@ -39,13 +39,15 @@ export const handleD1Request = async (
     return jsonError("method_not_allowed", 405);
   }
 
+  const requestId =
+    request.headers.get(REQUEST_ID_HEADER) || createRequestId();
   try {
     const payload = await readPayload(request);
     switch (payload.operation) {
       case "fetch_one":
-        return await fetchOne(database, parseStatement(payload));
+        return await fetchOne(database, parseStatement(payload), requestId);
       case "fetch_all":
-        return await fetchAll(database, parseStatement(payload));
+        return await fetchAll(database, parseStatement(payload), requestId);
       case "execute":
         return await execute(database, parseStatement(payload));
       case "batch":
@@ -60,8 +62,7 @@ export const handleD1Request = async (
       return jsonError(error.code, error.status);
     }
     emitTelemetry("error", "d1_operation_failure", {
-      request_id:
-        request.headers.get(REQUEST_ID_HEADER) || createRequestId(),
+      request_id: requestId,
       container_role: "d1-bridge",
       error_category: errorCategory(error),
     });
@@ -69,13 +70,27 @@ export const handleD1Request = async (
   }
 };
 
-const fetchOne = async (database: D1Database, input: StatementInput) => {
-  const row = await prepare(database, input).first<Record<string, unknown>>();
+const fetchOne = async (
+  database: D1Database,
+  input: StatementInput,
+  requestId: string,
+) => {
+  const row = await retryRead(
+    () => prepare(database, input).first<Record<string, unknown>>(),
+    requestId,
+  );
   return Response.json({ ok: true, row });
 };
 
-const fetchAll = async (database: D1Database, input: StatementInput) => {
-  const result = await prepare(database, input).run<Record<string, unknown>>();
+const fetchAll = async (
+  database: D1Database,
+  input: StatementInput,
+  requestId: string,
+) => {
+  const result = await retryRead(
+    () => prepare(database, input).run<Record<string, unknown>>(),
+    requestId,
+  );
   return Response.json({
     ok: true,
     rows: result.results,
@@ -114,6 +129,22 @@ const allocateId = async (database: D1Database, sequence: string) => {
 
 const prepare = (database: D1Database, input: StatementInput) =>
   database.prepare(input.sql).bind(...input.params);
+
+const retryRead = async <T>(
+  operation: () => Promise<T>,
+  requestId: string,
+): Promise<T> => {
+  try {
+    return await operation();
+  } catch (error: unknown) {
+    emitTelemetry("warn", "d1_operation_retry", {
+      request_id: requestId,
+      container_role: "d1-bridge",
+      error_category: errorCategory(error),
+    });
+    return operation();
+  }
+};
 
 const readPayload = async (request: Request): Promise<BridgePayload> => {
   const declaredLength = Number(request.headers.get("content-length") || 0);

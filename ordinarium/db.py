@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 
 import click
-from flask import current_app, g
+from flask import current_app, g, has_request_context, request
 
 from .infrastructure import D1HttpGateway, GatewayConnection, SQLiteGateway
 
@@ -40,6 +40,11 @@ def get_database_gateway():
             service_url,
             timeout_seconds=current_app.config["D1_SERVICE_TIMEOUT_SECONDS"],
             max_response_bytes=current_app.config["D1_SERVICE_MAX_BYTES"],
+            request_id=(
+                request.headers.get("X-Ordinarium-Request-Id")
+                if has_request_context()
+                else None
+            ),
         )
         return g.database_gateway
     raise RuntimeError(f"Unknown database gateway backend: {backend}")

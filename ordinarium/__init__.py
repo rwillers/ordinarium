@@ -6,12 +6,13 @@ from html.parser import HTMLParser
 from functools import lru_cache
 
 import markdown2
-from flask import Flask
+from flask import Flask, Response
 from flask_wtf import CSRFProtect
 from jinja2 import pass_context
 from markupsafe import Markup
 
 from .db import close_db, init_db_command
+from .infrastructure.d1_http_gateway import D1GatewayError
 from .auth_rate_limit import init_rate_limiter
 from .mail_delivery import init_mail
 from .auth_session import init_login
@@ -235,5 +236,14 @@ def create_app():
         if not secret or secret == "dev":
             raise RuntimeError("SECRET_KEY must be set in production.")
         return None
+
+    @app.errorhandler(D1GatewayError)
+    def _handle_d1_gateway_error(_error):
+        return Response(
+            "The database is temporarily unavailable. Please refresh and try again.",
+            status=503,
+            content_type="text/plain; charset=utf-8",
+            headers={"Retry-After": "1"},
+        )
 
     return app

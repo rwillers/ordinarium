@@ -17,6 +17,8 @@ class FakeStatement {
   }
 
   async first() {
+    this.database.recordAttempt(this.sql);
+    this.database.failIfConfigured(this.sql);
     if (this.sql.startsWith("update id_sequences")) {
       const sequence = this.params[0];
       const nextValue = this.database.sequences.get(sequence);
@@ -30,6 +32,8 @@ class FakeStatement {
   }
 
   async run() {
+    this.database.recordAttempt(this.sql);
+    this.database.failIfConfigured(this.sql);
     return {
       results: this.database.rows,
       meta: {
@@ -49,6 +53,8 @@ class FakeDatabase {
     this.firstRow = { id: 7, title: "Proof" };
     this.rows = [{ id: 7 }, { id: 8 }];
     this.sequences = new Map([["services", 11]]);
+    this.attempts = new Map();
+    this.failures = new Map();
   }
 
   prepare(sql) {
@@ -57,6 +63,18 @@ class FakeDatabase {
 
   async batch(statements) {
     return Promise.all(statements.map((statement) => statement.run()));
+  }
+
+  recordAttempt(sql) {
+    this.attempts.set(sql, (this.attempts.get(sql) || 0) + 1);
+  }
+
+  failIfConfigured(sql) {
+    const remaining = this.failures.get(sql) || 0;
+    if (remaining > 0) {
+      this.failures.set(sql, remaining - 1);
+      throw new Error("D1 temporarily unavailable");
+    }
   }
 }
 
@@ -165,4 +183,35 @@ test("bridge allocates numeric IDs without reuse", async () => {
   assert.deepEqual(await firstResponse.json(), { ok: true, id: 11 });
   assert.deepEqual(await secondResponse.json(), { ok: true, id: 12 });
   assert.equal(missingResponse.status, 400);
+});
+
+
+test("bridge retries reads once but never retries mutations", async () => {
+  const database = new FakeDatabase();
+  database.failures.set("select one", 1);
+  database.failures.set("select all", 2);
+  database.failures.set("update services set title = 'Changed'", 1);
+
+  const recovered = await handleD1Request(
+    request({ operation: "fetch_one", sql: "select one" }),
+    database,
+  );
+  const exhausted = await handleD1Request(
+    request({ operation: "fetch_all", sql: "select all" }),
+    database,
+  );
+  const mutation = await handleD1Request(
+    request({
+      operation: "execute",
+      sql: "update services set title = 'Changed'",
+    }),
+    database,
+  );
+
+  assert.equal(recovered.status, 200);
+  assert.equal(exhausted.status, 503);
+  assert.equal(mutation.status, 503);
+  assert.equal(database.attempts.get("select one"), 2);
+  assert.equal(database.attempts.get("select all"), 2);
+  assert.equal(database.attempts.get("update services set title = 'Changed'"), 1);
 });
