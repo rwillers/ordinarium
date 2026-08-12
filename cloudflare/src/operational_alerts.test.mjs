@@ -120,6 +120,23 @@ test("runtime failures are sanitized and raw exception text never crosses the qu
 });
 
 
+test("D1 runtime exceptions use the D1 fingerprint without exposing the exception", () => {
+  const [alert] = alertsFromTrace(trace([], {
+    outcome: "exception",
+    exceptions: [{
+      name: "Error",
+      message: "D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
+      timestamp: Date.now(),
+    }],
+  }));
+
+  assert.equal(alert.kind, "d1_failure");
+  assert.equal(alert.source.container_role, "d1-bridge");
+  assert.equal(alert.source.error_category, "internal");
+  assert.equal(JSON.stringify(alert).includes("storage operation"), false);
+});
+
+
 test("expected deployment resets do not page as runtime failures", () => {
   const alerts = alertsFromTrace(trace([], {
     outcome: "exception",
@@ -218,6 +235,35 @@ test("tail dispatch enqueues once per fingerprint inside the dedupe window", asy
   assert.equal(messages.length, 1);
   assert.equal(messages[0].kind, "d1_failure");
   assert.ok(alertFingerprint(messages[0]).includes("d1_failure"));
+});
+
+
+test("D1 telemetry and a related runtime exception deduplicate across traces", async () => {
+  const messages = [];
+  const environment = {
+    ALERTS_QUEUE: { send: async (message) => messages.push(message) },
+    ALERT_DEDUPLICATOR: new FakeDeduplicatorNamespace(),
+    ALERT_DEDUPE_WINDOW_SECONDS: "900",
+  };
+  const telemetry = trace([{
+    event: "d1_operation_failure",
+    container_role: "d1-bridge",
+    error_category: "internal",
+  }]);
+  const runtime = trace([], {
+    outcome: "exception",
+    exceptions: [{
+      name: "Error",
+      message: "D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
+      timestamp: Date.now(),
+    }],
+  });
+
+  await handleTailEvents([telemetry], environment);
+  await handleTailEvents([runtime], environment);
+
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].kind, "d1_failure");
 });
 
 

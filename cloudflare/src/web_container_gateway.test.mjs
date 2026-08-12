@@ -34,15 +34,18 @@ test("safe requests retry one recognized container startup failure", async () =>
     new Response("ready", { status: 200 }),
   ]);
 
+  const delays = [];
   const result = await fetchWebContainer(
     container,
     new Request("https://ordinarium.com/login"),
+    async (milliseconds) => delays.push(milliseconds),
   );
 
   assert.equal(result.response.status, 200);
   assert.equal(await result.response.text(), "ready");
   assert.equal(result.retryOutcome, "succeeded");
   assert.equal(container.requests.length, 2);
+  assert.deepEqual(delays, [250]);
 });
 
 
@@ -50,11 +53,14 @@ test("repeated transient startup failures become a controlled 503", async () => 
   const container = new FakeContainer([
     transientResponse(),
     transientResponse("Container suddenly disconnected, try again"),
+    transientResponse("Error proxying request to container: not ready"),
   ]);
 
+  const delays = [];
   const result = await fetchWebContainer(
     container,
     new Request("https://ordinarium.com/"),
+    async (milliseconds) => delays.push(milliseconds),
   );
 
   assert.equal(result.response.status, 503);
@@ -63,7 +69,27 @@ test("repeated transient startup failures become a controlled 503", async () => 
     error: "web_container_unavailable",
   });
   assert.equal(result.retryOutcome, "exhausted");
-  assert.equal(container.requests.length, 2);
+  assert.equal(container.requests.length, 3);
+  assert.deepEqual(delays, [250, 750]);
+});
+
+
+test("safe requests can recover on the final bounded retry", async () => {
+  const container = new FakeContainer([
+    transientResponse(),
+    transientResponse(),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/login"),
+    async () => undefined,
+  );
+
+  assert.equal(result.response.status, 200);
+  assert.equal(result.retryOutcome, "succeeded");
+  assert.equal(container.requests.length, 3);
 });
 
 

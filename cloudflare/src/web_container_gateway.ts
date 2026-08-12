@@ -4,6 +4,9 @@ const TRANSIENT_CONTAINER_FAILURE_PREFIXES = [
   "Error proxying request to container:",
 ] as const;
 const MAX_TRANSIENT_RESPONSE_BYTES = 512;
+const TRANSIENT_RETRY_DELAYS_MS = [250, 750] as const;
+
+type Delay = (milliseconds: number) => Promise<void>;
 
 interface WebContainerStub {
   fetch(request: Request): Promise<Response>;
@@ -17,25 +20,29 @@ export type WebContainerResult = {
 export const fetchWebContainer = async (
   container: WebContainerStub,
   request: Request,
+  delay: Delay = wait,
 ): Promise<WebContainerResult> => {
-  const retryRequest = isRetryableMethod(request.method)
-    ? new Request(request)
-    : null;
-  const response = await container.fetch(request);
-  if (!retryRequest) {
+  const retryRequests = isRetryableMethod(request.method)
+    ? TRANSIENT_RETRY_DELAYS_MS.map(() => new Request(request))
+    : [];
+  let response = await container.fetch(request);
+  if (retryRequests.length === 0) {
     return { response, retryOutcome: "none" };
   }
   if (!(await isTransientContainerFailure(response))) {
     return { response, retryOutcome: "none" };
   }
 
-  await response.body?.cancel();
-  const retryResponse = await container.fetch(retryRequest);
-  if (!(await isTransientContainerFailure(retryResponse))) {
-    return { response: retryResponse, retryOutcome: "succeeded" };
+  for (const [index, retryRequest] of retryRequests.entries()) {
+    await response.body?.cancel();
+    await delay(TRANSIENT_RETRY_DELAYS_MS[index]);
+    response = await container.fetch(retryRequest);
+    if (!(await isTransientContainerFailure(response))) {
+      return { response, retryOutcome: "succeeded" };
+    }
   }
 
-  await retryResponse.body?.cancel();
+  await response.body?.cancel();
   return {
     response: Response.json(
       { error: "web_container_unavailable" },
@@ -47,6 +54,9 @@ export const fetchWebContainer = async (
     retryOutcome: "exhausted",
   };
 };
+
+const wait: Delay = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const isRetryableMethod = (method: string): boolean =>
   method === "GET" || method === "HEAD";

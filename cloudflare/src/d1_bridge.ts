@@ -9,6 +9,19 @@ const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_SQL_BYTES = 64 * 1024;
 const MAX_PARAMS = 500;
 const MAX_BATCH_STATEMENTS = 50;
+const D1_READ_RETRY_DELAYS_MS = [250, 1_000, 2_500] as const;
+const RETRYABLE_D1_ERROR_FRAGMENTS = [
+  "Network connection lost",
+  "caused object to be reset",
+  "reset because its code was updated",
+  "Cannot resolve D1 DB due to transient issue",
+  "Replica disconnected from primary",
+] as const;
+
+type D1ReadRetryOptions = {
+  sleep?: (milliseconds: number) => Promise<void>;
+  random?: () => number;
+};
 
 type StatementInput = {
   sql: string;
@@ -34,6 +47,7 @@ type NormalizedMetadata = {
 export const handleD1Request = async (
   request: Request,
   database: D1Database,
+  retryOptions: D1ReadRetryOptions = {},
 ): Promise<Response> => {
   if (request.method !== "POST") {
     return jsonError("method_not_allowed", 405);
@@ -41,13 +55,25 @@ export const handleD1Request = async (
 
   const requestId =
     request.headers.get(REQUEST_ID_HEADER) || createRequestId();
+  let databaseOperation = "unknown";
   try {
     const payload = await readPayload(request);
+    databaseOperation = normalizedOperation(payload.operation);
     switch (payload.operation) {
       case "fetch_one":
-        return await fetchOne(database, parseStatement(payload), requestId);
+        return await fetchOne(
+          database,
+          parseStatement(payload),
+          requestId,
+          retryOptions,
+        );
       case "fetch_all":
-        return await fetchAll(database, parseStatement(payload), requestId);
+        return await fetchAll(
+          database,
+          parseStatement(payload),
+          requestId,
+          retryOptions,
+        );
       case "execute":
         return await execute(database, parseStatement(payload));
       case "batch":
@@ -65,6 +91,7 @@ export const handleD1Request = async (
       request_id: requestId,
       container_role: "d1-bridge",
       error_category: errorCategory(error),
+      database_operation: databaseOperation,
     });
     return jsonError("database_operation_failed", 503);
   }
@@ -74,10 +101,13 @@ const fetchOne = async (
   database: D1Database,
   input: StatementInput,
   requestId: string,
+  retryOptions: D1ReadRetryOptions,
 ) => {
   const row = await retryRead(
     () => prepare(database, input).first<Record<string, unknown>>(),
     requestId,
+    "fetch_one",
+    retryOptions,
   );
   return Response.json({ ok: true, row });
 };
@@ -86,10 +116,13 @@ const fetchAll = async (
   database: D1Database,
   input: StatementInput,
   requestId: string,
+  retryOptions: D1ReadRetryOptions,
 ) => {
   const result = await retryRead(
     () => prepare(database, input).run<Record<string, unknown>>(),
     requestId,
+    "fetch_all",
+    retryOptions,
   );
   return Response.json({
     ok: true,
@@ -133,18 +166,51 @@ const prepare = (database: D1Database, input: StatementInput) =>
 const retryRead = async <T>(
   operation: () => Promise<T>,
   requestId: string,
+  databaseOperation: string,
+  options: D1ReadRetryOptions,
 ): Promise<T> => {
-  try {
-    return await operation();
-  } catch (error: unknown) {
-    emitTelemetry("warn", "d1_operation_retry", {
-      request_id: requestId,
-      container_role: "d1-bridge",
-      error_category: errorCategory(error),
-    });
-    return operation();
+  const sleep = options.sleep ?? wait;
+  const random = options.random ?? Math.random;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      const delay = D1_READ_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || !isRetryableD1Error(error)) {
+        throw error;
+      }
+      const retryDelayMs = jitteredDelay(delay, random());
+      emitTelemetry("warn", "d1_operation_retry", {
+        request_id: requestId,
+        container_role: "d1-bridge",
+        error_category: errorCategory(error),
+        database_operation: databaseOperation,
+        attempts: attempt + 1,
+        retry_delay_ms: retryDelayMs,
+      });
+      await sleep(retryDelayMs);
+    }
   }
 };
+
+const isRetryableD1Error = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return RETRYABLE_D1_ERROR_FRAGMENTS.some((fragment) =>
+    message.includes(fragment),
+  );
+};
+
+const jitteredDelay = (baseDelayMs: number, randomValue: number): number =>
+  Math.round(baseDelayMs * (0.75 + Math.min(1, Math.max(0, randomValue)) * 0.5));
+
+const wait = (milliseconds: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+const normalizedOperation = (value: unknown): string =>
+  typeof value === "string" &&
+  ["fetch_one", "fetch_all", "execute", "batch", "allocate_id"].includes(value)
+    ? value
+    : "unknown";
 
 const readPayload = async (request: Request): Promise<BridgePayload> => {
   const declaredLength = Number(request.headers.get("content-length") || 0);
