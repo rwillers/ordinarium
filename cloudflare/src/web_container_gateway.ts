@@ -1,10 +1,37 @@
-const TRANSIENT_CONTAINER_FAILURE_PREFIXES = [
-  "Failed to start container:",
-  "Container suddenly disconnected, try again",
-  "Error proxying request to container:",
-  "There is no Container instance available at this time.",
+const TRANSIENT_CONTAINER_FAILURES = [
+  {
+    status: 429,
+    matches: (body: string) =>
+      body
+        .toLowerCase()
+        .includes("you are requesting too many containers per second"),
+    forceReadinessCheck: false,
+  },
+  {
+    status: 500,
+    matches: (body: string) => body.startsWith("Failed to start container:"),
+    forceReadinessCheck: true,
+  },
+  {
+    status: 500,
+    matches: (body: string) =>
+      body.startsWith("Container suddenly disconnected, try again"),
+    forceReadinessCheck: true,
+  },
+  {
+    status: 500,
+    matches: (body: string) =>
+      body.startsWith("Error proxying request to container:"),
+    forceReadinessCheck: true,
+  },
+  {
+    status: 503,
+    matches: (body: string) =>
+      body.startsWith("There is no Container instance available at this time."),
+    forceReadinessCheck: true,
+  },
 ] as const;
-const TRANSIENT_CONTAINER_STATUSES = new Set([429, 502, 503, 504]);
+const NON_REPLAYABLE_GET_PATHS = new Set(["/integrations/pco/callback"]);
 const MAX_TRANSIENT_RESPONSE_BYTES = 512;
 const DEFAULT_RETRY_DELAYS_MS = [250, 750] as const;
 
@@ -35,7 +62,7 @@ export const fetchWebContainer = async (
   const retryDelaysMs = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
   const sleep = options.sleep ?? wait;
   const random = options.random ?? randomFraction;
-  const canRetry = isRetryableMethod(request.method);
+  const canRetry = isReplaySafeRequest(request);
   const maxAttempts = canRetry ? retryDelaysMs.length + 1 : 1;
   let forceReadinessCheck = false;
 
@@ -81,30 +108,48 @@ export const fetchWebContainer = async (
   return exhaustedResult(maxAttempts);
 };
 
-const isRetryableMethod = (method: string): boolean =>
-  method === "GET" || method === "HEAD";
+const isReplaySafeRequest = (request: Request): boolean => {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false;
+  }
+
+  // The PCO callback consumes a one-time OAuth code before all application
+  // persistence has completed. Replaying it can turn a recoverable storage
+  // failure into an authorization error because that code is already spent.
+  try {
+    const pathname = decodeURIComponent(new URL(request.url).pathname);
+    return !NON_REPLAYABLE_GET_PATHS.has(pathname);
+  } catch {
+    // If the path cannot be canonicalized, prefer one attempt over risking a
+    // replay of a route that the downstream HTTP server may still decode.
+    return false;
+  }
+};
 
 const transientContainerFailure = async (
   response: Response,
 ): Promise<{ retry: boolean; forceReadinessCheck: boolean }> => {
-  const retryStatus = TRANSIENT_CONTAINER_STATUSES.has(response.status);
-  if (response.status !== 500 && response.status !== 503) {
-    return { retry: retryStatus, forceReadinessCheck: false };
+  const possibleFailures = TRANSIENT_CONTAINER_FAILURES.filter(
+    (failure) => failure.status === response.status,
+  );
+  if (possibleFailures.length === 0) {
+    return { retry: false, forceReadinessCheck: false };
   }
   const contentType = response.headers.get("content-type") || "";
   if (contentType.split(";", 1)[0].trim().toLowerCase() !== "text/plain") {
-    return { retry: retryStatus, forceReadinessCheck: false };
+    return { retry: false, forceReadinessCheck: false };
   }
   const body = await readBoundedText(
     response.clone(),
     MAX_TRANSIENT_RESPONSE_BYTES,
   );
-  const forceReadinessCheck =
-    body !== null &&
-    TRANSIENT_CONTAINER_FAILURE_PREFIXES.some((prefix) => body.startsWith(prefix));
+  const failure =
+    body === null
+      ? undefined
+      : possibleFailures.find(({ matches }) => matches(body));
   return {
-    retry: retryStatus || forceReadinessCheck,
-    forceReadinessCheck,
+    retry: failure !== undefined,
+    forceReadinessCheck: failure?.forceReadinessCheck ?? false,
   };
 };
 
