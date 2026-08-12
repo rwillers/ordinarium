@@ -101,10 +101,14 @@ test("safe requests recover from a thrown container RPC failure", async () => {
 });
 
 
-test("temporary platform HTTP statuses are retried", async () => {
+test("recognized platform HTTP responses are retried", async () => {
   const container = new FakeContainer([
-    new Response("rate limited", { status: 429 }),
-    new Response("bad gateway", { status: 502 }),
+    new Response("you are requesting too many containers per second", {
+      status: 429,
+    }),
+    new Response("There is no Container instance available at this time.", {
+      status: 503,
+    }),
     new Response("ready", { status: 200 }),
   ]);
 
@@ -117,13 +121,17 @@ test("temporary platform HTTP statuses are retried", async () => {
   assert.equal(result.response.status, 200);
   assert.equal(result.retryOutcome, "succeeded");
   assert.equal(result.attempts, 3);
-  assert.deepEqual(container.forceReadinessChecks, [false, false, false]);
+  assert.deepEqual(container.forceReadinessChecks, [false, false, true]);
 });
 
 
-test("application 503 retries without forcing a redundant readiness probe", async () => {
+test("application JSON 503 responses are not retried", async () => {
+  const applicationFailure = Response.json(
+    { error: "database_unavailable" },
+    { status: 503 },
+  );
   const container = new FakeContainer([
-    Response.json({ error: "database_unavailable" }, { status: 503 }),
+    applicationFailure,
     new Response("ready", { status: 200 }),
   ]);
 
@@ -133,9 +141,63 @@ test("application 503 retries without forcing a redundant readiness probe", asyn
     immediateRetries,
   );
 
-  assert.equal(result.response.status, 200);
-  assert.equal(result.retryOutcome, "succeeded");
-  assert.deepEqual(container.forceReadinessChecks, [false, false]);
+  assert.equal(result.response.status, 503);
+  assert.deepEqual(await result.response.json(), {
+    error: "database_unavailable",
+  });
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+  assert.deepEqual(container.forceReadinessChecks, [false]);
+});
+
+
+test("application text 503 responses are not retried", async () => {
+  const message = "The database is temporarily unavailable. Please try again.";
+  const container = new FakeContainer([
+    new Response(message, {
+      status: 503,
+      headers: {
+        "content-type": "text/plain;charset=UTF-8",
+        "retry-after": "1",
+      },
+    }),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/service/1"),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 503);
+  assert.equal(await result.response.text(), message);
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+  assert.deepEqual(container.forceReadinessChecks, [false]);
+});
+
+
+test("bare transient-looking statuses are not retried", async () => {
+  for (const status of [429, 502, 503, 504]) {
+    const container = new FakeContainer([
+      new Response("application response", { status }),
+      new Response("ready", { status: 200 }),
+    ]);
+
+    const result = await fetchWebContainer(
+      container,
+      new Request("https://ordinarium.com/"),
+      immediateRetries,
+    );
+
+    assert.equal(result.response.status, status);
+    assert.equal(result.retryOutcome, "none");
+    assert.equal(result.attempts, 1);
+    assert.equal(container.requests.length, 1);
+  }
 });
 
 
@@ -227,6 +289,46 @@ test("unsafe requests surface thrown failures without replaying", async () => {
     fetchWebContainer(
       container,
       new Request("https://ordinarium.com/login", { method: "POST" }),
+      immediateRetries,
+    ),
+    error,
+  );
+  assert.equal(container.requests.length, 1);
+});
+
+
+test("OAuth callbacks do not replay recognized platform responses", async () => {
+  const container = new FakeContainer([
+    transientResponse(),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request(
+      "https://ordinarium.com/integrations/pco/callback?code=once&state=valid",
+    ),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 500);
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+  assert.deepEqual(container.forceReadinessChecks, [false]);
+});
+
+
+test("OAuth callbacks surface thrown failures without replaying", async () => {
+  const error = new Error("container RPC unavailable");
+  const container = new FakeContainer([error]);
+
+  await assert.rejects(
+    fetchWebContainer(
+      container,
+      new Request(
+        "https://ordinarium.com/integrations/pco/callback?code=once&state=valid",
+      ),
       immediateRetries,
     ),
     error,
