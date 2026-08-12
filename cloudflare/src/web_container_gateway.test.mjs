@@ -103,9 +103,10 @@ test("safe requests recover from a thrown container RPC failure", async () => {
 
 test("recognized platform HTTP responses are retried", async () => {
   const container = new FakeContainer([
-    new Response("you are requesting too many containers per second", {
-      status: 429,
-    }),
+    new Response(
+      "Allocation failed: You Are Requesting Too Many Containers Per Second; retry later",
+      { status: 429 },
+    ),
     new Response("There is no Container instance available at this time.", {
       status: 503,
     }),

@@ -1,27 +1,33 @@
 const TRANSIENT_CONTAINER_FAILURES = [
   {
     status: 429,
-    prefix: "you are requesting too many containers per second",
+    matches: (body: string) =>
+      body
+        .toLowerCase()
+        .includes("you are requesting too many containers per second"),
     forceReadinessCheck: false,
   },
   {
     status: 500,
-    prefix: "Failed to start container:",
+    matches: (body: string) => body.startsWith("Failed to start container:"),
     forceReadinessCheck: true,
   },
   {
     status: 500,
-    prefix: "Container suddenly disconnected, try again",
+    matches: (body: string) =>
+      body.startsWith("Container suddenly disconnected, try again"),
     forceReadinessCheck: true,
   },
   {
     status: 500,
-    prefix: "Error proxying request to container:",
+    matches: (body: string) =>
+      body.startsWith("Error proxying request to container:"),
     forceReadinessCheck: true,
   },
   {
     status: 503,
-    prefix: "There is no Container instance available at this time.",
+    matches: (body: string) =>
+      body.startsWith("There is no Container instance available at this time."),
     forceReadinessCheck: true,
   },
 ] as const;
@@ -140,7 +146,7 @@ const transientContainerFailure = async (
   const failure =
     body === null
       ? undefined
-      : possibleFailures.find(({ prefix }) => body.startsWith(prefix));
+      : possibleFailures.find(({ matches }) => matches(body));
   return {
     retry: failure !== undefined,
     forceReadinessCheck: failure?.forceReadinessCheck ?? false,
