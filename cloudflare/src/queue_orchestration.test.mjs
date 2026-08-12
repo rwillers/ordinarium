@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  ALERT_DLQ_NAME,
-  ALERT_QUEUE_NAME,
-} from "./operational_alerts.ts";
-import {
-  EMAIL_DLQ_NAME,
-  EMAIL_QUEUE_NAME,
-  PCO_DLQ_NAME,
-  PCO_QUEUE_NAME,
-  handleQueueBatch,
-} from "./queue_consumer.ts";
+import { deploymentResources } from "./deployment_resources.ts";
+import { handleQueueBatch } from "./queue_consumer.ts";
 import { handleQueuePublishRequest } from "./queue_publisher.ts";
+
+
+const STAGING_RESOURCES = deploymentResources("staging");
+const {
+  alertDlq: ALERT_DLQ_NAME,
+  alertQueue: ALERT_QUEUE_NAME,
+  emailDlq: EMAIL_DLQ_NAME,
+  emailQueue: EMAIL_QUEUE_NAME,
+  pcoDlq: PCO_DLQ_NAME,
+  pcoQueue: PCO_QUEUE_NAME,
+} = STAGING_RESOURCES;
 
 
 class FakeQueue {
@@ -86,6 +88,7 @@ const consumerEnvironment = (pcoResponse, emailResponse = pcoResponse) => ({
   EMAIL_JOBS_CONTAINER: new FakeNamespace(emailResponse),
   PCO_JOB_SERVICE_AUTH_TOKEN: "pco-job-secret",
   EMAIL_JOB_SERVICE_AUTH_TOKEN: "email-job-secret",
+  DEPLOYMENT_ENV: "staging",
 });
 
 
@@ -178,6 +181,28 @@ test("consumer injects role auth and acks only persisted terminal responses", as
     row_id: "row-1",
     user_id: 7,
   });
+});
+
+
+test("consumer derives production queue and instance names from the deployment", async () => {
+  const environment = {
+    ...consumerEnvironment(
+      () => Response.json({ disposition: "terminal", persisted: true }),
+    ),
+    DEPLOYMENT_ENV: "production",
+  };
+  const resources = deploymentResources("production");
+  const message = queueMessage({ job_id: "job-1", row_id: "row-1", user_id: 7 });
+
+  await handleQueueBatch(
+    { queue: resources.pcoQueue, messages: [message] },
+    environment,
+  );
+
+  assert.equal(message.acknowledged, true);
+  assert.deepEqual(environment.PCO_JOBS_CONTAINER.instanceNames, [
+    "production-pco-jobs",
+  ]);
 });
 
 

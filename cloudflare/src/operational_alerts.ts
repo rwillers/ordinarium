@@ -1,8 +1,5 @@
 import { sanitizeIdentifier, sanitizeRoute } from "./telemetry.ts";
 
-export const ALERT_QUEUE_NAME = "ordinarium-app-staging-alerts";
-export const ALERT_DLQ_NAME = `${ALERT_QUEUE_NAME}-dlq`;
-
 export const ALERT_KINDS = [
   "worker_runtime_failure",
   "worker_request_failure",

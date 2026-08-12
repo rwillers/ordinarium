@@ -1,9 +1,9 @@
 import { parseEmailMessage, parsePcoRowMessage } from "./queue_publisher.ts";
 import {
-  ALERT_DLQ_NAME,
-  ALERT_QUEUE_NAME,
-  parseOperationalAlert,
-} from "./operational_alerts.ts";
+  deploymentResources,
+  type DeploymentResources,
+} from "./deployment_resources.ts";
+import { parseOperationalAlert } from "./operational_alerts.ts";
 import {
   createRequestId,
   emitTelemetry,
@@ -15,11 +15,6 @@ import {
 const JOB_AUTH_HEADER = "X-Ordinarium-Job-Auth";
 const JOB_REQUEST_TIMEOUT_MS = 115_000;
 const MAX_RETRY_DELAY_SECONDS = 86_400;
-
-export const PCO_QUEUE_NAME = "ordinarium-app-staging-pco-jobs";
-export const PCO_DLQ_NAME = `${PCO_QUEUE_NAME}-dlq`;
-export const EMAIL_QUEUE_NAME = "ordinarium-app-staging-email-jobs";
-export const EMAIL_DLQ_NAME = `${EMAIL_QUEUE_NAME}-dlq`;
 
 interface JobContainerStub {
   fetch(request: Request): Promise<Response>;
@@ -34,6 +29,7 @@ export interface QueueConsumerEnvironment {
   EMAIL_JOBS_CONTAINER: JobContainerNamespace;
   PCO_JOB_SERVICE_AUTH_TOKEN?: string;
   EMAIL_JOB_SERVICE_AUTH_TOKEN?: string;
+  DEPLOYMENT_ENV: string;
 }
 
 interface QueueMessageLike {
@@ -52,7 +48,7 @@ interface QueueBatchLike {
 interface ConsumerRoute {
   parse: (body: unknown) => object | null;
   namespace: JobContainerNamespace;
-  instanceName: () => string;
+  instanceName: (jobId: string) => string;
   path: string;
   authToken?: string;
   queueName: string;
@@ -60,13 +56,15 @@ interface ConsumerRoute {
   dlq: boolean;
 }
 
-let nextEmailInstance = 0;
-
 export const handleQueueBatch = async (
   batch: QueueBatchLike,
   environment: QueueConsumerEnvironment,
 ): Promise<void> => {
-  const route = routeForQueue(batch.queue, environment);
+  const route = routeForQueue(
+    batch.queue,
+    environment,
+    deploymentResources(environment.DEPLOYMENT_ENV),
+  );
   if (!route) {
     emitTelemetry("error", "queue_unknown_batch", {
       queue: sanitizeIdentifier(batch.queue),
@@ -127,7 +125,9 @@ const deliverMessage = async (
 
   let response: Response;
   try {
-    response = await route.namespace.getByName(route.instanceName()).fetch(request);
+    response = await route.namespace
+      .getByName(route.instanceName(jobId))
+      .fetch(request);
   } catch (error: unknown) {
     emitTelemetry("error", "queue_delivery_failure", {
       request_id: requestId,
@@ -182,59 +182,54 @@ const deliverMessage = async (
 const routeForQueue = (
   queueName: string,
   environment: QueueConsumerEnvironment,
+  resources: DeploymentResources,
 ): ConsumerRoute | null => {
-  if (queueName === PCO_QUEUE_NAME || queueName === PCO_DLQ_NAME) {
+  if (queueName === resources.pcoQueue || queueName === resources.pcoDlq) {
     // DLQ retries are finite even at the platform maximum. A later scheduled D1
     // reconciliation pass must terminalize stale records after a prolonged
     // container or D1 outage; queue delivery alone cannot guarantee that state.
     return {
       parse: parsePcoRowMessage,
       namespace: environment.PCO_JOBS_CONTAINER,
-      instanceName: () => "staging-pco-jobs",
+      instanceName: () => resources.pcoJobsInstance,
       path:
-        queueName === PCO_QUEUE_NAME
+        queueName === resources.pcoQueue
           ? "/jobs/pco/rows/process"
           : "/jobs/pco/rows/dead-letter",
       authToken: environment.PCO_JOB_SERVICE_AUTH_TOKEN,
       queueName,
       role: "pco-jobs",
-      dlq: queueName === PCO_DLQ_NAME,
+      dlq: queueName === resources.pcoDlq,
     };
   }
-  if (queueName === EMAIL_QUEUE_NAME || queueName === EMAIL_DLQ_NAME) {
+  if (queueName === resources.emailQueue || queueName === resources.emailDlq) {
     return {
       parse: parseEmailMessage,
       namespace: environment.EMAIL_JOBS_CONTAINER,
-      instanceName: selectEmailInstanceName,
+      instanceName: resources.emailJobsInstance,
       path:
-        queueName === EMAIL_QUEUE_NAME
+        queueName === resources.emailQueue
           ? "/jobs/email/resets/process"
           : "/jobs/email/resets/dead-letter",
       authToken: environment.EMAIL_JOB_SERVICE_AUTH_TOKEN,
       queueName,
       role: "email-jobs",
-      dlq: queueName === EMAIL_DLQ_NAME,
+      dlq: queueName === resources.emailDlq,
     };
   }
-  if (queueName === ALERT_QUEUE_NAME || queueName === ALERT_DLQ_NAME) {
+  if (queueName === resources.alertQueue || queueName === resources.alertDlq) {
     return {
       parse: parseOperationalAlert,
       namespace: environment.EMAIL_JOBS_CONTAINER,
-      instanceName: selectEmailInstanceName,
+      instanceName: resources.emailJobsInstance,
       path: "/jobs/email/alerts/process",
       authToken: environment.EMAIL_JOB_SERVICE_AUTH_TOKEN,
       queueName,
       role: "email-jobs",
-      dlq: queueName === ALERT_DLQ_NAME,
+      dlq: queueName === resources.alertDlq,
     };
   }
   return null;
-};
-
-const selectEmailInstanceName = (): string => {
-  const name = `staging-email-jobs-${nextEmailInstance}`;
-  nextEmailInstance = (nextEmailInstance + 1) % 2;
-  return name;
 };
 
 const readJobDisposition = async (

@@ -8,11 +8,13 @@ def test_worker_routes_to_named_web_and_document_containers():
     worker = (ROOT / "cloudflare/src/index.ts").read_text()
     orchestrator = (ROOT / "cloudflare/src/document_orchestrator.ts").read_text()
 
-    assert "getByName(WEB_INSTANCE_NAME)" in worker
+    assert "deploymentResources(environment.DEPLOYMENT_ENV)" in worker
+    assert "resources.webInstance" in worker
+    assert "fetchWebContainer" in worker
+    assert '"container_start_failure"' in worker
     assert '"documents.internal"' in worker
     assert "handleDocumentRequest(request, environment)" in worker
-    assert '"staging-documents-0"' in orchestrator
-    assert '"staging-documents-1"' in orchestrator
+    assert "documentInstance(requestId)" in orchestrator
     assert '"X-Ordinarium-Document-Auth"' in orchestrator
     assert "ContainerProxy" in worker
 
@@ -35,6 +37,7 @@ def test_web_startup_is_optimized_for_d1():
     assert "--preload" in startup
     assert "python -m compileall -q /app/ordinarium /app/app.py" in dockerfile
     assert "--timeout=125" in startup
+    assert 'sleepAfter = "30m"' in worker
 
 
 def test_web_container_disables_access_logging_for_token_bearing_routes():

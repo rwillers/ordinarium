@@ -28,12 +28,49 @@ test("scheduled queue observability reads primary and dead-letter backlogs", asy
     PCO_JOBS_DLQ: new FakeQueue(metrics),
     EMAIL_JOBS_QUEUE: new FakeQueue(metrics),
     EMAIL_JOBS_DLQ: new FakeQueue(metrics),
+    DEPLOYMENT_ENV: "staging",
   };
 
   await emitQueueMetrics(environment, Date.parse("2026-07-18T12:00:00Z"));
 
   assert.deepEqual(
-    Object.values(environment).map((queue) => queue.calls),
+    Object.values(environment)
+      .filter((value) => value instanceof FakeQueue)
+      .map((queue) => queue.calls),
     [1, 1, 1, 1],
+  );
+});
+
+
+test("queue observability labels production resources correctly", async () => {
+  const metrics = {
+    backlogCount: 0,
+    backlogBytes: 0,
+    oldestMessageTimestamp: undefined,
+  };
+  const environment = {
+    PCO_JOBS_QUEUE: new FakeQueue(metrics),
+    PCO_JOBS_DLQ: new FakeQueue(metrics),
+    EMAIL_JOBS_QUEUE: new FakeQueue(metrics),
+    EMAIL_JOBS_DLQ: new FakeQueue(metrics),
+    DEPLOYMENT_ENV: "production",
+  };
+  const records = [];
+  const originalInfo = console.info;
+  console.info = (record) => records.push(record);
+  try {
+    await emitQueueMetrics(environment, Date.parse("2026-07-18T12:00:00Z"));
+  } finally {
+    console.info = originalInfo;
+  }
+
+  assert.deepEqual(
+    records.map((record) => record.queue).sort(),
+    [
+      "ordinarium-app-production-email-jobs",
+      "ordinarium-app-production-email-jobs-dlq",
+      "ordinarium-app-production-pco-jobs",
+      "ordinarium-app-production-pco-jobs-dlq",
+    ],
   );
 });
