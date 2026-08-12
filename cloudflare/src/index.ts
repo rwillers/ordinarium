@@ -2,6 +2,7 @@ import { Container, ContainerProxy } from "@cloudflare/containers";
 import { env } from "cloudflare:workers";
 
 import { redirectAliasToCanonicalOrigin } from "./canonical_origin";
+import { deploymentResources } from "./deployment_resources";
 import { handleD1Request } from "./d1_bridge";
 import { handleDocumentRequest } from "./document_orchestrator";
 import { handleEdgeRateLimit } from "./edge_security";
@@ -22,12 +23,12 @@ import {
   sanitizeRoute,
 } from "./telemetry";
 import { handleTurnstileRequest } from "./turnstile_gateway";
+import { fetchWebContainer } from "./web_container_gateway";
 
 export { ContainerProxy };
 export { AuthRateLimiter } from "./auth_rate_limiter";
 
 const APPLICATION_PORT = 8080;
-const WEB_INSTANCE_NAME = "staging-web";
 declare global {
   namespace Cloudflare {
     interface Env {
@@ -110,6 +111,13 @@ export class WebContainer extends Container {
 
   override onStart() {
     emitTelemetry("info", "container_started", { container_role: "web" });
+  }
+
+  override onError(error: unknown) {
+    emitTelemetry("error", "container_start_failure", {
+      container_role: "web",
+      error_category: errorCategory(error),
+    });
   }
 
   override onStop({ exitCode, reason }: { exitCode: number; reason: string }) {
@@ -276,10 +284,32 @@ const worker: ExportedHandler<Cloudflare.Env> = {
         return responseWithRequestId(response, requestId);
       }
       containerRole = "web";
-      const webContainer = environment.WEB_CONTAINER.getByName(WEB_INSTANCE_NAME);
+      const resources = deploymentResources(environment.DEPLOYMENT_ENV);
+      const webContainer = environment.WEB_CONTAINER.getByName(
+        resources.webInstance,
+      );
       const headers = new Headers(request.headers);
       headers.set(REQUEST_ID_HEADER, requestId);
-      response = await webContainer.fetch(new Request(request, { headers }));
+      const result = await fetchWebContainer(
+        webContainer,
+        new Request(request, { headers }),
+      );
+      response = result.response;
+      if (result.retryOutcome !== "none") {
+        emitTelemetry(
+          result.retryOutcome === "exhausted" ? "error" : "warn",
+          result.retryOutcome === "exhausted"
+            ? "worker_request_failure"
+            : "web_container_retry",
+          {
+            request_id: requestId,
+            route,
+            container_role: containerRole,
+            status: response.status,
+            error_category: "container_transient",
+          },
+        );
+      }
       return responseWithRequestId(response, requestId);
     } catch (error: unknown) {
       emitTelemetry("error", "worker_request_failure", {

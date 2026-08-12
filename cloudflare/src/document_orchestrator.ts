@@ -1,3 +1,4 @@
+import { deploymentResources } from "./deployment_resources.ts";
 import {
   createRequestId,
   emitTelemetry,
@@ -9,10 +10,6 @@ const DOCUMENT_AUTH_HEADER = "X-Ordinarium-Document-Auth";
 const DOCUMENT_MAX_REQUEST_BYTES = 5 * 1024 * 1024;
 const DOCUMENT_MAX_OUTPUT_BYTES = 25 * 1024 * 1024;
 const DOCUMENT_REQUEST_TIMEOUT_MS = 115_000;
-const DOCUMENT_INSTANCE_NAMES = [
-  "staging-documents-0",
-  "staging-documents-1",
-] as const;
 
 interface DocumentContainerStub {
   fetch(request: Request): Promise<Response>;
@@ -25,9 +22,8 @@ interface DocumentContainerNamespace {
 interface DocumentEnvironment {
   DOCUMENT_CONTAINER: DocumentContainerNamespace;
   DOCUMENT_SERVICE_AUTH_TOKEN?: string;
+  DEPLOYMENT_ENV: string;
 }
-
-let nextDocumentInstance = 0;
 
 export const handleDocumentRequest = async (
   request: Request,
@@ -63,7 +59,7 @@ export const handleDocumentRequest = async (
   }
 
   const container = environment.DOCUMENT_CONTAINER.getByName(
-    selectDocumentInstanceName(),
+    deploymentResources(environment.DEPLOYMENT_ENV).documentInstance(requestId),
   );
   const headers = new Headers({
     "content-type": "application/json",
@@ -94,13 +90,6 @@ export const handleDocumentRequest = async (
     emitExportFailure(requestId, errorCategory(error));
     return unavailableResponse();
   }
-};
-
-export const selectDocumentInstanceName = (): string => {
-  const instanceName = DOCUMENT_INSTANCE_NAMES[nextDocumentInstance];
-  nextDocumentInstance =
-    (nextDocumentInstance + 1) % DOCUMENT_INSTANCE_NAMES.length;
-  return instanceName;
 };
 
 const parseContentLength = (value: string | null): number | null => {

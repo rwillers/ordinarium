@@ -1,3 +1,7 @@
+import {
+  deploymentResources,
+  type DeploymentResources,
+} from "./deployment_resources.ts";
 import { emitTelemetry, errorCategory } from "./telemetry.ts";
 
 interface MetricsQueue {
@@ -13,11 +17,18 @@ export interface QueueObservabilityEnvironment {
   PCO_JOBS_DLQ: MetricsQueue;
   EMAIL_JOBS_QUEUE: MetricsQueue;
   EMAIL_JOBS_DLQ: MetricsQueue;
+  DEPLOYMENT_ENV: string;
 }
 
 type QueuePolicy = {
-  name: string;
-  binding: keyof QueueObservabilityEnvironment;
+  resource: keyof Pick<
+    DeploymentResources,
+    "pcoQueue" | "pcoDlq" | "emailQueue" | "emailDlq"
+  >;
+  binding: keyof Pick<
+    QueueObservabilityEnvironment,
+    "PCO_JOBS_QUEUE" | "PCO_JOBS_DLQ" | "EMAIL_JOBS_QUEUE" | "EMAIL_JOBS_DLQ"
+  >;
   role: "pco-jobs" | "email-jobs";
   dlq: boolean;
   backlogThreshold: number;
@@ -26,7 +37,7 @@ type QueuePolicy = {
 
 const QUEUE_POLICIES: readonly QueuePolicy[] = [
   {
-    name: "ordinarium-app-staging-pco-jobs",
+    resource: "pcoQueue",
     binding: "PCO_JOBS_QUEUE",
     role: "pco-jobs",
     dlq: false,
@@ -34,7 +45,7 @@ const QUEUE_POLICIES: readonly QueuePolicy[] = [
     oldestAgeThresholdSeconds: 300,
   },
   {
-    name: "ordinarium-app-staging-pco-jobs-dlq",
+    resource: "pcoDlq",
     binding: "PCO_JOBS_DLQ",
     role: "pco-jobs",
     dlq: true,
@@ -42,7 +53,7 @@ const QUEUE_POLICIES: readonly QueuePolicy[] = [
     oldestAgeThresholdSeconds: 0,
   },
   {
-    name: "ordinarium-app-staging-email-jobs",
+    resource: "emailQueue",
     binding: "EMAIL_JOBS_QUEUE",
     role: "email-jobs",
     dlq: false,
@@ -50,7 +61,7 @@ const QUEUE_POLICIES: readonly QueuePolicy[] = [
     oldestAgeThresholdSeconds: 120,
   },
   {
-    name: "ordinarium-app-staging-email-jobs-dlq",
+    resource: "emailDlq",
     binding: "EMAIL_JOBS_DLQ",
     role: "email-jobs",
     dlq: true,
@@ -63,6 +74,7 @@ export const emitQueueMetrics = async (
   environment: QueueObservabilityEnvironment,
   now = Date.now(),
 ): Promise<void> => {
+  const resources = deploymentResources(environment.DEPLOYMENT_ENV);
   await Promise.all(
     QUEUE_POLICIES.map(async (policy) => {
       try {
@@ -78,7 +90,7 @@ export const emitQueueMetrics = async (
           : metrics.backlogCount > policy.backlogThreshold ||
             oldestAgeSeconds > policy.oldestAgeThresholdSeconds;
         emitTelemetry(thresholdExceeded ? "error" : "info", "queue_metrics", {
-          queue: policy.name,
+          queue: resources[policy.resource],
           container_role: policy.role,
           backlog_count: metrics.backlogCount,
           backlog_bytes: metrics.backlogBytes,
@@ -93,7 +105,7 @@ export const emitQueueMetrics = async (
         });
       } catch (error: unknown) {
         emitTelemetry("error", "queue_metrics_failure", {
-          queue: policy.name,
+          queue: resources[policy.resource],
           container_role: policy.role,
           dlq: policy.dlq,
           error_category: errorCategory(error),

@@ -42,10 +42,14 @@ test("orchestrator uses both document instances and injects only private headers
   const environment = {
     DOCUMENT_CONTAINER: namespace,
     DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+    DEPLOYMENT_ENV: "staging",
   };
 
   const first = await handleDocumentRequest(renderRequest(), environment);
-  const second = await handleDocumentRequest(renderRequest(), environment);
+  const second = await handleDocumentRequest(
+    renderRequest({ headers: { "x-ordinarium-request-id": "request-456" } }),
+    environment,
+  );
 
   assert.equal(first.status, 200);
   assert.equal(second.status, 200);
@@ -54,12 +58,15 @@ test("orchestrator uses both document instances and injects only private headers
     new Set(namespace.instanceNames),
     new Set(["staging-documents-0", "staging-documents-1"]),
   );
-  for (const request of namespace.requests) {
+  for (const [index, request] of namespace.requests.entries()) {
     assert.equal(
       request.headers.get("x-ordinarium-document-auth"),
       "document-secret",
     );
-    assert.equal(request.headers.get("x-ordinarium-request-id"), "request-123");
+    assert.equal(
+      request.headers.get("x-ordinarium-request-id"),
+      index === 0 ? "request-123" : "request-456",
+    );
     assert.equal(request.headers.get("authorization"), null);
     assert.equal(request.headers.get("cookie"), null);
   }
@@ -70,12 +77,14 @@ test("orchestrator fails closed and permits only the bounded render contract", a
   const namespace = new FakeDocumentNamespace();
   const missingSecret = await handleDocumentRequest(renderRequest(), {
     DOCUMENT_CONTAINER: namespace,
+    DEPLOYMENT_ENV: "staging",
   });
   const wrongMethod = await handleDocumentRequest(
     new Request("http://documents.internal/render"),
     {
       DOCUMENT_CONTAINER: namespace,
       DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+      DEPLOYMENT_ENV: "staging",
     },
   );
   const wrongPath = await handleDocumentRequest(
@@ -83,6 +92,7 @@ test("orchestrator fails closed and permits only the bounded render contract", a
     {
       DOCUMENT_CONTAINER: namespace,
       DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+      DEPLOYMENT_ENV: "staging",
     },
   );
   const oversized = await handleDocumentRequest(
@@ -90,6 +100,7 @@ test("orchestrator fails closed and permits only the bounded render contract", a
     {
       DOCUMENT_CONTAINER: namespace,
       DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+      DEPLOYMENT_ENV: "staging",
     },
   );
 
@@ -117,10 +128,12 @@ test("orchestrator converts container and oversized-output failures to 503", asy
   const unavailable = await handleDocumentRequest(renderRequest(), {
     DOCUMENT_CONTAINER: unavailableNamespace,
     DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+    DEPLOYMENT_ENV: "staging",
   });
   const oversized = await handleDocumentRequest(renderRequest(), {
     DOCUMENT_CONTAINER: oversizedNamespace,
     DOCUMENT_SERVICE_AUTH_TOKEN: "document-secret",
+    DEPLOYMENT_ENV: "staging",
   });
 
   assert.equal(unavailable.status, 503);
