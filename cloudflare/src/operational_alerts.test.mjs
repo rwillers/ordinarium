@@ -107,12 +107,14 @@ test("routine container starts remain telemetry and do not enqueue alerts", () =
 
 
 test("runtime failures are sanitized and raw exception text never crosses the queue", () => {
+  const exceptionTimestamp = Date.parse("2026-07-21T12:00:43Z");
   const [alert] = alertsFromTrace(trace([], {
     outcome: "exception",
-    exceptions: [{ name: "Error", message: "secret bearer token", timestamp: Date.now() }],
+    exceptions: [{ name: "Error", message: "secret bearer token", timestamp: exceptionTimestamp }],
   }));
 
   assert.equal(alert.kind, "worker_runtime_failure");
+  assert.equal(alert.occurred_at, "2026-07-21T12:00:43.000Z");
   assert.equal(alert.source.error_category, "exception");
   assert.equal(JSON.stringify(alert).includes("secret bearer token"), false);
   assert.ok(parseOperationalAlert(alert));
@@ -121,16 +123,18 @@ test("runtime failures are sanitized and raw exception text never crosses the qu
 
 
 test("D1 runtime exceptions use the D1 fingerprint without exposing the exception", () => {
+  const exceptionTimestamp = Date.parse("2026-08-12T19:22:12.299Z");
   const [alert] = alertsFromTrace(trace([], {
     outcome: "exception",
     exceptions: [{
       name: "Error",
       message: "D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
-      timestamp: Date.now(),
+      timestamp: exceptionTimestamp,
     }],
   }));
 
   assert.equal(alert.kind, "d1_failure");
+  assert.equal(alert.occurred_at, "2026-08-12T19:22:12.299Z");
   assert.equal(alert.source.container_role, "d1-bridge");
   assert.equal(alert.source.error_category, "internal");
   assert.equal(JSON.stringify(alert).includes("storage operation"), false);
@@ -164,6 +168,74 @@ test("recovered web container capacity alarms do not page", () => {
   }));
 
   assert.deepEqual(alerts, []);
+});
+
+
+test("known web container lifecycle storage alarms remain telemetry only", () => {
+  const commonOptions = {
+    event: { scheduledTime: new Date("2026-08-12T14:45:14.082Z") },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+  };
+  const monitorStorageFailure = {
+    name: "Error",
+    message: "internal error; reference = 0947fnii4v34h0t0sl67p7bf",
+    timestamp: Date.parse("2026-08-12T14:48:57.533Z"),
+    stack: "Error: internal error\n    at async ContainerState.update (index.js:184:9)\n    at async ContainerState.setStopped (index.js:151:9)",
+  };
+  const durableStorageReset = {
+    name: "Error",
+    message: "Internal error in Durable Object storage caused object to be reset; reference = abc123",
+    timestamp: Date.parse("2026-08-12T15:00:00Z"),
+    stack: "Error: storage reset\n    at async ContainerState.update (index.js:184:9)",
+  };
+
+  assert.deepEqual(
+    alertsFromTrace(trace([], {
+      ...commonOptions,
+      exceptions: [monitorStorageFailure],
+    })),
+    [],
+  );
+  assert.deepEqual(
+    alertsFromTrace(trace([], {
+      ...commonOptions,
+      exceptions: [durableStorageReset],
+    })),
+    [],
+  );
+});
+
+
+test("internal references outside known web lifecycle alarms remain critical", () => {
+  const exception = {
+    name: "Error",
+    message: "internal error; reference = abc123",
+    timestamp: Date.parse("2026-08-12T15:00:00Z"),
+    stack: "Error: internal error\n    at applicationHandler (src/index.ts:10:2)",
+  };
+  const alarm = { scheduledTime: new Date("2026-08-12T14:45:14.082Z") };
+
+  const [unknownStackAlert] = alertsFromTrace(trace([], {
+    event: alarm,
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+    exceptions: [exception],
+  }));
+  const [requestAlert] = alertsFromTrace(trace([], {
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+    exceptions: [{
+      ...exception,
+      stack: "Error: internal error\n    at async ContainerState.update (index.js:184:9)",
+    }],
+  }));
+
+  assert.equal(unknownStackAlert.kind, "worker_runtime_failure");
+  assert.equal(requestAlert.kind, "worker_runtime_failure");
 });
 
 
