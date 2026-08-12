@@ -22,11 +22,13 @@ class D1HttpGateway:
         timeout_seconds: float = 30,
         max_response_bytes: int = 5 * 1024 * 1024,
         session: requests.Session | None = None,
+        request_id: str | None = None,
     ):
         self._service_url = service_url
         self._timeout_seconds = timeout_seconds
         self._max_response_bytes = max_response_bytes
         self._session = session or requests.Session()
+        self._request_id = request_id
 
     def fetch_one(self, sql: str, params: DatabaseParams = ()) -> dict[str, Any] | None:
         payload = self._request("fetch_one", sql=sql, params=params)
@@ -81,11 +83,15 @@ class D1HttpGateway:
         if "params" in body:
             body["params"] = list(body["params"])
         try:
-            response = self._session.post(
-                self._service_url,
-                json=body,
-                timeout=self._timeout_seconds,
-            )
+            request_options = {
+                "json": body,
+                "timeout": self._timeout_seconds,
+            }
+            if self._request_id:
+                request_options["headers"] = {
+                    "X-Ordinarium-Request-Id": self._request_id,
+                }
+            response = self._session.post(self._service_url, **request_options)
         except requests.RequestException as exc:
             raise D1GatewayError("D1 bridge is unavailable.") from exc
         if len(response.content) > self._max_response_bytes:

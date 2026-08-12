@@ -140,6 +140,18 @@ def test_d1_http_gateway_normalizes_bridge_responses():
     }
 
 
+def test_d1_http_gateway_forwards_request_id():
+    session = _FakeSession([_FakeResponse({"ok": True, "row": None})])
+    gateway = D1HttpGateway(
+        "http://d1.internal/query",
+        session=session,
+        request_id="request-123",
+    )
+
+    assert gateway.fetch_one("select 1") is None
+    assert session.calls[0][1]["headers"] == {"X-Ordinarium-Request-Id": "request-123"}
+
+
 def test_d1_http_gateway_rejects_bridge_errors_and_oversized_responses():
     failed = D1HttpGateway(
         "http://d1.internal/query",
@@ -155,3 +167,24 @@ def test_d1_http_gateway_rejects_bridge_errors_and_oversized_responses():
     )
     with pytest.raises(D1GatewayError, match="size limit"):
         oversized.fetch_all("select 1")
+
+
+def test_d1_gateway_errors_render_as_service_unavailable(app):
+    class UnavailableGateway:
+        def fetch_one(self, *_args, **_kwargs):
+            raise D1GatewayError("D1 bridge returned HTTP 503.")
+
+        def close(self):
+            pass
+
+    app.config["DATABASE_GATEWAY_FACTORY"] = UnavailableGateway
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = "1"
+        session["_fresh"] = True
+
+    response = client.get("/")
+
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "1"
+    assert b"database is temporarily unavailable" in response.data.lower()
