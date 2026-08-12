@@ -11,7 +11,7 @@ import {
 
 
 const trace = (records = [], options = {}) => ({
-  event: null,
+  event: options.event || null,
   eventTimestamp: Date.parse("2026-07-21T12:00:00Z"),
   logs: records.map((record) => ({
     timestamp: Date.now(),
@@ -21,8 +21,9 @@ const trace = (records = [], options = {}) => ({
   exceptions: options.exceptions || [],
   diagnosticsChannelEvents: [],
   scriptName: "ordinarium-app-staging",
+  entrypoint: options.entrypoint,
   outcome: options.outcome || "ok",
-  executionModel: "stateless",
+  executionModel: options.executionModel || "stateless",
   truncated: false,
   cpuTime: 1,
   wallTime: 2,
@@ -130,6 +131,58 @@ test("expected deployment resets do not page as runtime failures", () => {
   }));
 
   assert.deepEqual(alerts, []);
+});
+
+
+test("recovered web container capacity alarms do not page", () => {
+  const alerts = alertsFromTrace(trace([], {
+    event: { scheduledTime: new Date("2026-08-12T02:01:35.752Z") },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    exceptions: [{
+      name: "Error",
+      message: "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances",
+      timestamp: Date.now(),
+    }],
+  }));
+
+  assert.deepEqual(alerts, []);
+});
+
+
+test("container capacity exceptions outside recovered web alarms remain critical", () => {
+  const capacityException = {
+    name: "Error",
+    message: "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances",
+    timestamp: Date.now(),
+  };
+  const [requestAlert] = alertsFromTrace(trace([], {
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    exceptions: [capacityException],
+  }));
+  const [failedAlarmAlert] = alertsFromTrace(trace([], {
+    event: { scheduledTime: new Date("2026-08-12T02:01:35.752Z") },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+    exceptions: [capacityException],
+  }));
+  const [mixedAlarmAlert] = alertsFromTrace(trace([], {
+    event: { scheduledTime: new Date("2026-08-12T02:01:35.752Z") },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    exceptions: [
+      capacityException,
+      { name: "Error", message: "unexpected failure", timestamp: Date.now() },
+    ],
+  }));
+
+  assert.equal(requestAlert.kind, "worker_runtime_failure");
+  assert.equal(requestAlert.severity, "critical");
+  assert.equal(requestAlert.source.error_category, "worker_exception");
+  assert.equal(failedAlarmAlert.source.error_category, "exception");
+  assert.equal(mixedAlarmAlert.source.error_category, "worker_exception");
 });
 
 
