@@ -110,7 +110,14 @@ const isReplaySafeRequest = (request: Request): boolean => {
   // The PCO callback consumes a one-time OAuth code before all application
   // persistence has completed. Replaying it can turn a recoverable storage
   // failure into an authorization error because that code is already spent.
-  return !NON_REPLAYABLE_GET_PATHS.has(new URL(request.url).pathname);
+  try {
+    const pathname = decodeURIComponent(new URL(request.url).pathname);
+    return !NON_REPLAYABLE_GET_PATHS.has(pathname);
+  } catch {
+    // If the path cannot be canonicalized, prefer one attempt over risking a
+    // replay of a route that the downstream HTTP server may still decode.
+    return false;
+  }
 };
 
 const transientContainerFailure = async (

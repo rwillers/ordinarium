@@ -319,6 +319,46 @@ test("OAuth callbacks do not replay recognized platform responses", async () => 
 });
 
 
+test("encoded OAuth callback paths are not replayed", async () => {
+  const container = new FakeContainer([
+    transientResponse(),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request(
+      "https://ordinarium.com/integrations/pco/call%62ack?code=once&state=valid",
+    ),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 500);
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+});
+
+
+test("malformed encoded paths are conservatively not replayed", async () => {
+  const container = new FakeContainer([
+    transientResponse(),
+    new Response("ready", { status: 200 }),
+  ]);
+
+  const result = await fetchWebContainer(
+    container,
+    new Request("https://ordinarium.com/integrations/pco/call%FFback"),
+    immediateRetries,
+  );
+
+  assert.equal(result.response.status, 500);
+  assert.equal(result.retryOutcome, "none");
+  assert.equal(result.attempts, 1);
+  assert.equal(container.requests.length, 1);
+});
+
+
 test("OAuth callbacks surface thrown failures without replaying", async () => {
   const error = new Error("container RPC unavailable");
   const container = new FakeContainer([error]);
