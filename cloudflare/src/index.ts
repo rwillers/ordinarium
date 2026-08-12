@@ -29,10 +29,14 @@ export { ContainerProxy };
 export { AuthRateLimiter } from "./auth_rate_limiter";
 
 const APPLICATION_PORT = 8080;
+const WEB_CONTAINER_STARTUP_POLICY = {
+  instanceGetTimeoutMS: 30_000,
+  portReadyTimeoutMS: 90_000,
+} as const;
 declare global {
   namespace Cloudflare {
     interface Env {
-      WEB_CONTAINER: DurableObjectNamespace;
+      WEB_CONTAINER: DurableObjectNamespace<WebContainer>;
       DOCUMENT_CONTAINER: DurableObjectNamespace;
       PCO_JOBS_CONTAINER: DurableObjectNamespace;
       EMAIL_JOBS_CONTAINER: DurableObjectNamespace;
@@ -70,6 +74,8 @@ declare global {
 }
 
 export class WebContainer extends Container {
+  private readinessConfirmed = false;
+
   defaultPort = APPLICATION_PORT;
   sleepAfter = "30m";
   enableInternet = false;
@@ -109,11 +115,34 @@ export class WebContainer extends Container {
     PASSWORD_RESET_DELIVERY_KEY: env.PASSWORD_RESET_DELIVERY_KEY || "",
   };
 
+  async fetchWithReadiness(
+    request: Request,
+    forceReadinessCheck = false,
+  ): Promise<Response> {
+    const state = await this.getState();
+    if (
+      forceReadinessCheck ||
+      !this.readinessConfirmed ||
+      state.status !== "healthy"
+    ) {
+      await this.startAndWaitForPorts({
+        ports: APPLICATION_PORT,
+        cancellationOptions: {
+          abort: request.signal,
+          ...WEB_CONTAINER_STARTUP_POLICY,
+        },
+      });
+      this.readinessConfirmed = true;
+    }
+    return super.fetch(request);
+  }
+
   override onStart() {
     emitTelemetry("info", "container_started", { container_role: "web" });
   }
 
   override onError(error: unknown) {
+    this.readinessConfirmed = false;
     emitTelemetry("error", "container_start_failure", {
       container_role: "web",
       error_category: errorCategory(error),
@@ -121,6 +150,7 @@ export class WebContainer extends Container {
   }
 
   override onStop({ exitCode, reason }: { exitCode: number; reason: string }) {
+    this.readinessConfirmed = false;
     emitTelemetry(exitCode === 0 ? "info" : "error", "container_stopped", {
       container_role: "web",
       exit_code: exitCode,
@@ -307,6 +337,7 @@ const worker: ExportedHandler<Cloudflare.Env> = {
             container_role: containerRole,
             status: response.status,
             error_category: "container_transient",
+            attempts: result.attempts,
           },
         );
       }
@@ -320,7 +351,7 @@ const worker: ExportedHandler<Cloudflare.Env> = {
       });
       response = Response.json(
         { error: "web_container_unavailable" },
-        { status: 503 },
+        { status: 503, headers: { "Retry-After": "1" } },
       );
       return responseWithRequestId(response, requestId);
     } finally {

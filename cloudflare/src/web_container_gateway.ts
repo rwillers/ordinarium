@@ -2,74 +2,135 @@ const TRANSIENT_CONTAINER_FAILURE_PREFIXES = [
   "Failed to start container:",
   "Container suddenly disconnected, try again",
   "Error proxying request to container:",
+  "There is no Container instance available at this time.",
 ] as const;
+const TRANSIENT_CONTAINER_STATUSES = new Set([429, 502, 503, 504]);
 const MAX_TRANSIENT_RESPONSE_BYTES = 512;
+const DEFAULT_RETRY_DELAYS_MS = [250, 750] as const;
 
 interface WebContainerStub {
-  fetch(request: Request): Promise<Response>;
+  fetchWithReadiness(
+    request: Request,
+    forceReadinessCheck: boolean,
+  ): Promise<Response>;
 }
 
 export type WebContainerResult = {
   response: Response;
   retryOutcome: "none" | "succeeded" | "exhausted";
+  attempts: number;
+};
+
+type WebContainerFetchOptions = {
+  retryDelaysMs?: readonly number[];
+  sleep?: (delayMs: number) => Promise<void>;
+  random?: () => number;
 };
 
 export const fetchWebContainer = async (
   container: WebContainerStub,
   request: Request,
+  options: WebContainerFetchOptions = {},
 ): Promise<WebContainerResult> => {
-  const retryRequest = isRetryableMethod(request.method)
-    ? new Request(request)
-    : null;
-  const response = await container.fetch(request);
-  if (!retryRequest) {
-    return { response, retryOutcome: "none" };
-  }
-  if (!(await isTransientContainerFailure(response))) {
-    return { response, retryOutcome: "none" };
+  const retryDelaysMs = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+  const sleep = options.sleep ?? wait;
+  const random = options.random ?? randomFraction;
+  const canRetry = isRetryableMethod(request.method);
+  const maxAttempts = canRetry ? retryDelaysMs.length + 1 : 1;
+  let forceReadinessCheck = false;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
+    try {
+      response = await container.fetchWithReadiness(
+        attempt === 1 ? request : new Request(request),
+        forceReadinessCheck,
+      );
+    } catch (error: unknown) {
+      if (!canRetry || request.signal.aborted) {
+        throw error;
+      }
+      if (attempt === maxAttempts) {
+        return exhaustedResult(attempt);
+      }
+      forceReadinessCheck = true;
+      await sleep(jitteredDelay(retryDelaysMs[attempt - 1], random));
+      continue;
+    }
+
+    if (!canRetry || request.signal.aborted) {
+      return { response, retryOutcome: "none", attempts: attempt };
+    }
+    const failure = await transientContainerFailure(response);
+    if (!failure.retry) {
+      return {
+        response,
+        retryOutcome: attempt === 1 ? "none" : "succeeded",
+        attempts: attempt,
+      };
+    }
+
+    await response.body?.cancel();
+    if (attempt === maxAttempts) {
+      return exhaustedResult(attempt);
+    }
+    forceReadinessCheck = failure.forceReadinessCheck;
+    await sleep(jitteredDelay(retryDelaysMs[attempt - 1], random));
   }
 
-  await response.body?.cancel();
-  const retryResponse = await container.fetch(retryRequest);
-  if (!(await isTransientContainerFailure(retryResponse))) {
-    return { response: retryResponse, retryOutcome: "succeeded" };
-  }
-
-  await retryResponse.body?.cancel();
-  return {
-    response: Response.json(
-      { error: "web_container_unavailable" },
-      {
-        status: 503,
-        headers: { "Retry-After": "1" },
-      },
-    ),
-    retryOutcome: "exhausted",
-  };
+  return exhaustedResult(maxAttempts);
 };
 
 const isRetryableMethod = (method: string): boolean =>
   method === "GET" || method === "HEAD";
 
-const isTransientContainerFailure = async (
+const transientContainerFailure = async (
   response: Response,
-): Promise<boolean> => {
-  if (response.status !== 500) {
-    return false;
+): Promise<{ retry: boolean; forceReadinessCheck: boolean }> => {
+  const retryStatus = TRANSIENT_CONTAINER_STATUSES.has(response.status);
+  if (response.status !== 500 && response.status !== 503) {
+    return { retry: retryStatus, forceReadinessCheck: false };
   }
   const contentType = response.headers.get("content-type") || "";
-  if (contentType.toLowerCase() !== "text/plain;charset=utf-8") {
-    return false;
+  if (contentType.split(";", 1)[0].trim().toLowerCase() !== "text/plain") {
+    return { retry: retryStatus, forceReadinessCheck: false };
   }
   const body = await readBoundedText(
     response.clone(),
     MAX_TRANSIENT_RESPONSE_BYTES,
   );
-  return (
+  const forceReadinessCheck =
     body !== null &&
-    TRANSIENT_CONTAINER_FAILURE_PREFIXES.some((prefix) => body.startsWith(prefix))
-  );
+    TRANSIENT_CONTAINER_FAILURE_PREFIXES.some((prefix) => body.startsWith(prefix));
+  return {
+    retry: retryStatus || forceReadinessCheck,
+    forceReadinessCheck,
+  };
 };
+
+const exhaustedResult = (attempts: number): WebContainerResult => ({
+  response: Response.json(
+    { error: "web_container_unavailable" },
+    {
+      status: 503,
+      headers: { "Retry-After": "1" },
+    },
+  ),
+  retryOutcome: "exhausted",
+  attempts,
+});
+
+const jitteredDelay = (baseDelayMs: number, random: () => number): number =>
+  Math.round(baseDelayMs * (0.75 + random() * 0.5));
+
+const randomFraction = (): number => {
+  const value = new Uint32Array(1);
+  crypto.getRandomValues(value);
+  return value[0] / 2 ** 32;
+};
+
+const wait = async (delayMs: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, delayMs));
 
 const readBoundedText = async (
   response: Response,

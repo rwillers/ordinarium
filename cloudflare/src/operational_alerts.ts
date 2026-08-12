@@ -51,6 +51,14 @@ const DEPLOYMENT_RESET_MESSAGE =
   "Durable Object reset because its code was updated.";
 const RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE =
   "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances";
+const CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE =
+  /^(?:internal error|Internal error in Durable Object storage caused object to be reset); reference = [A-Za-z0-9]+$/i;
+const CONTAINER_LIFECYCLE_STACK_MARKERS = [
+  "ContainerState.update",
+  "ContainerState.setStopped",
+  "ContainerState.setStoppedWithCode",
+  "ContainerState.setStoppedIfUnchanged",
+] as const;
 
 export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => {
   const occurredAt = new Date(trace.eventTimestamp ?? Date.now()).toISOString();
@@ -62,9 +70,15 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
     !isExpectedRuntimeTransient(trace)
   ) {
     alerts.push(
-      createAlert("worker_runtime_failure", "critical", occurredAt, scriptName, {
-        error_category: runtimeErrorCategory(trace),
-      }),
+      createAlert(
+        "worker_runtime_failure",
+        "critical",
+        runtimeFailureOccurredAt(trace, occurredAt),
+        scriptName,
+        {
+          error_category: runtimeErrorCategory(trace),
+        },
+      ),
     );
   }
 
@@ -82,7 +96,8 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
 
 const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
   isExpectedDeploymentReset(trace) ||
-  isRecoveredWebContainerCapacityAlarm(trace);
+  isRecoveredWebContainerCapacityAlarm(trace) ||
+  isKnownWebContainerLifecycleStorageAlarm(trace);
 
 const isExpectedDeploymentReset = (trace: TraceItem): boolean =>
   trace.outcome === "exception" &&
@@ -102,6 +117,23 @@ const isRecoveredWebContainerCapacityAlarm = (trace: TraceItem): boolean =>
       exception.message === RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE,
   );
 
+const isKnownWebContainerLifecycleStorageAlarm = (
+  trace: TraceItem,
+): boolean =>
+  trace.outcome === "exception" &&
+  trace.executionModel === "durableObject" &&
+  trace.entrypoint === "WebContainer" &&
+  isAlarmEvent(trace.event) &&
+  trace.exceptions.length > 0 &&
+  trace.exceptions.every(
+    (exception) =>
+      CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE.test(exception.message) &&
+      typeof exception.stack === "string" &&
+      CONTAINER_LIFECYCLE_STACK_MARKERS.some((marker) =>
+        exception.stack?.includes(marker),
+      ),
+  );
+
 const isAlarmEvent = (event: TraceItem["event"]): boolean =>
   event !== null && "scheduledTime" in event && !("cron" in event);
 
@@ -109,6 +141,20 @@ const runtimeErrorCategory = (trace: TraceItem): string =>
   FAILURE_OUTCOMES.has(trace.outcome)
     ? sanitizeIdentifier(trace.outcome, "worker_exception")
     : "worker_exception";
+
+const runtimeFailureOccurredAt = (
+  trace: TraceItem,
+  fallback: string,
+): string => {
+  const latestExceptionTimestamp = Math.max(
+    ...trace.exceptions
+      .map((exception) => exception.timestamp)
+      .filter((timestamp) => Number.isFinite(timestamp)),
+  );
+  return Number.isFinite(latestExceptionTimestamp)
+    ? new Date(latestExceptionTimestamp).toISOString()
+    : fallback;
+};
 
 export const parseOperationalAlert = (
   value: unknown,
