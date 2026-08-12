@@ -49,6 +49,8 @@ const FAILURE_OUTCOMES = new Set([
 
 const DEPLOYMENT_RESET_MESSAGE =
   "Durable Object reset because its code was updated.";
+const RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE =
+  "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances";
 
 export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => {
   const occurredAt = new Date(trace.eventTimestamp ?? Date.now()).toISOString();
@@ -57,11 +59,11 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
 
   if (
     (FAILURE_OUTCOMES.has(trace.outcome) || trace.exceptions.length > 0) &&
-    !isExpectedDeploymentReset(trace)
+    !isExpectedRuntimeTransient(trace)
   ) {
     alerts.push(
       createAlert("worker_runtime_failure", "critical", occurredAt, scriptName, {
-        error_category: sanitizeIdentifier(trace.outcome, "worker_exception"),
+        error_category: runtimeErrorCategory(trace),
       }),
     );
   }
@@ -78,12 +80,35 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
   return deduplicateWithinTrace(alerts);
 };
 
+const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
+  isExpectedDeploymentReset(trace) ||
+  isRecoveredWebContainerCapacityAlarm(trace);
+
 const isExpectedDeploymentReset = (trace: TraceItem): boolean =>
   trace.outcome === "exception" &&
   trace.exceptions.length > 0 &&
   trace.exceptions.every(
     (exception) => exception.message === DEPLOYMENT_RESET_MESSAGE,
   );
+
+const isRecoveredWebContainerCapacityAlarm = (trace: TraceItem): boolean =>
+  trace.outcome === "ok" &&
+  trace.executionModel === "durableObject" &&
+  trace.entrypoint === "WebContainer" &&
+  isAlarmEvent(trace.event) &&
+  trace.exceptions.length > 0 &&
+  trace.exceptions.every(
+    (exception) =>
+      exception.message === RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE,
+  );
+
+const isAlarmEvent = (event: TraceItem["event"]): boolean =>
+  event !== null && "scheduledTime" in event && !("cron" in event);
+
+const runtimeErrorCategory = (trace: TraceItem): string =>
+  FAILURE_OUTCOMES.has(trace.outcome)
+    ? sanitizeIdentifier(trace.outcome, "worker_exception")
+    : "worker_exception";
 
 export const parseOperationalAlert = (
   value: unknown,
