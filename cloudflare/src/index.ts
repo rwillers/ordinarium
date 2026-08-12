@@ -29,6 +29,7 @@ export { ContainerProxy };
 export { AuthRateLimiter } from "./auth_rate_limiter";
 
 const APPLICATION_PORT = 8080;
+const D1_SERVICE_TIMEOUT_SECONDS = "40";
 const WEB_CONTAINER_STARTUP_POLICY = {
   instanceGetTimeoutMS: 30_000,
   portReadyTimeoutMS: 90_000,
@@ -106,6 +107,7 @@ export class WebContainer extends Container {
     DOCUMENT_SERVICE_MAX_BYTES: String(25 * 1024 * 1024),
     QUEUE_SERVICE_URL: "http://queue.internal",
     D1_SERVICE_URL: "http://d1.internal/query",
+    D1_SERVICE_TIMEOUT_SECONDS,
     DATABASE_GATEWAY_BACKEND: "d1",
     PCO_TOKEN_ENCRYPTION_KEYS: env.PCO_TOKEN_ENCRYPTION_KEYS,
     PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION:
@@ -207,6 +209,7 @@ export class PcoJobsContainer extends Container {
     ORDINARIUM_CONTAINER_ROLE: "pco-jobs",
     JOB_SERVICE_AUTH_TOKEN: env.PCO_JOB_SERVICE_AUTH_TOKEN,
     D1_SERVICE_URL: "http://d1.internal/query",
+    D1_SERVICE_TIMEOUT_SECONDS,
     DATABASE_GATEWAY_BACKEND: "d1",
     PCO_TOKEN_ENCRYPTION_KEYS: env.PCO_TOKEN_ENCRYPTION_KEYS,
     PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION:
@@ -249,6 +252,7 @@ export class EmailJobsContainer extends Container {
     ORDINARIUM_CONTAINER_ROLE: "email-jobs",
     JOB_SERVICE_AUTH_TOKEN: env.EMAIL_JOB_SERVICE_AUTH_TOKEN,
     D1_SERVICE_URL: "http://d1.internal/query",
+    D1_SERVICE_TIMEOUT_SECONDS,
     DATABASE_GATEWAY_BACKEND: "d1",
     MAILERSEND_API_TOKEN: env.MAILERSEND_API_TOKEN || "",
     MAILERSEND_FROM_EMAIL: env.MAILERSEND_FROM_EMAIL || "",

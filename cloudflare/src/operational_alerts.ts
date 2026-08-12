@@ -51,6 +51,7 @@ const DEPLOYMENT_RESET_MESSAGE =
   "Durable Object reset because its code was updated.";
 const RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE =
   "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances";
+const D1_RUNTIME_ERROR_PREFIX = "D1_ERROR:";
 const CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE =
   /^(?:internal error|Internal error in Durable Object storage caused object to be reset); reference = [A-Za-z0-9]+$/i;
 const CONTAINER_LIFECYCLE_STACK_MARKERS = [
@@ -69,17 +70,7 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
     (FAILURE_OUTCOMES.has(trace.outcome) || trace.exceptions.length > 0) &&
     !isExpectedRuntimeTransient(trace)
   ) {
-    alerts.push(
-      createAlert(
-        "worker_runtime_failure",
-        "critical",
-        runtimeFailureOccurredAt(trace, occurredAt),
-        scriptName,
-        {
-          error_category: runtimeErrorCategory(trace),
-        },
-      ),
-    );
+    alerts.push(runtimeFailureAlert(trace, occurredAt, scriptName));
   }
 
   for (const log of trace.logs) {
@@ -93,6 +84,34 @@ export const alertsFromTrace = (trace: TraceItem): OperationalAlertMessage[] => 
 
   return deduplicateWithinTrace(alerts);
 };
+
+const runtimeFailureAlert = (
+  trace: TraceItem,
+  occurredAt: string,
+  scriptName: string,
+): OperationalAlertMessage => {
+  const runtimeOccurredAt = runtimeFailureOccurredAt(trace, occurredAt);
+  return isD1RuntimeFailure(trace)
+    ? createAlert("d1_failure", "critical", runtimeOccurredAt, scriptName, {
+        container_role: "d1-bridge",
+        error_category: "internal",
+      })
+    : createAlert(
+        "worker_runtime_failure",
+        "critical",
+        runtimeOccurredAt,
+        scriptName,
+        {
+          error_category: runtimeErrorCategory(trace),
+        },
+      );
+};
+
+const isD1RuntimeFailure = (trace: TraceItem): boolean =>
+  trace.exceptions.length > 0 &&
+  trace.exceptions.every((exception) =>
+    exception.message.startsWith(D1_RUNTIME_ERROR_PREFIX),
+  );
 
 const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
   isExpectedDeploymentReset(trace) ||

@@ -73,7 +73,9 @@ class FakeDatabase {
     const remaining = this.failures.get(sql) || 0;
     if (remaining > 0) {
       this.failures.set(sql, remaining - 1);
-      throw new Error("D1 temporarily unavailable");
+      throw new Error(
+        "D1_ERROR: D1 DB storage operation exceeded timeout which caused object to be reset.",
+      );
     }
   }
 }
@@ -186,19 +188,26 @@ test("bridge allocates numeric IDs without reuse", async () => {
 });
 
 
-test("bridge retries reads once but never retries mutations", async () => {
+test("bridge retries transient reads with bounded backoff but never retries mutations", async () => {
   const database = new FakeDatabase();
   database.failures.set("select one", 1);
-  database.failures.set("select all", 2);
+  database.failures.set("select all", 4);
   database.failures.set("update services set title = 'Changed'", 1);
+  const delays = [];
+  const retryOptions = {
+    sleep: async (milliseconds) => delays.push(milliseconds),
+    random: () => 0.5,
+  };
 
   const recovered = await handleD1Request(
     request({ operation: "fetch_one", sql: "select one" }),
     database,
+    retryOptions,
   );
   const exhausted = await handleD1Request(
     request({ operation: "fetch_all", sql: "select all" }),
     database,
+    retryOptions,
   );
   const mutation = await handleD1Request(
     request({
@@ -212,6 +221,30 @@ test("bridge retries reads once but never retries mutations", async () => {
   assert.equal(exhausted.status, 503);
   assert.equal(mutation.status, 503);
   assert.equal(database.attempts.get("select one"), 2);
-  assert.equal(database.attempts.get("select all"), 2);
+  assert.equal(database.attempts.get("select all"), 4);
   assert.equal(database.attempts.get("update services set title = 'Changed'"), 1);
+  assert.deepEqual(delays, [250, 250, 1000, 2500]);
+});
+
+
+test("bridge does not retry non-transient read failures", async () => {
+  const database = new FakeDatabase();
+  database.failIfConfigured = (sql) => {
+    database.recordedFailure = sql;
+    throw new Error("D1_ERROR: no such table: missing");
+  };
+  const delays = [];
+
+  const response = await handleD1Request(
+    request({ operation: "fetch_one", sql: "select from missing" }),
+    database,
+    {
+      sleep: async (milliseconds) => delays.push(milliseconds),
+      random: () => 0.5,
+    },
+  );
+
+  assert.equal(response.status, 503);
+  assert.equal(database.attempts.get("select from missing"), 1);
+  assert.deepEqual(delays, []);
 });

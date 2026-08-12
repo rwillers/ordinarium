@@ -62,7 +62,7 @@ def test_wrangler_config_matches_target_sizing():
     containers = {item["class_name"]: item for item in config["containers"]}
 
     assert containers["WebContainer"]["instance_type"] == "basic"
-    assert containers["WebContainer"]["max_instances"] == 1
+    assert containers["WebContainer"]["max_instances"] == 2
     assert containers["DocumentContainer"]["instance_type"] == "standard-1"
     assert containers["DocumentContainer"]["max_instances"] == 2
     assert containers["PcoJobsContainer"]["max_instances"] == 1

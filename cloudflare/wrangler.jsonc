@@ -135,7 +135,7 @@
       "image": "../containers/web/Dockerfile",
       "image_build_context": "..",
       "instance_type": "basic",
-      "max_instances": 1
+      "max_instances": 2
     },
     {
       "name": "ordinarium-documents",
