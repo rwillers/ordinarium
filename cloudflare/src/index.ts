@@ -6,6 +6,7 @@ import { deploymentResources } from "./deployment_resources";
 import { handleD1Request } from "./d1_bridge";
 import { handleDocumentRequest } from "./document_orchestrator";
 import { handleEdgeRateLimit } from "./edge_security";
+import { handleObviousProbe } from "./edge_probe_filter";
 import { handleEdgeRoute } from "./edge_routes";
 import { handleQueueBatch } from "./queue_consumer";
 import { emitQueueMetrics } from "./queue_observability";
@@ -301,6 +302,11 @@ const worker: ExportedHandler<Cloudflare.Env> = {
       );
       if (canonicalRedirect) {
         response = canonicalRedirect;
+        return responseWithRequestId(response, requestId);
+      }
+      const probeResponse = handleObviousProbe(request, requestId);
+      if (probeResponse) {
+        response = probeResponse;
         return responseWithRequestId(response, requestId);
       }
       const rateLimitResponse = await handleEdgeRateLimit(
