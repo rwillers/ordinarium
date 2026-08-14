@@ -88,3 +88,22 @@ def test_web_container_has_explicit_turnstile_https_egress():
         'TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY ? "worker-managed" : ""'
         in web_block
     )
+
+
+def test_pco_jobs_container_has_explicit_planning_center_https_egress():
+    worker_source = (ROOT / "cloudflare" / "src" / "index.ts").read_text()
+    pco_block = worker_source.split("export class PcoJobsContainer", 1)[1].split(
+        "export class EmailJobsContainer", 1
+    )[0]
+
+    assert "enableInternet = false" in pco_block
+    assert "interceptHttps = true" in pco_block
+    assert '"api.planningcenteronline.com"' in pco_block
+    assert (
+        'REQUESTS_CA_BUNDLE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt"'
+        in pco_block
+    )
+    assert (
+        '"api.planningcenteronline.com": (request) => fetch(request)'
+        in pco_block
+    )
