@@ -57,6 +57,14 @@ global API key, or token should be copied into chat or committed to the
 repository. Workers Logs retention is finite, so restore access before the
 relevant interval expires.
 
+Interactive staging verification has a separate authentication boundary. The
+browser's Cloudflare Access session for `staging.ordinarium.com` is independent
+of Dashboard, API, Workers Observability, and GitHub environment credentials. A
+successful automated Access check therefore does not prove that the operator
+can load staging interactively. Before production promotion, require a
+successful user-visible staging check in the current browser session; if Access
+redirects to sign-in, pause and restore that session before continuing.
+
 The connected Workers Observability integration can currently read retained
 invocations and Worker metadata. Its API identity is not authorized to manage
 zone WAF rules, so a signed-in dashboard session is still required for that
