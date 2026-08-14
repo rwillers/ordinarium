@@ -66,7 +66,7 @@ class FakeDeduplicatorNamespace {
 }
 
 
-test("tail classification covers every Phase 8 alert category", () => {
+test("tail classification covers active paging categories", () => {
   const records = [
     { event: "container_started", container_role: "web" },
     { event: "container_stopped", container_role: "documents", error_category: "container_failure" },
@@ -88,7 +88,6 @@ test("tail classification covers every Phase 8 alert category", () => {
     "worker_request_failure",
     "d1_failure",
     "queue_failure",
-    "queue_backlog",
     "dead_letter",
     "export_failure",
     "pco_authorization_failure",
@@ -98,9 +97,35 @@ test("tail classification covers every Phase 8 alert category", () => {
 });
 
 
+test("primary queue backlog remains telemetry and does not enqueue warnings", () => {
+  assert.deepEqual(
+    alertsFromTrace(trace([{
+      event: "queue_metrics",
+      queue: "pco",
+      threshold_exceeded: true,
+      dlq: false,
+    }])),
+    [],
+  );
+});
+
+
 test("routine container starts remain telemetry and do not enqueue alerts", () => {
   assert.deepEqual(
     alertsFromTrace(trace([{ event: "container_started", container_role: "web" }])),
+    [],
+  );
+});
+
+
+test("rejected edge probes remain telemetry and do not enqueue alerts", () => {
+  assert.deepEqual(
+    alertsFromTrace(trace([{
+      event: "edge_probe_rejected",
+      route: "/assets/file-uploader/server/php/index.php",
+      status: 404,
+      error_category: "foreign_server_extension",
+    }])),
     [],
   );
 });
@@ -168,6 +193,41 @@ test("recovered web container capacity alarms do not page", () => {
   }));
 
   assert.deepEqual(alerts, []);
+});
+
+
+test("canceled web readiness streams remain telemetry and do not page", () => {
+  const alerts = alertsFromTrace(trace([], {
+    event: { rpcMethod: "fetchWithReadiness" },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "canceled",
+    exceptions: [{
+      name: "Error",
+      message: "ReadableStream received over RPC disconnected prematurely.",
+      timestamp: Date.now(),
+    }],
+  }));
+
+  assert.deepEqual(alerts, []);
+});
+
+
+test("premature RPC stream errors outside canceled readiness calls remain critical", () => {
+  const [alert] = alertsFromTrace(trace([], {
+    event: { rpcMethod: "otherMethod" },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+    exceptions: [{
+      name: "Error",
+      message: "ReadableStream received over RPC disconnected prematurely.",
+      timestamp: Date.now(),
+    }],
+  }));
+
+  assert.equal(alert.kind, "worker_runtime_failure");
+  assert.equal(alert.severity, "critical");
 });
 
 

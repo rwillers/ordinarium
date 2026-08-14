@@ -4,6 +4,11 @@ Ordinarium is deployed to Cloudflare Workers, Containers, D1, and Queues. The
 former Lightsail deployment path was retired after the Phase 11 production
 cutover and must not be recreated from this repository.
 
+Production incident investigation, paging thresholds, access requirements, and
+probe-handling principles are defined in
+[`cloudflare/OPERATIONS_DIAGNOSTICS.md`](cloudflare/OPERATIONS_DIAGNOSTICS.md).
+Read that policy before changing alert classification or Container behavior.
+
 ## Validation and staging
 
 Pull requests run the Python, SQLite, Worker, and container checks in GitHub

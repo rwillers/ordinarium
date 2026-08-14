@@ -8,6 +8,7 @@ export const ALERT_KINDS = [
   "container_failure",
   "d1_failure",
   "queue_failure",
+  // Kept for compatibility with older queue messages; new backlog metrics do not page.
   "queue_backlog",
   "dead_letter",
   "export_failure",
@@ -52,6 +53,8 @@ const DEPLOYMENT_RESET_MESSAGE =
 const RECOVERED_WEB_CONTAINER_CAPACITY_MESSAGE =
   "Maximum number of running container instances exceeded. Try again later, or try configuring a higher value for max_instances";
 const D1_RUNTIME_ERROR_PREFIX = "D1_ERROR:";
+const CANCELED_WEB_CONTAINER_STREAM_MESSAGE =
+  "ReadableStream received over RPC disconnected prematurely.";
 const CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE =
   /^(?:internal error|Internal error in Durable Object storage caused object to be reset); reference = [A-Za-z0-9]+$/i;
 const CONTAINER_LIFECYCLE_STACK_MARKERS = [
@@ -116,7 +119,8 @@ const isD1RuntimeFailure = (trace: TraceItem): boolean =>
 const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
   isExpectedDeploymentReset(trace) ||
   isRecoveredWebContainerCapacityAlarm(trace) ||
-  isKnownWebContainerLifecycleStorageAlarm(trace);
+  isKnownWebContainerLifecycleStorageAlarm(trace) ||
+  isCanceledWebContainerReadinessStream(trace);
 
 const isExpectedDeploymentReset = (trace: TraceItem): boolean =>
   trace.outcome === "exception" &&
@@ -153,8 +157,25 @@ const isKnownWebContainerLifecycleStorageAlarm = (
       ),
   );
 
+const isCanceledWebContainerReadinessStream = (
+  trace: TraceItem,
+): boolean =>
+  trace.outcome === "canceled" &&
+  trace.executionModel === "durableObject" &&
+  trace.entrypoint === "WebContainer" &&
+  isRpcEvent(trace.event, "fetchWithReadiness") &&
+  trace.exceptions.length > 0 &&
+  trace.exceptions.every(
+    (exception) => exception.message === CANCELED_WEB_CONTAINER_STREAM_MESSAGE,
+  );
+
 const isAlarmEvent = (event: TraceItem["event"]): boolean =>
   event !== null && "scheduledTime" in event && !("cron" in event);
+
+const isRpcEvent = (
+  event: TraceItem["event"],
+  method: string,
+): boolean => event !== null && "rpcMethod" in event && event.rpcMethod === method;
 
 const runtimeErrorCategory = (trace: TraceItem): string =>
   FAILURE_OUTCOMES.has(trace.outcome)
@@ -254,13 +275,9 @@ const alertFromTelemetry = (
   if (event !== "queue_metrics" || record.threshold_exceeded !== true) {
     return null;
   }
-  return createAlert(
-    record.dlq === true ? "dead_letter" : "queue_backlog",
-    record.dlq === true ? "critical" : "warning",
-    occurredAt,
-    scriptName,
-    record,
-  );
+  return record.dlq === true
+    ? createAlert("dead_letter", "critical", occurredAt, scriptName, record)
+    : null;
 };
 
 const createAlert = (
