@@ -205,6 +205,7 @@ export class PcoJobsContainer extends Container {
   defaultPort = APPLICATION_PORT;
   sleepAfter = "2m";
   enableInternet = false;
+  interceptHttps = true;
   allowedHosts = ["d1.internal", "api.planningcenteronline.com"];
   envVars = {
     ORDINARIUM_CONTAINER_ROLE: "pco-jobs",
@@ -222,6 +223,7 @@ export class PcoJobsContainer extends Container {
     PCO_OAUTH_TOKEN_URL:
       env.PCO_OAUTH_TOKEN_URL ||
       "https://api.planningcenteronline.com/oauth/token",
+    REQUESTS_CA_BUNDLE: "/etc/cloudflare/certs/cloudflare-containers-ca.crt",
   };
 
   override onStart() {
@@ -241,6 +243,7 @@ export class PcoJobsContainer extends Container {
 PcoJobsContainer.outboundByHost = {
   "d1.internal": (request, environment: Cloudflare.Env) =>
     handleD1Request(request, environment.APP_DB),
+  "api.planningcenteronline.com": (request) => fetch(request),
 };
 
 export class EmailJobsContainer extends Container {
