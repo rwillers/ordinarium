@@ -255,3 +255,50 @@ test("failed email recovery publication leaves the row stale", async () => {
   );
   assert.deepEqual(db.updates, []);
 });
+
+
+test("scheduled reconciliation retries overloaded reads but not writes", async () => {
+  let readAttempts = 0;
+  let writeAttempts = 0;
+  const delays = [];
+  const db = {
+    prepare(sql) {
+      return {
+        bind() {
+          return this;
+        },
+        async all() {
+          readAttempts += 1;
+          if (readAttempts === 1) {
+            throw new Error(
+              "D1_ERROR: D1 DB is overloaded. Requests queued for too long.",
+            );
+          }
+          return { results: [{ id: "reset-expired" }] };
+        },
+        async run() {
+          writeAttempts += 1;
+          throw new Error(
+            "D1_ERROR: D1 DB is overloaded. Requests queued for too long.",
+          );
+        },
+      };
+    },
+  };
+
+  await assert.rejects(
+    reconcilePasswordResetEmails(
+      { APP_DB: db, EMAIL_JOBS_QUEUE: { send: async () => {} } },
+      1_000,
+      {
+        sleep: async (milliseconds) => delays.push(milliseconds),
+        random: () => 0.5,
+      },
+    ),
+    /Requests queued for too long/,
+  );
+
+  assert.equal(readAttempts, 2);
+  assert.equal(writeAttempts, 1);
+  assert.deepEqual(delays, [250]);
+});

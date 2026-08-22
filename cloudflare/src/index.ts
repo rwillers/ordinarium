@@ -13,9 +13,9 @@ import { emitQueueMetrics } from "./queue_observability";
 import { handleQueuePublishRequest } from "./queue_publisher";
 import { turnstileEnabledForDeployment } from "./runtime_policy";
 import {
-  reconcilePasswordResetEmails,
-  reconcilePcoRows,
-} from "./queue_reconciliation";
+  reconcileScheduledQueues,
+  shouldRunScheduledReconciliation,
+} from "./scheduled_reconciliation";
 import {
   createRequestId,
   emitTelemetry,
@@ -384,14 +384,12 @@ const worker: ExportedHandler<Cloudflare.Env> = {
   queue: async (batch, environment): Promise<void> => {
     await handleQueueBatch(batch, environment);
   },
-  scheduled: async (_controller, environment, context): Promise<void> => {
-    context.waitUntil(
-      Promise.all([
-        reconcilePcoRows(environment),
-        reconcilePasswordResetEmails(environment),
-        emitQueueMetrics(environment),
-      ]).then(() => undefined),
-    );
+  scheduled: async (controller, environment, context): Promise<void> => {
+    const scheduledTasks: Promise<unknown>[] = [emitQueueMetrics(environment)];
+    if (shouldRunScheduledReconciliation(controller.scheduledTime)) {
+      scheduledTasks.push(reconcileScheduledQueues(environment));
+    }
+    context.waitUntil(Promise.all(scheduledTasks).then(() => undefined));
   },
 };
 

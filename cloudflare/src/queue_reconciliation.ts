@@ -1,3 +1,9 @@
+import {
+  retryD1Read,
+  type D1ReadRetryOptions,
+} from "./d1_read_retry.ts";
+import { emitTelemetry, errorCategory } from "./telemetry.ts";
+
 const RECONCILIATION_LIMIT = 100;
 const STALE_PENDING_SECONDS = 30;
 
@@ -29,10 +35,12 @@ export interface EmailReconciliationEnvironment {
 export const reconcilePcoRows = async (
   environment: ReconciliationEnvironment,
   nowEpoch = Math.floor(Date.now() / 1000),
+  retryOptions: D1ReadRetryOptions = {},
 ): Promise<number> => {
   const staleBefore = nowEpoch - STALE_PENDING_SECONDS;
-  const result = await environment.APP_DB.prepare(
-    `select r.id as row_id, r.job_id, j.user_id, r.status, r.claim_expires_at
+  const result = await retryReconciliationRead(
+    () => environment.APP_DB.prepare(
+      `select r.id as row_id, r.job_id, j.user_id, r.status, r.claim_expires_at
        from pco_batch_sync_rows r
        join pco_batch_sync_jobs j on j.id=r.job_id
       where j.status != 'failed'
@@ -42,9 +50,12 @@ export const reconcilePcoRows = async (
         )
       order by r.updated_at, r.row_index, r.id
       limit ?`,
-  )
-    .bind(staleBefore, nowEpoch, RECONCILIATION_LIMIT)
-    .all<RecoverablePcoRow>();
+    )
+      .bind(staleBefore, nowEpoch, RECONCILIATION_LIMIT)
+      .all<RecoverablePcoRow>(),
+    "pco_rows",
+    retryOptions,
+  );
 
   let published = 0;
   for (const row of result.results || []) {
@@ -73,19 +84,24 @@ export const reconcilePcoRows = async (
 export const reconcilePasswordResetEmails = async (
   environment: EmailReconciliationEnvironment,
   nowEpoch = Math.floor(Date.now() / 1000),
+  retryOptions: D1ReadRetryOptions = {},
 ): Promise<number> => {
   const staleBefore = nowEpoch - STALE_PENDING_SECONDS;
 
   // Expired links must not retain decryptable delivery material indefinitely.
-  const expired = await environment.APP_DB.prepare(
-    `select id from password_reset_requests
+  const expired = await retryReconciliationRead(
+    () => environment.APP_DB.prepare(
+      `select id from password_reset_requests
       where used_at is null and unixepoch(expires_at)<=?
         and delivery_status not in ('sent','accepted','suppressed','failed')
       order by expires_at, id
       limit ?`,
-  )
-    .bind(nowEpoch, RECONCILIATION_LIMIT)
-    .all<{ id: string }>();
+    )
+      .bind(nowEpoch, RECONCILIATION_LIMIT)
+      .all<{ id: string }>(),
+    "expired_password_resets",
+    retryOptions,
+  );
   for (const reset of expired.results || []) {
     await environment.APP_DB.prepare(
       `update password_reset_requests
@@ -101,8 +117,9 @@ export const reconcilePasswordResetEmails = async (
       .run();
   }
 
-  const recoverable = await environment.APP_DB.prepare(
-    `select id, delivery_status, delivery_claim_token,
+  const recoverable = await retryReconciliationRead(
+    () => environment.APP_DB.prepare(
+      `select id, delivery_status, delivery_claim_token,
             delivery_claim_expires_at
        from password_reset_requests
       where sent_at is null and used_at is null and unixepoch(expires_at)>?
@@ -115,9 +132,12 @@ export const reconcilePasswordResetEmails = async (
         )
       order by delivery_updated_at, id
       limit ?`,
-  )
-    .bind(nowEpoch, staleBefore, nowEpoch, RECONCILIATION_LIMIT)
-    .all<RecoverablePasswordReset>();
+    )
+      .bind(nowEpoch, staleBefore, nowEpoch, RECONCILIATION_LIMIT)
+      .all<RecoverablePasswordReset>(),
+    "recoverable_password_resets",
+    retryOptions,
+  );
 
   let published = 0;
   for (const reset of recoverable.results || []) {
@@ -140,3 +160,21 @@ export const reconcilePasswordResetEmails = async (
   }
   return published;
 };
+
+const retryReconciliationRead = <T>(
+  operation: () => Promise<T>,
+  task: string,
+  options: D1ReadRetryOptions,
+): Promise<T> =>
+  retryD1Read(operation, {
+    ...options,
+    onRetry: ({ error, attempts, retryDelayMs }) => {
+      emitTelemetry("warn", "d1_reconciliation_retry", {
+        container_role: "d1-reconciliation",
+        reconciliation_task: task,
+        error_category: errorCategory(error),
+        attempts,
+        retry_delay_ms: retryDelayMs,
+      });
+    },
+  });

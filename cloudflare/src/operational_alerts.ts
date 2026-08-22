@@ -57,6 +57,8 @@ const CANCELED_WEB_CONTAINER_STREAM_MESSAGE =
   "ReadableStream received over RPC disconnected prematurely.";
 const CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE =
   /^(?:internal error|Internal error in Durable Object storage caused object to be reset); reference = [A-Za-z0-9]+$/i;
+const INACTIVE_WEB_CONTAINER_CONNECTION_MESSAGE =
+  "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.";
 const CONTAINER_LIFECYCLE_STACK_MARKERS = [
   "ContainerState.update",
   "ContainerState.setStopped",
@@ -120,6 +122,7 @@ const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
   isExpectedDeploymentReset(trace) ||
   isRecoveredWebContainerCapacityAlarm(trace) ||
   isKnownWebContainerLifecycleStorageAlarm(trace) ||
+  isInactiveWebContainerLifecycleAlarm(trace) ||
   isCanceledWebContainerReadinessStream(trace);
 
 const isExpectedDeploymentReset = (trace: TraceItem): boolean =>
@@ -155,6 +158,21 @@ const isKnownWebContainerLifecycleStorageAlarm = (
       CONTAINER_LIFECYCLE_STACK_MARKERS.some((marker) =>
         exception.stack?.includes(marker),
       ),
+  );
+
+const isInactiveWebContainerLifecycleAlarm = (trace: TraceItem): boolean =>
+  trace.outcome === "exception" &&
+  trace.executionModel === "durableObject" &&
+  trace.entrypoint === "WebContainer" &&
+  isAlarmEvent(trace.event) &&
+  trace.exceptions.length > 0 &&
+  trace.exceptions.every(
+    (exception) =>
+      exception.message === INACTIVE_WEB_CONTAINER_CONNECTION_MESSAGE &&
+      typeof exception.stack === "string" &&
+      exception.stack.includes("ContainerState.update") &&
+      exception.stack.includes("ContainerState.setStatusAndupdate") &&
+      exception.stack.includes("ContainerState.setStopped"),
   );
 
 const isCanceledWebContainerReadinessStream = (
