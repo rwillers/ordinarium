@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import {
   reconcilePasswordResetEmails,
   reconcilePcoRows,
+  terminalizeExpiredPasswordResets,
 } from "./queue_reconciliation.ts";
 
 
@@ -157,16 +159,12 @@ test("failed queue publication leaves row stale for the next cron", async () => 
 class EmailStatement extends Statement {
   async all() {
     this.db.selects.push({ sql: this.sql, params: this.params });
-    if (this.sql.includes("unixepoch(expires_at)<=?")) {
-      return { results: this.db.expiredRows || [] };
-    }
     return { results: this.db.recoverableRows || [] };
   }
 }
 
 
-const emailDb = ({ expiredRows = [], recoverableRows = [] } = {}) => ({
-  expiredRows,
+const emailDb = ({ recoverableRows = [] } = {}) => ({
   recoverableRows,
   selects: [],
   updates: [],
@@ -208,26 +206,111 @@ test("scheduled email recovery publishes only opaque stale reset IDs", async () 
     { reset_id: "reset-queued" },
     { reset_id: "reset-restart" },
   ]);
-  assert.deepEqual(db.selects[1].params, [1_000, 970, 1_000, 100]);
-  assert.match(db.selects[1].sql, /delivery_status='queued'/);
-  assert.match(db.selects[1].sql, /delivery_status='sending'/);
-  assert.doesNotMatch(db.selects[1].sql, /delivery_status='retry'/);
+  assert.deepEqual(db.selects[0].params, [1_000, 970, 1_000, 100]);
+  assert.match(db.selects[0].sql, /delivery_status='queued'/);
+  assert.match(db.selects[0].sql, /delivery_status='sending'/);
+  assert.doesNotMatch(db.selects[0].sql, /delivery_status='retry'/);
   assert.equal(db.updates.length, 2);
 });
 
 
-test("scheduled email recovery terminalizes expired material with a capped scan", async () => {
-  const db = emailDb({ expiredRows: [{ id: "reset-expired" }] });
+test("expired reset cleanup is one bounded atomic update", async () => {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(`
+    create table password_reset_requests (
+      id text primary key,
+      expires_at text not null,
+      used_at text,
+      delivery_status text not null,
+      delivery_last_error text,
+      delivery_failed_at text,
+      delivery_token_envelope text,
+      delivery_claim_token text,
+      delivery_claim_expires_at integer,
+      delivery_updated_at text
+    );
+  `);
+  const insert = sqlite.prepare(`
+    insert into password_reset_requests (
+      id, expires_at, used_at, delivery_status, delivery_token_envelope,
+      delivery_claim_token, delivery_claim_expires_at, delivery_updated_at
+    ) values (?, datetime(?, 'unixepoch'), ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `);
+  insert.run("expired", 900, null, "sending", "secret", "lease", 1_100);
+  insert.run("terminal", 900, null, "sent", "terminal-secret", null, null);
+  insert.run("used", 900, "1970-01-01 00:15:00", "queued", "used-secret", null, null);
+  insert.run("future", 1_100, null, "queued", "future-secret", null, null);
 
-  const count = await reconcilePasswordResetEmails(
-    { APP_DB: db, EMAIL_JOBS_QUEUE: { send: async () => {} } },
-    1_000,
-  );
+  const writes = [];
+  const database = {
+    prepare(sql) {
+      const state = { params: [] };
+      return {
+        bind(...params) {
+          state.params = params;
+          return this;
+        },
+        async run() {
+          writes.push({ sql, params: state.params });
+          const result = sqlite.prepare(sql).run(...state.params);
+          return { success: true, meta: { changes: Number(result.changes) } };
+        },
+      };
+    },
+  };
 
-  assert.equal(count, 0);
-  assert.deepEqual(db.selects[0].params, [1_000, 100]);
-  assert.match(db.updates[0].sql, /delivery_token_envelope=null/);
-  assert.deepEqual(db.updates[0].params, ["reset-expired", 1_000]);
+  await terminalizeExpiredPasswordResets({ APP_DB: database }, 1_000);
+
+  assert.equal(writes.length, 1);
+  assert.deepEqual(writes[0].params, [1_000, 100]);
+  assert.match(writes[0].sql, /limit \?/);
+  assert.match(writes[0].sql, /delivery_token_envelope=null/);
+  const rows = sqlite.prepare(`
+    select id, delivery_status, delivery_last_error, delivery_failed_at,
+           delivery_token_envelope, delivery_claim_token,
+           delivery_claim_expires_at
+      from password_reset_requests order by id
+  `).all().map((row) => ({ ...row }));
+  assert.deepEqual(rows, [
+    {
+      id: "expired",
+      delivery_status: "failed",
+      delivery_last_error: "reset_expired",
+      delivery_failed_at: rows[0].delivery_failed_at,
+      delivery_token_envelope: null,
+      delivery_claim_token: null,
+      delivery_claim_expires_at: null,
+    },
+    {
+      id: "future",
+      delivery_status: "queued",
+      delivery_last_error: null,
+      delivery_failed_at: null,
+      delivery_token_envelope: "future-secret",
+      delivery_claim_token: null,
+      delivery_claim_expires_at: null,
+    },
+    {
+      id: "terminal",
+      delivery_status: "sent",
+      delivery_last_error: null,
+      delivery_failed_at: null,
+      delivery_token_envelope: "terminal-secret",
+      delivery_claim_token: null,
+      delivery_claim_expires_at: null,
+    },
+    {
+      id: "used",
+      delivery_status: "queued",
+      delivery_last_error: null,
+      delivery_failed_at: null,
+      delivery_token_envelope: "used-secret",
+      delivery_claim_token: null,
+      delivery_claim_expires_at: null,
+    },
+  ]);
+  assert.ok(rows[0].delivery_failed_at);
+  sqlite.close();
 });
 
 

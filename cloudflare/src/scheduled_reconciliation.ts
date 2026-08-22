@@ -2,7 +2,9 @@ import type { D1ReadRetryOptions } from "./d1_read_retry.ts";
 import {
   reconcilePasswordResetEmails,
   reconcilePcoRows,
+  terminalizeExpiredPasswordResets,
   type EmailReconciliationEnvironment,
+  type PasswordResetCleanupEnvironment,
   type ReconciliationEnvironment,
 } from "./queue_reconciliation.ts";
 
@@ -10,7 +12,10 @@ const RECONCILIATION_INTERVAL_MINUTES = 5;
 const MILLISECONDS_PER_MINUTE = 60_000;
 
 type ScheduledReconciliationEnvironment = ReconciliationEnvironment &
-  EmailReconciliationEnvironment;
+  EmailReconciliationEnvironment &
+  PasswordResetCleanupEnvironment;
+
+type ScheduledTask = () => Promise<unknown>;
 
 export const shouldRunScheduledReconciliation = (
   scheduledTime: number,
@@ -29,6 +34,46 @@ export const reconcileScheduledQueues = async (
   nowEpoch = Math.floor(Date.now() / 1_000),
   retryOptions: D1ReadRetryOptions = {},
 ): Promise<void> => {
-  await reconcilePcoRows(environment, nowEpoch, retryOptions);
-  await reconcilePasswordResetEmails(environment, nowEpoch, retryOptions);
+  await runSequentially(recoveryTasks(environment, nowEpoch, retryOptions));
+};
+
+export const runScheduledReconciliation = async (
+  environment: ScheduledReconciliationEnvironment,
+  recoveryEnabled: boolean,
+  nowEpoch = Math.floor(Date.now() / 1_000),
+  retryOptions: D1ReadRetryOptions = {},
+): Promise<void> => {
+  const tasks: ScheduledTask[] = [
+    () => terminalizeExpiredPasswordResets(environment, nowEpoch),
+  ];
+  if (recoveryEnabled) {
+    tasks.push(...recoveryTasks(environment, nowEpoch, retryOptions));
+  }
+  await runSequentially(tasks);
+};
+
+const recoveryTasks = (
+  environment: ScheduledReconciliationEnvironment,
+  nowEpoch: number,
+  retryOptions: D1ReadRetryOptions,
+): ScheduledTask[] => [
+  () => reconcilePcoRows(environment, nowEpoch, retryOptions),
+  () => reconcilePasswordResetEmails(environment, nowEpoch, retryOptions),
+];
+
+const runSequentially = async (tasks: ScheduledTask[]): Promise<void> => {
+  const errors: unknown[] = [];
+  for (const task of tasks) {
+    try {
+      await task();
+    } catch (error: unknown) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) {
+    throw errors[0];
+  }
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "Scheduled reconciliation tasks failed");
+  }
 };
