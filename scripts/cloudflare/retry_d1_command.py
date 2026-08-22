@@ -35,13 +35,15 @@ def run_with_d1_retry(
             return 0
 
         _write_output(result, failed=True)
-        delay = RETRY_DELAYS_SECONDS[attempt] if attempt < len(RETRY_DELAYS_SECONDS) else None
+        delay = (
+            RETRY_DELAYS_SECONDS[attempt]
+            if attempt < len(RETRY_DELAYS_SECONDS)
+            else None
+        )
         if delay is None or not _is_d1_overload(combined_output):
             return result.returncode
 
-        jittered_delay = delay * (
-            0.75 + min(1.0, max(0.0, random_value())) * 0.5
-        )
+        jittered_delay = delay * (0.75 + min(1.0, max(0.0, random_value())) * 0.5)
         print(
             "Recognized transient D1 overload; "
             f"retrying attempt {attempt + 2} of {len(RETRY_DELAYS_SECONDS) + 1} "

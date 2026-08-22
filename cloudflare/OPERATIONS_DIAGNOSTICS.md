@@ -241,10 +241,15 @@ For future diagnosis, retain these distinctions:
   test request. Establish request-driven load only from HTTP triggers and
   correlated request identifiers.
 - Staging currently sets `SCHEDULED_RECONCILIATION_ENABLED=false`; production
-  explicitly sets it to `true`. If staging emits another scheduled
-  reconciliation failure while the flag is false, first verify the deployed
-  configuration and whether the event came from a manual workflow, migration
-  check, Queue consumer, or a different Worker version.
+  explicitly sets it to `true`. The Worker emits `d1_reconciliation_retry`
+  only from scheduled reconciliation. If that telemetry event appears in
+  staging while the flag is false, the deployed configuration is stale or
+  mismatched, or the event came from a different Worker version.
+- Output from deployment-time `scripts/cloudflare/retry_d1_command.py` retries
+  is CI log output, not `d1_reconciliation_retry` Worker telemetry. For generic
+  D1 errors that do not carry that telemetry event name, continue checking
+  deployment workflows, migration checks, HTTP requests, and Queue consumers
+  as applicable to the failing operation.
 - Fast direct D1 API queries do not prove the Worker binding path is healthy.
   If direct SQL remains fast while only Worker-binding reads exhaust bounded
   retries, treat the binding/platform path as the leading hypothesis and avoid
