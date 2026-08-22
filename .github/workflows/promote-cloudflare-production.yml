@@ -144,13 +144,14 @@ jobs:
 
       - name: Apply compatible production D1 migrations
         run: >-
+          python ../scripts/cloudflare/retry_d1_command.py --
           npx wrangler d1 migrations apply APP_DB
           --remote
           --config wrangler.production.generated.json
 
       - name: Require reconciled production data
         run: |
-          CUTOVER_STATE="$(npx wrangler d1 execute APP_DB --remote --json --config wrangler.production.generated.json --command "SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN 1 ELSE 0 END AS imported")"
+          CUTOVER_STATE="$(python ../scripts/cloudflare/retry_d1_command.py -- npx wrangler d1 execute APP_DB --remote --json --config wrangler.production.generated.json --command "SELECT CASE WHEN EXISTS (SELECT 1 FROM users) THEN 1 ELSE 0 END AS imported")"
           printf '%s' "$CUTOVER_STATE" | jq -e '.[0].results[0].imported == 1' > /dev/null
 
       - name: Deploy production alert classifier
@@ -218,7 +219,7 @@ jobs:
 
       - name: Verify production D1 and public readiness
         run: |
-          npx wrangler d1 execute APP_DB --remote --config wrangler.production.generated.json --command "select 1 as ok"
+          python ../scripts/cloudflare/retry_d1_command.py -- npx wrangler d1 execute APP_DB --remote --config wrangler.production.generated.json --command "select 1 as ok"
           python ../scripts/cloudflare/verify_staging_deployment.py \
             --public-production \
             --base-url "https://$PRODUCTION_APP_DOMAIN" \

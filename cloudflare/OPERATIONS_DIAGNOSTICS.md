@@ -178,6 +178,14 @@ including both documented overload messages. Writes are never automatically
 retried. An exhausted retry still propagates to the Tail Worker and pages as a
 D1 failure.
 
+The first staging rollout of this remediation, workflow run `32590682159`,
+also encountered overload code 7429 while Wrangler queried the remote migration
+state. It stopped before any Worker or Container deployment. Staging and
+production now run idempotent Wrangler D1 migration and verification commands
+through the same kind of bounded, jittered, overload-only retry gate;
+authentication, migration syntax, and all other failures still stop
+immediately.
+
 ## Session handoff checklist
 
 For each troubleshooting session, record in the issue or pull request:
