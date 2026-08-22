@@ -198,6 +198,14 @@ Do not reset or replace the staging database solely for this platform-path
 failure; re-enable staging scans only after the binding path is confirmed
 healthy.
 
+The first circuit-breaker rollout, workflow run `32591901016`, stopped before
+deployment when Wrangler's migration-state query returned Cloudflare internal
+error code 7500. Because code-only releases do not need to query migration
+state, staging now applies and verifies D1 migrations only when the pushed
+commit changes `migrations/d1`; manual workflow runs continue to force the
+check. Any schema-changing release therefore remains fail-closed, while an
+unrelated D1 control-plane fault cannot block an operational Worker fix.
+
 ## Session handoff checklist
 
 For each troubleshooting session, record in the issue or pull request:

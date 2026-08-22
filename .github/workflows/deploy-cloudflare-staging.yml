@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Check out the exact main commit
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - name: Verify deployment commit
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -61,7 +63,23 @@ jobs:
       - name: Verify required queues
         run: npm run queues:ensure
 
+      - name: Detect D1 migration changes
+        id: d1_migrations
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- ../migrations/d1; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "required=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Apply compatible D1 migrations
+        if: ${{ steps.d1_migrations.outputs.required == 'true' }}
         run: >-
           python ../scripts/cloudflare/retry_d1_command.py --
           npx wrangler d1 migrations apply APP_DB
@@ -69,6 +87,7 @@ jobs:
           --config wrangler.jsonc
 
       - name: Verify remote D1
+        if: ${{ steps.d1_migrations.outputs.required == 'true' }}
         run: >-
           python ../scripts/cloudflare/retry_d1_command.py --
           npx wrangler d1 execute APP_DB
