@@ -13,7 +13,7 @@ import { emitQueueMetrics } from "./queue_observability";
 import { handleQueuePublishRequest } from "./queue_publisher";
 import { turnstileEnabledForDeployment } from "./runtime_policy";
 import {
-  reconcileScheduledQueues,
+  runScheduledReconciliation,
   scheduledReconciliationEnabled,
   shouldRunScheduledReconciliation,
 } from "./scheduled_reconciliation";
@@ -388,12 +388,15 @@ const worker: ExportedHandler<Cloudflare.Env> = {
   },
   scheduled: async (controller, environment, context): Promise<void> => {
     const scheduledTasks: Promise<unknown>[] = [emitQueueMetrics(environment)];
-    if (
-      scheduledReconciliationEnabled(
-        environment.SCHEDULED_RECONCILIATION_ENABLED,
-      ) && shouldRunScheduledReconciliation(controller.scheduledTime)
-    ) {
-      scheduledTasks.push(reconcileScheduledQueues(environment));
+    if (shouldRunScheduledReconciliation(controller.scheduledTime)) {
+      scheduledTasks.push(
+        runScheduledReconciliation(
+          environment,
+          scheduledReconciliationEnabled(
+            environment.SCHEDULED_RECONCILIATION_ENABLED,
+          ),
+        ),
+      );
     }
     context.waitUntil(Promise.all(scheduledTasks).then(() => undefined));
   },

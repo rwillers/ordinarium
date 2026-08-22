@@ -32,6 +32,10 @@ export interface EmailReconciliationEnvironment {
   EMAIL_JOBS_QUEUE: Queue;
 }
 
+export interface PasswordResetCleanupEnvironment {
+  APP_DB: D1Database;
+}
+
 export const reconcilePcoRows = async (
   environment: ReconciliationEnvironment,
   nowEpoch = Math.floor(Date.now() / 1000),
@@ -88,35 +92,6 @@ export const reconcilePasswordResetEmails = async (
 ): Promise<number> => {
   const staleBefore = nowEpoch - STALE_PENDING_SECONDS;
 
-  // Expired links must not retain decryptable delivery material indefinitely.
-  const expired = await retryReconciliationRead(
-    () => environment.APP_DB.prepare(
-      `select id from password_reset_requests
-      where used_at is null and unixepoch(expires_at)<=?
-        and delivery_status not in ('sent','accepted','suppressed','failed')
-      order by expires_at, id
-      limit ?`,
-    )
-      .bind(nowEpoch, RECONCILIATION_LIMIT)
-      .all<{ id: string }>(),
-    "expired_password_resets",
-    retryOptions,
-  );
-  for (const reset of expired.results || []) {
-    await environment.APP_DB.prepare(
-      `update password_reset_requests
-          set delivery_status='failed', delivery_last_error='reset_expired',
-              delivery_failed_at=CURRENT_TIMESTAMP,
-              delivery_token_envelope=null, delivery_claim_token=null,
-              delivery_claim_expires_at=null,
-              delivery_updated_at=CURRENT_TIMESTAMP
-        where id=? and used_at is null and unixepoch(expires_at)<=?
-          and delivery_status not in ('sent','accepted','suppressed','failed')`,
-    )
-      .bind(reset.id, nowEpoch)
-      .run();
-  }
-
   const recoverable = await retryReconciliationRead(
     () => environment.APP_DB.prepare(
       `select id, delivery_status, delivery_claim_token,
@@ -159,6 +134,31 @@ export const reconcilePasswordResetEmails = async (
     published += 1;
   }
   return published;
+};
+
+export const terminalizeExpiredPasswordResets = async (
+  environment: PasswordResetCleanupEnvironment,
+  nowEpoch = Math.floor(Date.now() / 1000),
+): Promise<void> => {
+  // Keep this a single bounded write so cleanup is safe when recovery reads are
+  // circuit-broken and an overloaded write is never replayed automatically.
+  await environment.APP_DB.prepare(
+    `update password_reset_requests
+        set delivery_status='failed', delivery_last_error='reset_expired',
+            delivery_failed_at=CURRENT_TIMESTAMP,
+            delivery_token_envelope=null, delivery_claim_token=null,
+            delivery_claim_expires_at=null,
+            delivery_updated_at=CURRENT_TIMESTAMP
+      where id in (
+        select id from password_reset_requests
+        where used_at is null and expires_at<=datetime(?, 'unixepoch')
+          and delivery_status in ('queued','sending','retry')
+        order by expires_at, id
+        limit ?
+      )`,
+  )
+    .bind(nowEpoch, RECONCILIATION_LIMIT)
+    .run();
 };
 
 const retryReconciliationRead = <T>(

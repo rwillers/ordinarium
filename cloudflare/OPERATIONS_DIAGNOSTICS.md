@@ -170,10 +170,12 @@ does not support legitimate user or test traffic as the cause. The minute cron
 was launching the PCO and password-reset recovery scans concurrently, creating
 three D1 reads per minute even when there was no work.
 
-The remediation keeps queue metrics on the minute schedule, runs recovery
-scans every five cron minutes, and serializes the PCO scan before the two
-password-reset scans. Safe reconciliation reads use bounded jittered retries at
-250 ms, 1 second, and 2.5 seconds for recognized transient D1 failures,
+The remediation keeps queue metrics on the minute schedule. On each
+five-minute boundary, scheduled orchestration first performs one bounded write
+to terminalize expired password resets. When recovery is enabled, it then runs
+the PCO recovery read and publication followed by one password-reset recovery
+read and publication. Safe reconciliation reads use bounded jittered retries
+at 250 ms, 1 second, and 2.5 seconds for recognized transient D1 failures,
 including both documented overload messages. Writes are never automatically
 retried. An exhausted retry still propagates to the Tail Worker and pages as a
 D1 failure.
@@ -191,11 +193,12 @@ exhausted all four attempts of the first PCO read. The intervening metric-only
 cron invocations were successful, and the identical SQL returned no rows from
 the same D1 primary in 0.2 ms through the Cloudflare API. This isolates the
 remaining failure to the staging Worker's D1 binding path rather than user
-traffic or query cost. As a reversible circuit breaker, scheduled recovery
-scans are disabled in staging while normal Queue delivery and queue metrics
-remain active. Production explicitly retains the five-minute recovery scans.
-Do not reset or replace the staging database solely for this platform-path
-failure; re-enable staging scans only after the binding path is confirmed
+traffic or query cost. As a reversible circuit breaker, staging disables the
+two recovery reads and publications while retaining the five-minute expired
+password-reset cleanup write, normal Queue delivery, and per-minute queue
+metrics. Production explicitly retains the full five-minute orchestration. Do
+not reset or replace the staging database solely for this platform-path
+failure; re-enable staging recovery only after the binding path is confirmed
 healthy.
 
 The first circuit-breaker rollout, workflow run `32591901016`, stopped before
@@ -241,10 +244,18 @@ For future diagnosis, retain these distinctions:
   test request. Establish request-driven load only from HTTP triggers and
   correlated request identifiers.
 - Staging currently sets `SCHEDULED_RECONCILIATION_ENABLED=false`; production
-  explicitly sets it to `true`. If staging emits another scheduled
-  reconciliation failure while the flag is false, first verify the deployed
-  configuration and whether the event came from a manual workflow, migration
-  check, Queue consumer, or a different Worker version.
+  explicitly sets it to `true`. In staging, this disables the PCO and
+  password-reset recovery reads and publications but leaves the bounded
+  expired-reset cleanup write active on five-minute boundaries. The Worker
+  emits `d1_reconciliation_retry` only from those disabled recovery reads. If
+  that telemetry event appears in staging while the flag is false, the
+  deployed configuration is stale or mismatched, or the event came from a
+  different Worker version.
+- Output from deployment-time `scripts/cloudflare/retry_d1_command.py` retries
+  is CI log output, not `d1_reconciliation_retry` Worker telemetry. For generic
+  D1 errors that do not carry that telemetry event name, continue checking
+  deployment workflows, migration checks, HTTP requests, and Queue consumers
+  as applicable to the failing operation.
 - Fast direct D1 API queries do not prove the Worker binding path is healthy.
   If direct SQL remains fast while only Worker-binding reads exhaust bounded
   retries, treat the binding/platform path as the leading hypothesis and avoid
@@ -252,9 +263,10 @@ For future diagnosis, retain these distinctions:
 - The inactive `WebContainer` lifecycle error is telemetry-only only when the
   Durable Object alarm, entrypoint, execution model, message, and lifecycle
   stack all match the tested signature. Near matches remain critical.
-- Re-enable staging scheduled reconciliation only after repeated Worker-binding
-  reads succeed across multiple recovery boundaries; normal Queue delivery and
-  per-minute queue metrics remain enabled while the circuit breaker is active.
+- Re-enable staging scheduled recovery only after repeated Worker-binding reads
+  succeed across multiple recovery boundaries; the bounded expired-reset
+  cleanup write, normal Queue delivery, and per-minute queue metrics remain
+  enabled while the circuit breaker is active.
 
 ## Session handoff checklist
 

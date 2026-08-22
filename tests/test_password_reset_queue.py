@@ -373,6 +373,14 @@ def test_password_reset_schema_matches_sqlite_forward_and_d1_migrations(app):
             row[1]
             for row in canonical.execute("pragma table_info(password_reset_requests)")
         }
+        canonical_indexes = {
+            row[1]
+            for row in canonical.execute("pragma index_list(password_reset_requests)")
+        }
+        canonical_cleanup_index_sql = canonical.execute(
+            "select sql from sqlite_schema where type='index' and name=?",
+            ("idx_password_reset_expiry_cleanup",),
+        ).fetchone()[0]
 
     with sqlite3.connect(":memory:") as forward:
         forward.execute("create table users (id integer primary key)")
@@ -381,10 +389,23 @@ def test_password_reset_schema_matches_sqlite_forward_and_d1_migrations(app):
                 root / "scripts/migrations/042_add_password_reset_requests.sql"
             ).read_text()
         )
+        forward.executescript(
+            (
+                root / "scripts/migrations/044_add_password_reset_cleanup_index.sql"
+            ).read_text()
+        )
         forward_columns = {
             row[1]
             for row in forward.execute("pragma table_info(password_reset_requests)")
         }
+        forward_indexes = {
+            row[1]
+            for row in forward.execute("pragma index_list(password_reset_requests)")
+        }
+        forward_cleanup_index_sql = forward.execute(
+            "select sql from sqlite_schema where type='index' and name=?",
+            ("idx_password_reset_expiry_cleanup",),
+        ).fetchone()[0]
 
     with sqlite3.connect(":memory:") as d1:
         d1.executescript(
@@ -399,8 +420,34 @@ def test_password_reset_schema_matches_sqlite_forward_and_d1_migrations(app):
         d1.executescript(
             (root / "migrations/d1/0004_operational_state.sql").read_text()
         )
+        d1.executescript(
+            (root / "migrations/d1/0007_password_reset_cleanup_index.sql").read_text()
+        )
         d1_columns = {
             row[1] for row in d1.execute("pragma table_info(password_reset_requests)")
         }
+        d1_indexes = {
+            row[1] for row in d1.execute("pragma index_list(password_reset_requests)")
+        }
+        d1_cleanup_index_sql = d1.execute(
+            "select sql from sqlite_schema where type='index' and name=?",
+            ("idx_password_reset_expiry_cleanup",),
+        ).fetchone()[0]
 
     assert canonical_columns == forward_columns == d1_columns
+    assert "idx_password_reset_expiry_cleanup" in canonical_indexes
+    assert "idx_password_reset_expiry_cleanup" in forward_indexes
+    assert "idx_password_reset_expiry_cleanup" in d1_indexes
+    normalized_cleanup_indexes = {
+        " ".join(value.lower().split())
+        for value in (
+            canonical_cleanup_index_sql,
+            forward_cleanup_index_sql,
+            d1_cleanup_index_sql,
+        )
+    }
+    assert len(normalized_cleanup_indexes) == 1
+    cleanup_index_sql = next(iter(normalized_cleanup_indexes))
+    assert "(expires_at, id)" in cleanup_index_sql
+    assert "where used_at is null" in cleanup_index_sql
+    assert "delivery_status in ('queued','sending','retry')" in cleanup_index_sql
