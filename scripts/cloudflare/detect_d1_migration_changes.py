@@ -89,7 +89,9 @@ def detect_d1_migration_changes(
         return MigrationDecision(True, "manual deployments always run D1 migrations")
 
     if event_name != "push" or not SHA_PATTERN.fullmatch(current_sha):
-        return MigrationDecision(True, "the deployment event or commit SHA is untrusted")
+        return MigrationDecision(
+            True, "the deployment event or commit SHA is untrusted"
+        )
 
     baseline_sha, lookup_error = _last_successful_staging_sha(repository, runner)
     if lookup_error or baseline_sha is None:
@@ -159,9 +161,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--event-name", default=os.environ.get("GITHUB_EVENT_NAME", ""))
     parser.add_argument("--current-sha", default=os.environ.get("GITHUB_SHA", ""))
-    parser.add_argument(
-        "--repository", default=os.environ.get("GITHUB_REPOSITORY", "")
-    )
+    parser.add_argument("--repository", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument(
         "--github-output",
         type=Path,
