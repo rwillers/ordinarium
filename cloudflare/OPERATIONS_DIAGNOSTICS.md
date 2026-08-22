@@ -206,6 +206,56 @@ commit changes `migrations/d1`; manual workflow runs continue to force the
 check. Any schema-changing release therefore remains fail-closed, while an
 unrelated D1 control-plane fault cannot block an operational Worker fix.
 
+### Resolution and acceptance record
+
+Pull requests [#45](https://github.com/rwillers/ordinarium/pull/45) through
+[#48](https://github.com/rwillers/ordinarium/pull/48) merged the alert
+classification, D1 read resilience, deployment retry, staging circuit-breaker,
+and conditional migration-check changes. Staging workflow run
+[`32592110561`](https://github.com/rwillers/ordinarium/actions/runs/32592110561)
+successfully deployed the immutable release at commit
+`6c1c53d32a2b65a34a73f2d4ceae830533750e68`. Between 18:58 and 19:05 UTC,
+Workers Observability recorded seven consecutive staging cron invocations with
+outcome `ok`, including both former five-minute recovery boundaries, and zero
+`d1_reconciliation_retry` events.
+
+Production promotion workflow run
+[`32595518100`](https://github.com/rwillers/ordinarium/actions/runs/32595518100)
+then verified the staging artifact and exact commit before deploying it through
+the protected `cloudflare-production` environment. The production D1
+migration, reconciled-data, alert-classifier, pinned-container, D1 readiness,
+and public-readiness gates all completed successfully. The repository variable
+`ENABLE_CLOUDFLARE_PRODUCTION_DEPLOY` was returned to `false` after promotion.
+
+Independent post-deployment probes returned 200 for `/`, `/login`, and
+`/health`. From 20:07 through 20:10 UTC, production recorded three scheduled
+invocations with outcome `ok`, including the 20:10 five-minute recovery scan,
+zero D1 reconciliation retries, and no alert-queue invocation. The production
+Tail Worker processed 28 observed post-deployment batches with outcome `ok`.
+Canceled `WebContainer.fetchWithReadiness` streams seen during the rollout were
+expected Container readiness behavior and did not enqueue alerts.
+
+For future diagnosis, retain these distinctions:
+
+- A `* * * * *` trigger is scheduled system work, not evidence of a user or
+  test request. Establish request-driven load only from HTTP triggers and
+  correlated request identifiers.
+- Staging currently sets `SCHEDULED_RECONCILIATION_ENABLED=false`; production
+  explicitly sets it to `true`. If staging emits another scheduled
+  reconciliation failure while the flag is false, first verify the deployed
+  configuration and whether the event came from a manual workflow, migration
+  check, Queue consumer, or a different Worker version.
+- Fast direct D1 API queries do not prove the Worker binding path is healthy.
+  If direct SQL remains fast while only Worker-binding reads exhaust bounded
+  retries, treat the binding/platform path as the leading hypothesis and avoid
+  resetting or replacing the database without contrary evidence.
+- The inactive `WebContainer` lifecycle error is telemetry-only only when the
+  Durable Object alarm, entrypoint, execution model, message, and lifecycle
+  stack all match the tested signature. Near matches remain critical.
+- Re-enable staging scheduled reconciliation only after repeated Worker-binding
+  reads succeed across multiple recovery boundaries; normal Queue delivery and
+  per-minute queue metrics remain enabled while the circuit breaker is active.
+
 ## Session handoff checklist
 
 For each troubleshooting session, record in the issue or pull request:
