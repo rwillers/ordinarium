@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   reconcileScheduledQueues,
+  scheduledReconciliationEnabled,
   shouldRunScheduledReconciliation,
 } from "./scheduled_reconciliation.ts";
 
@@ -20,6 +21,13 @@ test("scheduled recovery runs once every five cron minutes", () => {
     shouldRunScheduledReconciliation(Date.parse("2026-08-22T12:40:59Z")),
     true,
   );
+});
+
+
+test("scheduled recovery supports an explicit environment circuit breaker", () => {
+  assert.equal(scheduledReconciliationEnabled(undefined), true);
+  assert.equal(scheduledReconciliationEnabled("true"), true);
+  assert.equal(scheduledReconciliationEnabled("false"), false);
 });
 
 

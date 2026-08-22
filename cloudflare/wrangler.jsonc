@@ -43,6 +43,7 @@
   ],
   "vars": {
     "DEPLOYMENT_ENV": "staging",
+    "SCHEDULED_RECONCILIATION_ENABLED": "false",
     "APP_ORIGIN": "https://staging.ordinarium.com",
     "SIDE_EFFECTS_HOSTNAME": "staging.ordinarium.com",
     "EXTERNAL_SIDE_EFFECTS_ENABLED": "true",

@@ -632,6 +632,7 @@ def test_production_renderer_uses_separate_resources_and_tested_images():
         {"pattern": "www.ordinarium.com", "custom_domain": True},
     ]
     assert app["vars"]["APP_ORIGIN"] == "https://ordinarium.com"
+    assert app["vars"]["SCHEDULED_RECONCILIATION_ENABLED"] == "true"
     assert app["d1_databases"][0]["database_name"] == "ordinarium-app-production"
     assert alerts["name"] == "ordinarium-alerts-production"
     assert all(

@@ -58,6 +58,7 @@ def render_configs(
     app["vars"].update(
         {
             "DEPLOYMENT_ENV": "production",
+            "SCHEDULED_RECONCILIATION_ENABLED": "true",
             "APP_ORIGIN": f"https://{domain}",
             "SIDE_EFFECTS_HOSTNAME": domain,
             "EXTERNAL_SIDE_EFFECTS_ENABLED": "true",
