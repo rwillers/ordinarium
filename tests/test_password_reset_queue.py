@@ -448,6 +448,6 @@ def test_password_reset_schema_matches_sqlite_forward_and_d1_migrations(app):
     }
     assert len(normalized_cleanup_indexes) == 1
     cleanup_index_sql = next(iter(normalized_cleanup_indexes))
-    assert "(delivery_status, expires_at, id)" in cleanup_index_sql
+    assert "(expires_at, id)" in cleanup_index_sql
     assert "where used_at is null" in cleanup_index_sql
     assert "delivery_status in ('queued','sending','retry')" in cleanup_index_sql

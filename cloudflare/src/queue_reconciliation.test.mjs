@@ -230,7 +230,7 @@ test("expired reset cleanup is one bounded atomic update", async () => {
       delivery_updated_at text
     );
     create index idx_password_reset_expiry_cleanup
-      on password_reset_requests(delivery_status, expires_at, id)
+      on password_reset_requests(expires_at, id)
       where used_at is null
         and delivery_status in ('queued','sending','retry');
   `);
@@ -291,12 +291,16 @@ test("expired reset cleanup is one bounded atomic update", async () => {
   assert.ok(
     queryPlan.some((row) =>
       row.detail.includes("idx_password_reset_expiry_cleanup") &&
-      row.detail.includes("delivery_status=? AND expires_at<?"),
+      row.detail.includes("expires_at<?"),
     ),
     JSON.stringify(queryPlan),
   );
   assert.equal(
     queryPlan.some((row) => row.detail === "SCAN password_reset_requests"),
+    false,
+  );
+  assert.equal(
+    queryPlan.some((row) => row.detail.includes("USE TEMP B-TREE FOR ORDER BY")),
     false,
   );
   const row = (id) => ({

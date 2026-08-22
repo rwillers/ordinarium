@@ -399,7 +399,7 @@ CREATE INDEX idx_password_reset_requests_user_id ON password_reset_requests(user
 CREATE INDEX idx_password_reset_requests_expires_at ON password_reset_requests(expires_at);
 CREATE INDEX idx_password_reset_delivery_state ON password_reset_requests(delivery_status, delivery_claim_expires_at, delivery_updated_at);
 CREATE INDEX idx_password_reset_expiry_cleanup
-  ON password_reset_requests(delivery_status, expires_at, id)
+  ON password_reset_requests(expires_at, id)
   WHERE used_at IS NULL
     AND delivery_status IN ('queued','sending','retry');
 CREATE TABLE service_shares (
