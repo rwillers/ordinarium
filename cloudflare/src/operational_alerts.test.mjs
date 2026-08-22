@@ -299,6 +299,52 @@ test("internal references outside known web lifecycle alarms remain critical", (
 });
 
 
+test("inactive web container lifecycle alarms remain telemetry only", () => {
+  const alerts = alertsFromTrace(trace([], {
+    event: { scheduledTime: new Date("2026-08-21T19:15:00.000Z") },
+    entrypoint: "WebContainer",
+    executionModel: "durableObject",
+    outcome: "exception",
+    exceptions: [{
+      name: "Error",
+      message: "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.",
+      timestamp: Date.parse("2026-08-21T19:15:00.000Z"),
+      stack: "Error: Connection closed\n    at ContainerState.update (index.js:184:24)\n    at ContainerState.setStatusAndupdate (index.js:179:16)\n    at ContainerState.setStopped (index.js:150:16)",
+    }],
+  }));
+
+  assert.deepEqual(alerts, []);
+});
+
+
+test("inactive connection errors outside exact lifecycle alarms remain critical", () => {
+  const message = "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.";
+  const lifecycleStack = "Error: Connection closed\n    at ContainerState.update (index.js:184:24)\n    at ContainerState.setStatusAndupdate (index.js:179:16)\n    at ContainerState.setStopped (index.js:150:16)";
+  const alarm = { scheduledTime: new Date("2026-08-21T19:15:00.000Z") };
+  const cases = [
+    { event: null, entrypoint: "WebContainer", executionModel: "durableObject", stack: lifecycleStack },
+    { event: alarm, entrypoint: "OtherContainer", executionModel: "durableObject", stack: lifecycleStack },
+    { event: alarm, entrypoint: "WebContainer", executionModel: "stateless", stack: lifecycleStack },
+    { event: alarm, entrypoint: "WebContainer", executionModel: "durableObject", stack: "Error: Connection closed\n    at applicationHandler (src/index.ts:10:2)" },
+  ];
+
+  for (const options of cases) {
+    const [alert] = alertsFromTrace(trace([], {
+      ...options,
+      outcome: "exception",
+      exceptions: [{
+        name: "Error",
+        message,
+        timestamp: Date.parse("2026-08-21T19:15:00.000Z"),
+        stack: options.stack,
+      }],
+    }));
+    assert.equal(alert.kind, "worker_runtime_failure");
+    assert.equal(alert.severity, "critical");
+  }
+});
+
+
 test("container capacity exceptions outside recovered web alarms remain critical", () => {
   const capacityException = {
     name: "Error",

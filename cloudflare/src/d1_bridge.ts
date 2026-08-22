@@ -4,25 +4,15 @@ import {
   errorCategory,
   REQUEST_ID_HEADER,
 } from "./telemetry.ts";
+import {
+  retryD1Read,
+  type D1ReadRetryOptions,
+} from "./d1_read_retry.ts";
 
 const MAX_REQUEST_BYTES = 1024 * 1024;
 const MAX_SQL_BYTES = 64 * 1024;
 const MAX_PARAMS = 500;
 const MAX_BATCH_STATEMENTS = 50;
-const D1_READ_RETRY_DELAYS_MS = [250, 1_000, 2_500] as const;
-const RETRYABLE_D1_ERROR_FRAGMENTS = [
-  "Network connection lost",
-  "caused object to be reset",
-  "reset because its code was updated",
-  "Cannot resolve D1 DB due to transient issue",
-  "Replica disconnected from primary",
-] as const;
-
-type D1ReadRetryOptions = {
-  sleep?: (milliseconds: number) => Promise<void>;
-  random?: () => number;
-};
-
 type StatementInput = {
   sql: string;
   params: unknown[];
@@ -169,42 +159,20 @@ const retryRead = async <T>(
   databaseOperation: string,
   options: D1ReadRetryOptions,
 ): Promise<T> => {
-  const sleep = options.sleep ?? wait;
-  const random = options.random ?? Math.random;
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error: unknown) {
-      const delay = D1_READ_RETRY_DELAYS_MS[attempt];
-      if (delay === undefined || !isRetryableD1Error(error)) {
-        throw error;
-      }
-      const retryDelayMs = jitteredDelay(delay, random());
+  return retryD1Read(operation, {
+    ...options,
+    onRetry: ({ error, attempts, retryDelayMs }) => {
       emitTelemetry("warn", "d1_operation_retry", {
         request_id: requestId,
         container_role: "d1-bridge",
         error_category: errorCategory(error),
         database_operation: databaseOperation,
-        attempts: attempt + 1,
+        attempts,
         retry_delay_ms: retryDelayMs,
       });
-      await sleep(retryDelayMs);
-    }
-  }
+    },
+  });
 };
-
-const isRetryableD1Error = (error: unknown): boolean => {
-  const message = error instanceof Error ? error.message : String(error);
-  return RETRYABLE_D1_ERROR_FRAGMENTS.some((fragment) =>
-    message.includes(fragment),
-  );
-};
-
-const jitteredDelay = (baseDelayMs: number, randomValue: number): number =>
-  Math.round(baseDelayMs * (0.75 + Math.min(1, Math.max(0, randomValue)) * 0.5));
-
-const wait = (milliseconds: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 const normalizedOperation = (value: unknown): string =>
   typeof value === "string" &&

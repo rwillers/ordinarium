@@ -136,6 +136,48 @@ readiness-stream signature is telemetry-only; other premature-stream contexts
 remain critical. Primary queue backlog is also telemetry-only, while dead-letter
 work remains critical.
 
+## 2026-08-21 and 2026-08-22 incident evidence
+
+Production emitted seven identical alert emails on 2026-08-21 from Worker
+version `a967a7b8-fc2e-4faf-9840-83e9db5bd1fe`, release `ece79d2`. Each was a
+`WebContainer` Durable Object alarm whose lifecycle callback reported:
+
+```text
+Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.
+```
+
+The stack consistently passed through `ContainerState.update`,
+`ContainerState.setStatusAndupdate`, and `ContainerState.setStopped`. No
+production 5xx response was present in the inspected window, and bounded live
+checks of `/`, `/login`, and `/health` returned 200. This exact message is
+therefore telemetry-only only when all of the Durable Object, `WebContainer`,
+alarm, and lifecycle-stack conditions match. The same message in any other
+context remains a critical runtime failure.
+
+Staging emitted recurring D1 pages on 2026-08-22 from Worker version
+`1ab0eb19-a847-4f98-8fb5-723ed834c781`, also release `ece79d2`. Retained logs
+showed the `* * * * *` cron, not a user request, repeatedly failing with:
+
+```text
+D1_ERROR: D1 DB is overloaded. Requests queued for too long.
+```
+
+The application request traffic visible in the incident window was limited to
+internal alert delivery. Unauthenticated staging access still redirected to
+Cloudflare Access, there were no PCO reconciliation rows, only three password
+reset rows, and direct inspection queries were fast. The evidence therefore
+does not support legitimate user or test traffic as the cause. The minute cron
+was launching the PCO and password-reset recovery scans concurrently, creating
+three D1 reads per minute even when there was no work.
+
+The remediation keeps queue metrics on the minute schedule, runs recovery
+scans every five cron minutes, and serializes the PCO scan before the two
+password-reset scans. Safe reconciliation reads use bounded jittered retries at
+250 ms, 1 second, and 2.5 seconds for recognized transient D1 failures,
+including both documented overload messages. Writes are never automatically
+retried. An exhausted retry still propagates to the Tail Worker and pages as a
+D1 failure.
+
 ## Session handoff checklist
 
 For each troubleshooting session, record in the issue or pull request:
