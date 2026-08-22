@@ -14,6 +14,7 @@ import { handleQueuePublishRequest } from "./queue_publisher";
 import { turnstileEnabledForDeployment } from "./runtime_policy";
 import {
   reconcileScheduledQueues,
+  scheduledReconciliationEnabled,
   shouldRunScheduledReconciliation,
 } from "./scheduled_reconciliation";
 import {
@@ -50,6 +51,7 @@ declare global {
       AUTH_RATE_LIMITER: DurableObjectNamespace;
       SECRET_KEY: string;
       DEPLOYMENT_ENV: string;
+      SCHEDULED_RECONCILIATION_ENABLED?: string;
       OPS_HEALTH_TOKEN?: string;
       PCO_TOKEN_ENCRYPTION_KEYS: string;
       PCO_TOKEN_ENCRYPTION_PRIMARY_VERSION?: string;
@@ -386,7 +388,11 @@ const worker: ExportedHandler<Cloudflare.Env> = {
   },
   scheduled: async (controller, environment, context): Promise<void> => {
     const scheduledTasks: Promise<unknown>[] = [emitQueueMetrics(environment)];
-    if (shouldRunScheduledReconciliation(controller.scheduledTime)) {
+    if (
+      scheduledReconciliationEnabled(
+        environment.SCHEDULED_RECONCILIATION_ENABLED,
+      ) && shouldRunScheduledReconciliation(controller.scheduledTime)
+    ) {
       scheduledTasks.push(reconcileScheduledQueues(environment));
     }
     context.waitUntil(Promise.all(scheduledTasks).then(() => undefined));

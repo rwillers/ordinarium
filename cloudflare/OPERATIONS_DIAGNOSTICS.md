@@ -186,6 +186,18 @@ through the same kind of bounded, jittered, overload-only retry gate;
 authentication, migration syntax, and all other failures still stop
 immediately.
 
+After deployment, the 18:35, 18:40, and 18:45 staging recovery ticks still
+exhausted all four attempts of the first PCO read. The intervening metric-only
+cron invocations were successful, and the identical SQL returned no rows from
+the same D1 primary in 0.2 ms through the Cloudflare API. This isolates the
+remaining failure to the staging Worker's D1 binding path rather than user
+traffic or query cost. As a reversible circuit breaker, scheduled recovery
+scans are disabled in staging while normal Queue delivery and queue metrics
+remain active. Production explicitly retains the five-minute recovery scans.
+Do not reset or replace the staging database solely for this platform-path
+failure; re-enable staging scans only after the binding path is confirmed
+healthy.
+
 ## Session handoff checklist
 
 For each troubleshooting session, record in the issue or pull request:

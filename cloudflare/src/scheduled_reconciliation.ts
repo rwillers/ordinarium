@@ -20,6 +20,10 @@ export const shouldRunScheduledReconciliation = (
     RECONCILIATION_INTERVAL_MINUTES ===
     0;
 
+export const scheduledReconciliationEnabled = (
+  configuredValue: string | undefined,
+): boolean => configuredValue !== "false";
+
 export const reconcileScheduledQueues = async (
   environment: ScheduledReconciliationEnvironment,
   nowEpoch = Math.floor(Date.now() / 1_000),
