@@ -151,8 +151,8 @@ export const terminalizeExpiredPasswordResets = async (
             delivery_updated_at=CURRENT_TIMESTAMP
       where id in (
         select id from password_reset_requests
-        where used_at is null and unixepoch(expires_at)<=?
-          and delivery_status not in ('sent','accepted','suppressed','failed')
+        where used_at is null and expires_at<=datetime(?, 'unixepoch')
+          and delivery_status in ('queued','sending','retry')
         order by expires_at, id
         limit ?
       )`,

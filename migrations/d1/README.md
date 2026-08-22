@@ -13,6 +13,8 @@ them in filename order with Wrangler.
   from leaving sequences stale during the Phase 5 transition.
 - `0006_user_text_overrides.sql` adds account-scoped house-use replacements for
   canonical liturgical texts.
+- `0007_password_reset_cleanup_index.sql` bounds expired delivery-material
+  cleanup to actionable password-reset states and expiry.
 
 Regenerate the first two files from a freshly initialized main SQLite database:
 

@@ -70,10 +70,12 @@ const runSequentially = async (tasks: ScheduledTask[]): Promise<void> => {
       errors.push(error);
     }
   }
-  if (errors.length === 1) {
-    throw errors[0];
+  if (errors.length > 0) {
+    throw errors.find(isD1Error) ?? errors[0];
   }
-  if (errors.length > 1) {
-    throw new AggregateError(errors, "Scheduled reconciliation tasks failed");
-  }
+};
+
+const isD1Error = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.startsWith("D1_ERROR:");
 };
