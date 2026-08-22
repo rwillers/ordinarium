@@ -62,10 +62,15 @@ jobs:
         run: npm run queues:ensure
 
       - name: Apply compatible D1 migrations
-        run: npx wrangler d1 migrations apply APP_DB --remote --config wrangler.jsonc
+        run: >-
+          python ../scripts/cloudflare/retry_d1_command.py --
+          npx wrangler d1 migrations apply APP_DB
+          --remote
+          --config wrangler.jsonc
 
       - name: Verify remote D1
         run: >-
+          python ../scripts/cloudflare/retry_d1_command.py --
           npx wrangler d1 execute APP_DB
           --remote
           --config wrangler.jsonc
