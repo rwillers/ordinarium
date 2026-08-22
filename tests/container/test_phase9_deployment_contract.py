@@ -136,8 +136,12 @@ def test_staging_workflow_migrates_deploys_verifies_and_records_release():
     assert "push:" in workflow and "branches: [main]" in workflow
     assert "name: cloudflare-staging" in workflow
     assert "cancel-in-progress: false" in workflow
+    assert "actions: read" in workflow
+    assert "fetch-depth: 0" in workflow
     assert "Detect D1 migration changes" in workflow
-    assert "git diff --quiet" in workflow
+    assert "detect_d1_migration_changes.py" in workflow
+    assert "GH_TOKEN: ${{ github.token }}" in workflow
+    assert "github.event.before" not in workflow
     assert "steps.d1_migrations.outputs.required == 'true'" in workflow
     assert workflow.index("Apply compatible D1 migrations") < workflow.index(
         "Deploy application with exact container digests"

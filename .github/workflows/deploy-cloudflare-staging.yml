@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: cloudflare-staging
@@ -33,7 +34,7 @@ jobs:
       - name: Check out the exact main commit
         uses: actions/checkout@v5
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Verify deployment commit
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -66,17 +67,8 @@ jobs:
       - name: Detect D1 migration changes
         id: d1_migrations
         env:
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          elif [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          elif git diff --quiet "$BEFORE_SHA" "$GITHUB_SHA" -- ../migrations/d1; then
-            echo "required=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "required=true" >> "$GITHUB_OUTPUT"
-          fi
+          GH_TOKEN: ${{ github.token }}
+        run: python ../scripts/cloudflare/detect_d1_migration_changes.py
 
       - name: Apply compatible D1 migrations
         if: ${{ steps.d1_migrations.outputs.required == 'true' }}
