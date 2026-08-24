@@ -39,16 +39,17 @@ export const reconcileScheduledQueues = async (
 
 export const runScheduledReconciliation = async (
   environment: ScheduledReconciliationEnvironment,
-  recoveryEnabled: boolean,
+  reconciliationEnabled: boolean,
   nowEpoch = Math.floor(Date.now() / 1_000),
   retryOptions: D1ReadRetryOptions = {},
 ): Promise<void> => {
+  if (!reconciliationEnabled) {
+    return;
+  }
   const tasks: ScheduledTask[] = [
     () => terminalizeExpiredPasswordResets(environment, nowEpoch),
+    ...recoveryTasks(environment, nowEpoch, retryOptions),
   ];
-  if (recoveryEnabled) {
-    tasks.push(...recoveryTasks(environment, nowEpoch, retryOptions));
-  }
   await runSequentially(tasks);
 };
 

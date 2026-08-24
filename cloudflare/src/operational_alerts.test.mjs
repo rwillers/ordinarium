@@ -166,6 +166,29 @@ test("D1 runtime exceptions use the D1 fingerprint without exposing the exceptio
 });
 
 
+test("scheduled D1 runtime exceptions use the reconciliation role", () => {
+  const exceptionTimestamp = Date.parse("2026-08-23T12:31:02.276Z");
+  const [alert] = alertsFromTrace(trace([], {
+    event: {
+      cron: "* * * * *",
+      scheduledTime: Date.parse("2026-08-23T12:30:50Z"),
+    },
+    outcome: "exception",
+    exceptions: [{
+      name: "Error",
+      message: "D1_ERROR: Network connection lost.",
+      timestamp: exceptionTimestamp,
+    }],
+  }));
+
+  assert.equal(alert.kind, "d1_failure");
+  assert.equal(alert.occurred_at, "2026-08-23T12:31:02.276Z");
+  assert.equal(alert.source.container_role, "d1-reconciliation");
+  assert.equal(alert.source.error_category, "internal");
+  assert.equal(JSON.stringify(alert).includes("Network connection lost"), false);
+});
+
+
 test("expected deployment resets do not page as runtime failures", () => {
   const alerts = alertsFromTrace(trace([], {
     outcome: "exception",

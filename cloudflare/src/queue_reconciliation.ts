@@ -140,8 +140,8 @@ export const terminalizeExpiredPasswordResets = async (
   environment: PasswordResetCleanupEnvironment,
   nowEpoch = Math.floor(Date.now() / 1000),
 ): Promise<void> => {
-  // Keep this a single bounded write so cleanup is safe when recovery reads are
-  // circuit-broken and an overloaded write is never replayed automatically.
+  // Keep this a single bounded write so scheduled maintenance never
+  // automatically replays an overloaded write.
   await environment.APP_DB.prepare(
     `update password_reset_requests
         set delivery_status='failed', delivery_last_error='reset_expired',

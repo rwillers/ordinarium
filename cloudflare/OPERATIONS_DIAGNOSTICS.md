@@ -193,13 +193,12 @@ exhausted all four attempts of the first PCO read. The intervening metric-only
 cron invocations were successful, and the identical SQL returned no rows from
 the same D1 primary in 0.2 ms through the Cloudflare API. This isolates the
 remaining failure to the staging Worker's D1 binding path rather than user
-traffic or query cost. As a reversible circuit breaker, staging disables the
-two recovery reads and publications while retaining the five-minute expired
-password-reset cleanup write, normal Queue delivery, and per-minute queue
-metrics. Production explicitly retains the full five-minute orchestration. Do
-not reset or replace the staging database solely for this platform-path
-failure; re-enable staging recovery only after the binding path is confirmed
-healthy.
+traffic or query cost. As a reversible circuit breaker, staging initially
+disabled the two recovery reads and publications while retaining the
+five-minute expired-password-reset cleanup write, normal Queue delivery, and
+per-minute queue metrics. Production explicitly retained the full five-minute
+orchestration. Do not reset or replace the staging database solely for this
+platform-path failure.
 
 The first circuit-breaker rollout, workflow run `32591901016`, stopped before
 deployment when Wrangler's migration-state query returned Cloudflare internal
@@ -238,19 +237,41 @@ Tail Worker processed 28 observed post-deployment batches with outcome `ok`.
 Canceled `WebContainer.fetchWithReadiness` streams seen during the rollout were
 expected Container readiness behavior and did not enqueue alerts.
 
+### 2026-08-23 follow-up evidence and circuit-breaker correction
+
+Staging continued to page approximately every 20 minutes after the initial
+recovery-read circuit breaker. A Workers Observability inspection of
+`2026-08-23T12:25Z` through `12:35Z` confirmed that the alert at
+`2026-08-23T12:31:02.276Z` came from the `* * * * *` cron on Worker version
+`74d7c7c2-5450-4328-91e3-82a01a2a9d10`, request ID `3APPCEJR5INJWYOE`, not
+from a user request or the HTTP D1 bridge. The exception was `D1_ERROR: Network
+connection lost.` and its stack passed through
+`terminalizeExpiredPasswordResets`, `runSequentially`, and
+`runScheduledReconciliation`. The failed cleanup merely deferred
+terminalization of already-expired reset records. The alert-delivery Queue,
+email-jobs Container, and MailerSend request then completed normally.
+
+The remaining five-minute cleanup write was therefore bypassing the intended
+staging D1 circuit breaker. When `SCHEDULED_RECONCILIATION_ENABLED=false`, the
+Worker now skips all scheduled D1 maintenance, including expired-reset cleanup
+and both recovery scans. Per-minute Queue metrics and normal Queue delivery
+remain enabled. Production continues to set the flag to `true` and runs the
+full cleanup and recovery sequence. Cron-originated D1 runtime failures are
+classified as `d1-reconciliation`; other D1 runtime failures retain the
+existing `d1-bridge` role.
+
 For future diagnosis, retain these distinctions:
 
 - A `* * * * *` trigger is scheduled system work, not evidence of a user or
   test request. Establish request-driven load only from HTTP triggers and
   correlated request identifiers.
 - Staging currently sets `SCHEDULED_RECONCILIATION_ENABLED=false`; production
-  explicitly sets it to `true`. In staging, this disables the PCO and
-  password-reset recovery reads and publications but leaves the bounded
-  expired-reset cleanup write active on five-minute boundaries. The Worker
-  emits `d1_reconciliation_retry` only from those disabled recovery reads. If
-  that telemetry event appears in staging while the flag is false, the
-  deployed configuration is stale or mismatched, or the event came from a
-  different Worker version.
+  explicitly sets it to `true`. In staging, this disables all scheduled D1
+  maintenance on five-minute boundaries: expired-reset cleanup, PCO recovery,
+  and password-reset recovery. If `d1_reconciliation_retry` or a cron-originated
+  D1 failure appears in staging while the flag is false, the deployed
+  configuration is stale or mismatched, or the event came from a different
+  Worker version.
 - Output from deployment-time `scripts/cloudflare/retry_d1_command.py` retries
   is CI log output, not `d1_reconciliation_retry` Worker telemetry. For generic
   D1 errors that do not carry that telemetry event name, continue checking
@@ -263,10 +284,10 @@ For future diagnosis, retain these distinctions:
 - The inactive `WebContainer` lifecycle error is telemetry-only only when the
   Durable Object alarm, entrypoint, execution model, message, and lifecycle
   stack all match the tested signature. Near matches remain critical.
-- Re-enable staging scheduled recovery only after repeated Worker-binding reads
-  succeed across multiple recovery boundaries; the bounded expired-reset
-  cleanup write, normal Queue delivery, and per-minute queue metrics remain
-  enabled while the circuit breaker is active.
+- Re-enable staging scheduled reconciliation only after repeated Worker-binding
+  operations succeed across multiple recovery boundaries. Normal Queue
+  delivery and per-minute queue metrics remain enabled while the circuit
+  breaker is active.
 
 ## Session handoff checklist
 
