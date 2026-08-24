@@ -9,7 +9,7 @@ import {
 } from "./scheduled_reconciliation.ts";
 
 
-test("scheduled recovery runs once every five cron minutes", () => {
+test("scheduled reconciliation runs once every five cron minutes", () => {
   assert.equal(
     shouldRunScheduledReconciliation(Date.parse("2026-08-22T12:35:08Z")),
     true,
@@ -25,7 +25,7 @@ test("scheduled recovery runs once every five cron minutes", () => {
 });
 
 
-test("scheduled recovery supports an explicit environment circuit breaker", () => {
+test("scheduled reconciliation supports an explicit environment circuit breaker", () => {
   assert.equal(scheduledReconciliationEnabled(undefined), true);
   assert.equal(scheduledReconciliationEnabled("true"), true);
   assert.equal(scheduledReconciliationEnabled("false"), false);
@@ -213,24 +213,13 @@ test("multiple failures propagate the raw D1 error after every task runs", async
 });
 
 
-test("disabled recovery still runs only expired reset cleanup", async () => {
-  const statements = [];
+test("disabled scheduled reconciliation performs no D1 or Queue work", async () => {
+  let databaseOperations = 0;
+  let queuePublications = 0;
   const database = {
-    prepare(sql) {
-      const statement = { sql, params: [] };
-      statements.push(statement);
-      return {
-        bind(...params) {
-          statement.params = params;
-          return this;
-        },
-        async all() {
-          throw new Error("recovery read must remain disabled");
-        },
-        async run() {
-          return { success: true };
-        },
-      };
+    prepare() {
+      databaseOperations += 1;
+      throw new Error("D1 access must remain disabled");
     },
   };
 
@@ -238,51 +227,16 @@ test("disabled recovery still runs only expired reset cleanup", async () => {
     {
       APP_DB: database,
       PCO_JOBS_QUEUE: {
-        send: async () => { throw new Error("PCO publication disabled"); },
+        send: async () => { queuePublications += 1; },
       },
       EMAIL_JOBS_QUEUE: {
-        send: async () => { throw new Error("email publication disabled"); },
+        send: async () => { queuePublications += 1; },
       },
     },
     false,
     1_000,
   );
 
-  assert.equal(statements.length, 1);
-  assert.match(statements[0].sql, /update password_reset_requests/);
-  assert.match(statements[0].sql, /delivery_token_envelope=null/);
-  assert.deepEqual(statements[0].params, [1_000, 100]);
-});
-
-
-test("disabled recovery propagates cleanup write failures without retrying", async () => {
-  let writes = 0;
-  const failure = new Error("cleanup write failed");
-  const database = {
-    prepare() {
-      return {
-        bind() {
-          return this;
-        },
-        async run() {
-          writes += 1;
-          throw failure;
-        },
-      };
-    },
-  };
-
-  await assert.rejects(
-    runScheduledReconciliation(
-      {
-        APP_DB: database,
-        PCO_JOBS_QUEUE: { send: async () => {} },
-        EMAIL_JOBS_QUEUE: { send: async () => {} },
-      },
-      false,
-      1_000,
-    ),
-    (error) => error === failure,
-  );
-  assert.equal(writes, 1);
+  assert.equal(databaseOperations, 0);
+  assert.equal(queuePublications, 0);
 });

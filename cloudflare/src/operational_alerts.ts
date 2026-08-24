@@ -98,7 +98,7 @@ const runtimeFailureAlert = (
   const runtimeOccurredAt = runtimeFailureOccurredAt(trace, occurredAt);
   return isD1RuntimeFailure(trace)
     ? createAlert("d1_failure", "critical", runtimeOccurredAt, scriptName, {
-        container_role: "d1-bridge",
+        container_role: d1RuntimeContainerRole(trace),
         error_category: "internal",
       })
     : createAlert(
@@ -117,6 +117,9 @@ const isD1RuntimeFailure = (trace: TraceItem): boolean =>
   trace.exceptions.every((exception) =>
     exception.message.startsWith(D1_RUNTIME_ERROR_PREFIX),
   );
+
+const d1RuntimeContainerRole = (trace: TraceItem): string =>
+  isCronEvent(trace.event) ? "d1-reconciliation" : "d1-bridge";
 
 const isExpectedRuntimeTransient = (trace: TraceItem): boolean =>
   isExpectedDeploymentReset(trace) ||
@@ -189,6 +192,9 @@ const isCanceledWebContainerReadinessStream = (
 
 const isAlarmEvent = (event: TraceItem["event"]): boolean =>
   event !== null && "scheduledTime" in event && !("cron" in event);
+
+const isCronEvent = (event: TraceItem["event"]): boolean =>
+  event !== null && "cron" in event;
 
 const isRpcEvent = (
   event: TraceItem["event"],
