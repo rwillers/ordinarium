@@ -32,7 +32,7 @@ All service texts are represented in Markdown.
 - Preformatted text uses double-space line breaks to preserve formatting (e.g., "We believe in one God,\[\_\]\[\_\]⮐").
 - Preformatted paragraphs (e.g., the Creeds) use code formatting (four spaces, resulting in \<pre\>\<code\> blocks).
 - Variables that are intended to be filled in with propers or other seasonal language are indicated using double curly quotation marks (e.g., "{{variable_name}}").
-- App UI titles and headers use sentence case (e.g., "Propers search").
+- App UI titles and headers use sentence case (e.g., "Calendar lookup").
 
 ## Database structure
 
@@ -47,7 +47,7 @@ When updating JSON text fields via SQL migrations, prefer building multiline str
 - Gunicorn for production serving
 
 ## Development (local)
-1) Create and activate a virtual environment.
+1) Install Python 3.13 (for example, `brew install python@3.13`), then create and activate the virtual environment: `python3.13 -m venv venv` and `source venv/bin/activate`.
 2) Install dependencies: `pip install -r requirements.txt`.
 3) Initialize the database: `flask --app ordinarium init-db`.
 4) If upgrading an existing database, run `python scripts/migrate_db.py`.

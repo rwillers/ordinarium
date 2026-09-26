@@ -3,6 +3,8 @@
 .gitignore
 .editorconfig
 .vscode/
+.venv
+venv/
 .env
 .dev.vars
 cloudflare/node_modules/
