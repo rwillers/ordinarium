@@ -61,16 +61,25 @@ def test_observance_endpoint_returns_options_for_date(client):
     }
 
 
-def test_propers_search_results_handles_blank_date(client):
-    response = client.get("/propers-search/results")
+def test_calendar_lookup_page_is_linked_in_menu(auth_client):
+    client, _ = auth_client
+    response = client.get("/calendar-lookup")
+    assert response.status_code == 200
+    body = response.data.decode("utf-8")
+    assert "<h2>Calendar lookup</h2>" in body
+    assert 'href="/calendar-lookup"' in body
+
+
+def test_calendar_lookup_results_handles_blank_date(client):
+    response = client.get("/calendar-lookup/results")
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["date"] is None
     assert payload["observances"] == []
 
 
-def test_propers_search_results_handles_invalid_date(client):
-    response = client.get("/propers-search/results?date=invalid")
+def test_calendar_lookup_results_handles_invalid_date(client):
+    response = client.get("/calendar-lookup/results?date=invalid")
     assert response.status_code == 200
     payload = response.get_json()
     assert payload["date"] == "invalid"

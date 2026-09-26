@@ -113,15 +113,15 @@ def register_page_routes(bp):
     def about():
         return render_template("about.html")
 
-    @bp.route("/propers-search")
-    def propers_search():
+    @bp.route("/calendar-lookup")
+    def calendar_lookup():
         today = date.today()
         days_until_sunday = (6 - today.weekday()) % 7
         default_date = (today + timedelta(days=days_until_sunday)).isoformat()
-        return render_template("propers_search.html", today=default_date)
+        return render_template("calendar_lookup.html", today=default_date)
 
-    @bp.route("/propers-search/results")
-    def propers_search_results():
+    @bp.route("/calendar-lookup/results")
+    def calendar_lookup_results():
         raw_date = request.args.get("date", "")
         if not raw_date:
             return jsonify({"date": None, "season": None, "observances": []})

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Propers search &mdash; Ordinarium{% endblock %}
+{% block title %}Calendar lookup &mdash; Ordinarium{% endblock %}
 
 {% block content %}
 <div id="page">
-	<h2>Propers search</h2>
+	<h2>Calendar lookup</h2>
 	<p>Select a date to view the season and matching observances with associated propers.</p>
 	<div class="propers-search-controls">
 		<label class="propers-search-label" for="propers-search-date">Service date</label>
@@ -147,7 +147,7 @@
 		}
 		summary.textContent = 'Loading results…'
 		results.innerHTML = ''
-		const response = await fetch(`/propers-search/results?date=${encodeURIComponent(selectedDate)}`)
+		const response = await fetch(`/calendar-lookup/results?date=${encodeURIComponent(selectedDate)}`)
 		if (!response.ok) {
 			summary.textContent = 'Unable to load results.'
 			return

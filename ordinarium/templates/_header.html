@@ -32,6 +32,7 @@
 				group='header-nav'
 				) %}
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.services') }}">Services</a>
+					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.calendar_lookup') }}">Calendar lookup</a>
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.settings') }}">Settings</a>
 					{% if user.has_feature('admin') %}
 					<a class="dropdown-menu-item" role="menuitem" href="{{ url_for('main.admin_index') }}">Admin</a>
