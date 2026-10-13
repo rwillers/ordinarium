@@ -218,6 +218,38 @@ def _swap_communion_distribution_formulas(text, other_rite_text):
     return f"{current_match.group(1)}{other_match.group(2)}{current_match.group(3)}"
 
 
+def _align_penitential_plan_items(plan_items):
+    kyrie = next(
+        (
+            item
+            for item in plan_items
+            if item.get("type") == "text" and item.get("title") == "The Kyrie"
+        ),
+        None,
+    )
+    trisagion = next(
+        (
+            item
+            for item in plan_items
+            if item.get("type") == "text" and item.get("title") == "The Trisagion"
+        ),
+        None,
+    )
+    if kyrie is None or trisagion is None:
+        return plan_items
+
+    # The editor uses the Kyrie row to position and include either acclamation;
+    # its hidden Trisagion row can still have a different saved position.
+    aligned = []
+    for item in plan_items:
+        if item is trisagion:
+            continue
+        aligned.append(item)
+        if item is kyrie:
+            aligned.append({**trisagion, "disabled": kyrie.get("disabled", False)})
+    return aligned
+
+
 def render_text_page(service_id, saved_service, saved_data, user_id=None):
     if not saved_service:
         return render_error("Service ID required to generate text.", 400)
@@ -313,6 +345,7 @@ def build_rendered_ordinaries(
         user_id=owner_user_id,
         overrides_by_text_id=overrides_by_text_id,
     )
+    plan_items = _align_penitential_plan_items(plan_items)
     ordinaries = [
         {
             "token": item.get("token"),
