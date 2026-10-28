@@ -282,12 +282,82 @@ For future diagnosis, retain these distinctions:
   retries, treat the binding/platform path as the leading hypothesis and avoid
   resetting or replacing the database without contrary evidence.
 - The inactive `WebContainer` lifecycle error is telemetry-only only when the
-  Durable Object alarm, entrypoint, execution model, message, and lifecycle
-  stack all match the tested signature. Near matches remain critical.
+  Durable Object alarm, entrypoint, execution model, message, and a tested
+  lifecycle or single `WebContainer.alarm` stack match. Near matches remain
+  critical; see the October evidence below for the narrowly accepted variants.
 - Re-enable staging scheduled reconciliation only after repeated Worker-binding
   operations succeed across multiple recovery boundaries. Normal Queue
   delivery and per-minute queue metrics remain enabled while the circuit
   breaker is active.
+
+## 2026-10-26 through 2026-10-28 production triage
+
+Authenticated Workers Observability inspection on October 28 correlated all five
+runtime alert emails to `WebContainer` Durable Object alarms on application
+Worker version `87895087-e766-45b7-97ec-60665a0fac4f`, release `af543a2`.
+The same Durable Object ID appeared in all five invocations. These were not
+HTTP or queue-delivery triggers:
+
+| UTC occurrence | Platform exception | Invocation ID |
+| --- | --- | --- |
+| Oct 26 14:23:42.058 | Inactive Durable Object connection | `d34d63735e80998e3458127f212de0ae` |
+| Oct 26 18:55:55.503 | Durable Object storage reset | `483bf099d6af3d7971ca6be8e31df8f9` |
+| Oct 26 22:00:16.589 | Internal error with platform reference | `192af4594a75592e483e4ba483c65b95` |
+| Oct 27 14:10:36.077 | Inactive Durable Object connection | `7bcaac640b9bf42ba7c0baa2aae530e3` |
+| Oct 27 22:41:23.852 | Inactive Durable Object connection | `b48198b7b054493f01f7ac0c1ff23667` |
+
+The inactive-connection and generic internal-error traces retained only
+`at WebContainer.alarm (index.js:1407:28)`. The storage-reset trace included an
+exception without a stack. These bypassed the previous classifier's required
+`ContainerState` lifecycle frames. The classifier now accepts the single alarm
+frame for the exact inactive or platform-reference messages, and an absent
+stack only for the exact platform storage-reset message with a reference.
+HTTP/RPC and cron triggers, other entrypoints, unknown/mixed exceptions,
+CPU/memory failures, application stacks, and actionable telemetry still page.
+
+A retained-telemetry search for October 26-27 returned no `status >= 500` or
+`worker_request_failure` records; a positive-control `status = 200` search found
+successful traffic. Searches also found no `d1_operation_failure`,
+`d1_reconciliation_retry`, `queue_delivery_failure`, or
+`queue_publication_failure` records. This supports a non-impacting platform
+lifecycle interpretation, but does not establish Cloudflare's underlying cause
+or guarantee that retention/sampling captured every request.
+
+The October 28 08:29:22 UTC alert was `queue_metrics_failure` on the minute cron,
+for `ordinarium-app-production-email-jobs-dlq`, invocation
+`b4a36ec2dfc4ba38a05808759cfce2aa`. The next readings at 08:30:23 and 08:31:22
+succeeded; the inspected 08:30 reading reported zero backlog bytes, count, and
+oldest age. At approximately 19:22 EDT, both primary job queues and both DLQs
+displayed zero realtime backlog and no ingestion/retry activity in the preceding
+24 hours. The homepage, services list, and a liturgy view loaded successfully;
+`/health` returned `{"status":"ok"}` but is edge-only. The running web container
+used version 16 at 100% traffic. Both app and alert Workers identified release
+`af543a2`, excluding a stale classifier release as the explanation for paging.
+
+### Queue visibility paging policy
+
+Raw `queue_metrics_failure` events remain sanitized telemetry. The Tail tracks
+observations in dedicated `queue-metrics:<script>:<queue>` instances of the
+existing `AlertDeduplicator` namespace, using a separate `metrics_health` key.
+This survives Tail isolate restarts and requires no binding or migration.
+Successful reads reset the streak. Three failed readings spanning at least two
+minutes produce a critical `queue_failure` alert with category
+`metrics_unavailable`; a gap over 150 seconds starts a new streak. Duplicate or
+older observations cannot add failures or undo a newer recovery. Existing
+15-minute alert deduplication applies. Only timestamp and health state are sent
+to the monitor, which persists each newer observation's state.
+
+If durable tracking fails or returns an invalid response, fail closed with a
+critical `metrics_monitor_unavailable` alert. Delivery/publication failures,
+D1 failures, and nonempty DLQ metrics still page immediately. Recovery sends no
+email; observations do not replay jobs or change container `sleepAfter`.
+
+Escalate correlated legitimate-route failures, failed readiness, or actual
+dead-lettered work immediately. Escalate persistent platform alarm failures to
+Cloudflare with UTC intervals, Worker versions, invocation IDs, and retained
+platform references. Keep raw exceptions in authenticated observability, never
+alert emails. Promote a reviewed, staging-tested release through the existing
+production workflow, then independently recheck live behavior.
 
 ## Session handoff checklist
 

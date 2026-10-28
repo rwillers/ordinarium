@@ -57,6 +57,8 @@ const CANCELED_WEB_CONTAINER_STREAM_MESSAGE =
   "ReadableStream received over RPC disconnected prematurely.";
 const CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE =
   /^(?:internal error|Internal error in Durable Object storage caused object to be reset); reference = [A-Za-z0-9]+$/i;
+const CLOUDFLARE_STORAGE_RESET_MESSAGE =
+  /^Internal error in Durable Object storage caused object to be reset; reference = [A-Za-z0-9]+$/;
 const INACTIVE_WEB_CONTAINER_CONNECTION_MESSAGE =
   "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.";
 const CONTAINER_LIFECYCLE_STACK_MARKERS = [
@@ -157,9 +159,16 @@ const isKnownWebContainerLifecycleStorageAlarm = (
   trace.exceptions.every(
     (exception) =>
       CLOUDFLARE_INTERNAL_REFERENCE_MESSAGE.test(exception.message) &&
-      typeof exception.stack === "string" &&
-      CONTAINER_LIFECYCLE_STACK_MARKERS.some((marker) =>
-        exception.stack?.includes(marker),
+      (
+        (typeof exception.stack === "string" &&
+          CONTAINER_LIFECYCLE_STACK_MARKERS.some((marker) =>
+            exception.stack?.includes(marker),
+          )) ||
+        isSingleWebAlarmFrame(exception.stack) ||
+        // Observed on Oct 26: the platform storage-reset alarm omitted its stack.
+        // Generic internal errors without a stack still page.
+        ((!exception.stack || !exception.stack.trim()) &&
+          CLOUDFLARE_STORAGE_RESET_MESSAGE.test(exception.message))
       ),
   );
 
@@ -173,10 +182,19 @@ const isInactiveWebContainerLifecycleAlarm = (trace: TraceItem): boolean =>
     (exception) =>
       exception.message === INACTIVE_WEB_CONTAINER_CONNECTION_MESSAGE &&
       typeof exception.stack === "string" &&
-      exception.stack.includes("ContainerState.update") &&
-      exception.stack.includes("ContainerState.setStatusAndupdate") &&
-      exception.stack.includes("ContainerState.setStopped"),
+      (
+        (exception.stack.includes("ContainerState.update") &&
+          exception.stack.includes("ContainerState.setStatusAndupdate") &&
+          exception.stack.includes("ContainerState.setStopped")) ||
+        isSingleWebAlarmFrame(exception.stack)
+      ),
   );
+
+// Match only the single platform frame retained in the Oct 26-27 traces.
+// An application frame or a mixed stack must not broaden this exception.
+const isSingleWebAlarmFrame = (stack: string | undefined): boolean =>
+  typeof stack === "string" &&
+  /^at (?:async )?WebContainer\.alarm \(index\.js:\d+:\d+\)$/.test(stack.trim());
 
 const isCanceledWebContainerReadinessStream = (
   trace: TraceItem,
@@ -292,10 +310,12 @@ const alertFromTelemetry = (
   if (
     event === "queue_delivery_failure" ||
     event === "queue_publication_failure" ||
-    event === "queue_metrics_failure"
+    event === "queue_metrics_unavailable"
   ) {
     return createAlert("queue_failure", "critical", occurredAt, scriptName, record);
   }
+  // Raw metrics failures remain telemetry. The Tail's durable health monitor
+  // emits queue_metrics_unavailable only for sustained loss of visibility.
   if (event !== "queue_metrics" || record.threshold_exceeded !== true) {
     return null;
   }

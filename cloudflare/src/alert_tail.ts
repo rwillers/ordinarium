@@ -11,6 +11,12 @@ import {
   type AlertTailEnvironment,
 } from "./alert_dispatch.ts";
 
+import {
+  observeQueueMetrics,
+  parseQueueMetricsObservation,
+  type QueueMetricsHealthState,
+} from "./queue_metrics_health.ts";
+
 export type { AlertTailEnvironment } from "./alert_dispatch.ts";
 
 export class AlertDeduplicator extends DurableObject<AlertTailEnvironment> {
@@ -19,6 +25,9 @@ export class AlertDeduplicator extends DurableObject<AlertTailEnvironment> {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
     const operation = new URL(request.url).pathname.slice(1);
+    if (operation === "metrics") {
+      return this.observeMetrics(request);
+    }
     const payload = await readOperation(request);
     if (!payload) {
       return Response.json({ error: "invalid_payload" }, { status: 400 });
@@ -30,6 +39,24 @@ export class AlertDeduplicator extends DurableObject<AlertTailEnvironment> {
       return this.finish(operation, payload);
     }
     return Response.json({ error: "not_found" }, { status: 404 });
+  }
+
+  private async observeMetrics(request: Request): Promise<Response> {
+    const observation = parseQueueMetricsObservation(
+      await request.json().catch(() => null),
+    );
+    if (!observation) {
+      return Response.json({ error: "invalid_payload" }, { status: 400 });
+    }
+    const result = await this.ctx.storage.transaction(async (transaction) => {
+      const stored = await transaction.get<QueueMetricsHealthState>("metrics_health");
+      const next = observeQueueMetrics(stored, observation);
+      if (next.state !== stored) {
+        await transaction.put("metrics_health", next.state);
+      }
+      return { sustained: next.sustained };
+    });
+    return Response.json(result);
   }
 
   private async claim(payload: DedupeOperation): Promise<Response> {
