@@ -3,6 +3,7 @@ import {
   alertsFromTrace,
   type OperationalAlertMessage,
 } from "./operational_alerts.ts";
+import { sanitizeIdentifier } from "./telemetry.ts";
 
 interface AlertQueue {
   send(message: OperationalAlertMessage): Promise<unknown>;
@@ -36,7 +37,87 @@ export const handleTailEvents = async (
       await enqueueDeduplicatedAlert(alert, environment);
     }
   }
+  // Process every directly actionable alert first. Monitoring failures must
+  // never prevent a delivery, D1, security, or dead-letter alert from paging.
+  const observations = traces.flatMap(queueMetricsObservations)
+    .sort((left, right) => left.observed_at - right.observed_at);
+  for (const observation of observations) {
+    let sustained: boolean;
+    let category = "metrics_unavailable";
+    try {
+      const stub = environment.ALERT_DEDUPLICATOR.getByName(
+        `queue-metrics:${observation.trace.scriptName}:${observation.queue}`,
+      );
+      const response = await stub.fetch(new Request("http://alert-dedupe.internal/metrics", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          healthy: observation.healthy,
+          observed_at: observation.observed_at,
+        }),
+      }));
+      if (!response.ok) {
+        throw new Error("metrics_monitor_unavailable");
+      }
+      const result = await response.json() as { sustained?: unknown };
+      if (typeof result.sustained !== "boolean") {
+        throw new Error("invalid_metrics_monitor_response");
+      }
+      sustained = result.sustained;
+    } catch {
+      // Fail closed if durable tracking is unavailable, rather than silently
+      // disabling pages for a persistent visibility outage.
+      sustained = true;
+      category = "metrics_monitor_unavailable";
+    }
+    if (sustained) {
+      const healthTrace: TraceItem = {
+        ...observation.trace,
+        eventTimestamp: observation.observed_at,
+        outcome: "ok",
+        exceptions: [],
+        logs: [{
+          timestamp: observation.observed_at,
+          level: "error",
+          message: [{
+            event: "queue_metrics_unavailable",
+            queue: observation.queue,
+            container_role: observation.role,
+            error_category: category,
+          }],
+        }],
+      };
+      for (const alert of alertsFromTrace(healthTrace)) {
+        await enqueueDeduplicatedAlert(alert, environment);
+      }
+    }
+  }
 };
+
+const queueMetricsObservations = (trace: TraceItem) =>
+  trace.logs.flatMap((log) => {
+    const messages: unknown[] = Array.isArray(log.message) ? log.message : [log.message];
+    return messages.flatMap((value) => {
+      if (!value || typeof value !== "object") {
+        return [];
+      }
+      const record = value as Record<string, unknown>;
+      if (record.event !== "queue_metrics" && record.event !== "queue_metrics_failure") {
+        return [];
+      }
+      const queue = sanitizeIdentifier(record.queue, "");
+      if (!queue || !Number.isFinite(log.timestamp)) {
+        return [];
+      }
+      return [{
+        trace,
+        queue,
+        role: sanitizeIdentifier(record.container_role),
+        healthy: record.event === "queue_metrics",
+        observed_at: log.timestamp,
+      }];
+    });
+  });
 
 const enqueueDeduplicatedAlert = async (
   alert: OperationalAlertMessage,

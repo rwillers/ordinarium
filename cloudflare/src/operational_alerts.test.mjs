@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { handleTailEvents } from "./alert_dispatch.ts";
 import { claimAlert, commitAlert, releaseAlert } from "./alert_dedupe_policy.ts";
+import { observeQueueMetrics } from "./queue_metrics_health.ts";
 import {
   alertFingerprint,
   alertsFromTrace,
@@ -41,6 +42,11 @@ class FakeDeduplicatorNamespace {
         const operation = new URL(request.url).pathname.slice(1);
         const payload = await request.json();
         const state = this.states.get(name);
+        if (operation === "metrics") {
+          const result = observeQueueMetrics(state, payload);
+          this.states.set(name, result.state);
+          return Response.json({ sustained: result.sustained });
+        }
         if (operation === "claim") {
           const result = claimAlert(
             state,
@@ -483,4 +489,153 @@ test("failed queue publication releases the claim for a later delivery", async (
   });
 
   assert.equal(messages.length, 1);
+});
+
+const octoberAlarm = (exceptions, overrides = {}) => trace([], {
+  event: { scheduledTime: new Date("2026-10-27T22:38:23Z") },
+  entrypoint: "WebContainer", executionModel: "durableObject", outcome: "exception",
+  exceptions: exceptions.map((exception) => ({
+    name: "Error", timestamp: Date.parse("2026-10-27T22:41:23.852Z"), ...exception,
+  })),
+  ...overrides,
+});
+const inactiveMessage = "Connection closed: this Durable Object instance is no longer active. Reconnect or retry the request.";
+const alarmOnlyStack = "    at WebContainer.alarm (index.js:1407:28)";
+const resetMessage = "Internal error in Durable Object storage caused object to be reset; reference = a7brfpocabv4v194opmh5hjm";
+
+test("October alarm signatures with shortened or omitted platform stacks remain telemetry", () => {
+  for (const exception of [
+    { message: inactiveMessage, stack: alarmOnlyStack },
+    { message: "internal error; reference = 73u8rabpsnbnn3cs7ncsuhei", stack: alarmOnlyStack },
+    { message: resetMessage }, { message: resetMessage, stack: alarmOnlyStack },
+  ]) {
+    assert.deepEqual(alertsFromTrace(octoberAlarm([exception])), []);
+  }
+  assert.deepEqual(alertsFromTrace(octoberAlarm([
+    { message: resetMessage }, { message: resetMessage, stack: alarmOnlyStack },
+  ])), []);
+});
+
+test("October exceptions outside exact WebContainer alarms still page", () => {
+  const exception = { message: inactiveMessage, stack: alarmOnlyStack };
+  for (const overrides of [
+    { event: null }, { event: { cron: "* * * * *", scheduledTime: Date.now() } },
+    { event: { rpcMethod: "fetchWithReadiness" } }, { entrypoint: "PcoJobsContainer" },
+    { executionModel: "stateless" }, { outcome: "exceededCpu" }, { outcome: "exceededMemory" },
+  ]) {
+    assert.equal(alertsFromTrace(octoberAlarm([exception], overrides))[0].severity, "critical");
+    assert.equal(alertsFromTrace(octoberAlarm([{ message: resetMessage }], overrides))[0].severity, "critical");
+  }
+  for (const unsafe of [
+    { message: inactiveMessage }, { message: "internal error; reference = abc123" },
+    { message: "unrecognized platform error", stack: alarmOnlyStack },
+    { message: inactiveMessage + " additional context", stack: alarmOnlyStack },
+    { message: inactiveMessage, stack: "    at WebContainer.alarm (application.ts:1:2)" },
+    { message: inactiveMessage, stack: alarmOnlyStack + "\n    at applicationHandler (index.js:1:2)" },
+    { message: resetMessage, stack: "    at applicationHandler (index.js:1:2)" },
+  ]) {
+    assert.equal(alertsFromTrace(octoberAlarm([unsafe]))[0].severity, "critical");
+  }
+  assert.equal(alertsFromTrace(octoberAlarm([
+    exception, { message: "unexpected application failure" },
+  ]))[0].kind, "worker_runtime_failure");
+});
+
+test("suppressing a platform alarm preserves actionable telemetry on the same trace", () => {
+  const event = octoberAlarm([{ message: inactiveMessage, stack: alarmOnlyStack }]);
+  event.logs = trace([{ event: "worker_request_failure", route: "/services", status: 503 }]).logs;
+  assert.deepEqual(alertsFromTrace(event).map((alert) => alert.kind), ["worker_request_failure"]);
+});
+
+const metricTrace = (at, healthy = false, queue = "email-dlq", script = "ordinarium-app-production") => {
+  const event = trace([{
+    event: healthy ? "queue_metrics" : "queue_metrics_failure", queue,
+    container_role: "email-jobs", error_category: healthy ? undefined : "internal",
+    threshold_exceeded: false,
+  }]);
+  event.scriptName = script;
+  event.logs[0].timestamp = at;
+  return event;
+};
+const metricsEnvironment = () => {
+  const messages = [];
+  return { messages, environment: {
+    ALERTS_QUEUE: { send: async (message) => messages.push(message) },
+    ALERT_DEDUPLICATOR: new FakeDeduplicatorNamespace(),
+  } };
+};
+
+test("a metrics failure followed by recovery never enqueues an alert", async () => {
+  const { messages, environment } = metricsEnvironment();
+  await handleTailEvents([metricTrace(0), metricTrace(60_000, true), metricTrace(120_000)], environment);
+  assert.deepEqual(messages, []);
+});
+
+test("durable metrics streaks span Tail calls, sort a batch, and deduplicate pages", async () => {
+  const { messages, environment } = metricsEnvironment();
+  await handleTailEvents([metricTrace(0)], environment);
+  await handleTailEvents([metricTrace(120_000), metricTrace(60_000)], environment);
+  await handleTailEvents([metricTrace(180_000)], environment);
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].kind, "queue_failure");
+  assert.equal(messages[0].occurred_at, "1970-01-01T00:02:00.000Z");
+  assert.equal(messages[0].source.error_category, "metrics_unavailable");
+  assert.ok(parseOperationalAlert(messages[0]));
+});
+
+test("metrics streaks are isolated by queue and deployment script", async () => {
+  const { messages, environment } = metricsEnvironment();
+  await handleTailEvents([
+    metricTrace(0), metricTrace(60_000, false, "pco-dlq"),
+    metricTrace(120_000, false, "email-dlq", "ordinarium-app-staging"),
+  ], environment);
+  assert.deepEqual(messages, []);
+});
+
+test("metrics gating cannot suppress delivery failures or nonempty dead letters", async () => {
+  const { messages, environment } = metricsEnvironment();
+  const event = metricTrace(0);
+  event.logs.push(...trace([
+    { event: "queue_delivery_failure", queue: "email-dlq", error_category: "internal" },
+    { event: "queue_metrics", queue: "pco-dlq", dlq: true, threshold_exceeded: true },
+  ]).logs);
+  await handleTailEvents([event], environment);
+  assert.deepEqual(messages.map((message) => message.kind), ["queue_failure", "dead_letter"]);
+});
+
+test("unavailable durable metrics tracking fails closed while preserving other pages", async () => {
+  const { messages, environment } = metricsEnvironment();
+  const original = environment.ALERT_DEDUPLICATOR.getByName.bind(environment.ALERT_DEDUPLICATOR);
+  environment.ALERT_DEDUPLICATOR.getByName = (name) => name.startsWith("queue-metrics:")
+    ? { fetch: async () => new Response("unavailable", { status: 503 }) } : original(name);
+  await handleTailEvents([
+    metricTrace(0), trace([{ event: "d1_operation_failure", error_category: "internal" }]),
+  ], environment);
+  assert.deepEqual(messages.map((message) => message.kind), ["d1_failure", "queue_failure"]);
+  assert.equal(messages[1].source.error_category, "metrics_monitor_unavailable");
+});
+
+test("a duplicate sustained metrics observation retries failed publication", async () => {
+  const { messages, environment } = metricsEnvironment();
+  const send = environment.ALERTS_QUEUE.send;
+  environment.ALERTS_QUEUE.send = async () => { throw new Error("queue down"); };
+  await handleTailEvents([metricTrace(0), metricTrace(60_000), metricTrace(120_000)], environment);
+  environment.ALERTS_QUEUE.send = send;
+  await handleTailEvents([metricTrace(120_000)], environment);
+  assert.equal(messages.length, 1);
+});
+
+
+test("only monitored metrics unavailability pages directly, and malformed monitor responses fail closed", async () => {
+  assert.deepEqual(alertsFromTrace(metricTrace(0)), []);
+  const [alert] = alertsFromTrace(trace([{
+    event: "queue_metrics_unavailable", queue: "email-dlq", error_category: "metrics_unavailable",
+  }]));
+  assert.equal(alert.kind, "queue_failure");
+  const { messages, environment } = metricsEnvironment();
+  const original = environment.ALERT_DEDUPLICATOR.getByName.bind(environment.ALERT_DEDUPLICATOR);
+  environment.ALERT_DEDUPLICATOR.getByName = (name) => name.startsWith("queue-metrics:")
+    ? { fetch: async () => Response.json({ sustained: "false" }) } : original(name);
+  await handleTailEvents([metricTrace(0)], environment);
+  assert.equal(messages[0].source.error_category, "metrics_monitor_unavailable");
 });
