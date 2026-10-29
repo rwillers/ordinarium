@@ -73,3 +73,37 @@ test("non-probe requests continue to normal edge routing", () => {
 
   assert.equal(response, null);
 });
+
+test("rejects the observed Gravity Forms upload probe before container routing", () => {
+  for (const query of [
+    "gf_page=upload",
+    "gf_page=%75pload",
+    "other=1&gf_page=upload",
+    "gf_page=preview&gf_page=upload",
+  ]) {
+    const response = handleObviousProbe(
+      new Request(`https://ordinarium.example/?${query}`),
+      "probe-request",
+    );
+    assert.equal(response?.status, 404, query);
+    assert.equal(response.headers.get("Cache-Control"), "private, no-store");
+    assert.equal(response.headers.get("X-Ordinarium-Request-Id"), "probe-request");
+  }
+});
+
+test("query probe rejection preserves ordinary homepage queries and application routes", () => {
+  for (const path of [
+    "/",
+    "/?next=/services",
+    "/?gf_page=preview",
+    "/?gf_page=upload-safe",
+    "/services?gf_page=upload",
+    "/integrations/pco/callback?code=example&state=example",
+  ]) {
+    assert.equal(
+      handleObviousProbe(new Request(`https://ordinarium.example${path}`), "request-id"),
+      null,
+      path,
+    );
+  }
+});

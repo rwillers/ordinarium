@@ -103,11 +103,11 @@ the Flask application to serve and is covered by tests.
 
 ### Active zone control
 
-As of 2026-08-14, the `ordinarium.com` Free zone has one active custom security
+As of 2026-10-29, the `ordinarium.com` Free zone has one active custom security
 rule named `Block impossible application probes` with the Block action:
 
 ```text
-(http.request.uri.path.extension in {"asp" "aspx" "cgi" "jsp" "phar" "php" "phtml"})
+(http.request.uri.path.extension in {"asp" "aspx" "cgi" "jsp" "phar" "php" "phtml"}) or (http.request.uri.path eq "/" and any(url_decode(http.request.uri.args["gf_page"][*])[*] eq "upload"))
 ```
 
 The dashboard reports one of five custom-rule slots used and no managed WAF
@@ -358,6 +358,51 @@ Cloudflare with UTC intervals, Worker versions, invocation IDs, and retained
 platform references. Keep raw exceptions in authenticated observability, never
 alert emails. Promote a reviewed, staging-tested release through the existing
 production workflow, then independently recheck live behavior.
+
+## 2026-10-29 Gravity Forms probe and request failure
+
+The production email at `2026-10-29T18:50:37.625Z` identified request
+`4b021971-2bce-491e-94cc-13ab4c1fda60`, route `/`, status 503, and category
+`container_transient`. Authenticated dashboard inspection of retained Worker
+logs in the approximately 18:02-19:02 UTC window correlated it with invocation
+`0e6e9b86c677a63f18d221702deaa0a3`, trace
+`fb9b42ebd855ddbd8c902ebfc3c8aaec`, and Worker version
+`f1f2412a-c9c4-456b-b5ad-eb929c2b96c7`. The deployed release was
+`cda1dffc88bde2a4eccf7f5fde35b5454ce8fbbf` (about 18 hours earlier).
+
+The trigger was stateless `GET https://ordinarium.com/?gf_page=upload`.
+Structured telemetry recorded three exhausted attempts, a controlled 503,
+and 1490 ms duration; invocation wall time was 1493 ms with 7 ms CPU time.
+The inspected hour contained one `worker_request_failure` event. The zone's
+24-hour traffic overview also reported one 5xx response. Bounded live checks
+of `/`, `/login`, and `/health` returned 200. Note that `/health` is served
+at the edge; the successful homepage and login checks also exercised web
+container routing.
+
+The query identifies the legacy Gravity Forms upload endpoint documented in
+the [vendor's release notes](https://www.gravityforms.com/blog/gravity-forms-v1-9-7-released/).
+Ordinarium does not serve this WordPress plugin. Classify the request as a
+foreign-platform probe, with no confirmed legitimate-user impact. Its exact
+underlying container failure remains unresolved: the gateway aggregates
+recognized platform HTTP failures and thrown RPC errors into the same
+`container_transient` category. No container generation was established.
+Do not describe this evidence as proving a cold start, D1 failure, or crash.
+
+The existing active `Block impossible application probes` WAF rule was
+extended with the narrowly scoped root-path Gravity Forms query condition
+shown above. This rejects the probe before Worker or Container execution;
+critical alerts for ordinary requests remain enabled. The local edge filter
+also rejects this query with a quiet, non-cacheable 404 and sanitized
+`foreign_platform_query` telemetry, including encoded values and repeated
+parameters. That application fallback is a local change awaiting the normal
+release process; the WAF rule is already live. Worker tests (117) and
+TypeScript checks passed.
+
+Final live verification returned 403 for the original query, an encoded
+`gf_page=%75pload` value, an additional unrelated parameter, and a repeated
+`gf_page=preview&gf_page=upload` query. `/`, `/login`, `/health`, and
+`/?gf_page=preview` returned 200. The dashboard confirmed the updated rule
+was Active. Its original foreign-extension condition remains in place.
 
 ## Session handoff checklist
 

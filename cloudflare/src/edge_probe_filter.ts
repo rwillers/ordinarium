@@ -17,6 +17,7 @@ type ProbeCategory =
   | "foreign_server_extension"
   | "sensitive_dot_path"
   | "foreign_platform_path"
+  | "foreign_platform_query"
   | "malformed_path";
 
 export const handleObviousProbe = (
@@ -24,7 +25,11 @@ export const handleObviousProbe = (
   requestId: string,
 ): Response | null => {
   const url = new URL(request.url);
-  const category = probeCategory(url.pathname);
+  const category =
+    probeCategory(url.pathname) ??
+    (url.pathname === "/" && url.searchParams.getAll("gf_page").includes("upload")
+      ? "foreign_platform_query"
+      : null);
   if (!category) {
     return null;
   }
